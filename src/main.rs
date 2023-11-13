@@ -1,8 +1,16 @@
 use winit::{event_loop::EventLoop, window::WindowBuilder};
+use clap::{Parser};
 
 mod cpu;
 
+#[derive(Parser)]
+struct Args {
+    rom_path: String
+}
+
 fn main() -> Result<(), impl std::error::Error> {
+    let args = Args::parse();
+
     let event_loop = EventLoop::new().unwrap();
 
     let window = WindowBuilder::new()
