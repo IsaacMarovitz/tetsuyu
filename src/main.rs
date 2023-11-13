@@ -15,11 +15,11 @@ fn main() -> Result<(), impl std::error::Error> {
 
     let window = WindowBuilder::new()
         .with_title("gb-rs")
-        .with_inner_size(winit::dpi::LogicalSize::new(128.0, 128.0))
+        .with_inner_size(winit::dpi::LogicalSize::new(160, 144))
         .build(&event_loop)
         .unwrap();
 
     event_loop.run(move |event, elwt| {
-        println!("{event:?}");
+        // println!("{event:?}");
     })
 }
