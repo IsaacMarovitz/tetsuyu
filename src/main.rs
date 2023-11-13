@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::Read;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use clap::{Parser};
 
@@ -10,6 +12,12 @@ struct Args {
 
 fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
+    let mut file = File::open(args.rom_path).expect("No ROM found!");
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer).expect("Failed to read ROM!");
+
+    println!("{:#04X?}", buffer);
 
     let event_loop = EventLoop::new().unwrap();
 
