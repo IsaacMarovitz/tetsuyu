@@ -2,24 +2,28 @@ use bitflags::{bitflags};
 use crate::mode::GBMode;
 
 pub struct Registers {
-    a: u8,
+    pub a: u8,
     f: Flags,
-    b: u8,
-    c: u8,
-    d: u8,
-    e: u8,
-    h: u8,
-    l: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
     pc: u16,
     sp: u16,
 }
 
 bitflags! {
     pub struct Flags: u8 {
-        const C = 0b00010000;
-        const H = 0b00100000;
-        const N = 0b01000000;
-        const Z = 0b10000000;
+        // Carry Flag
+        const C = 0b0001_0000;
+        // Half-Carry Flag
+        const H = 0b0010_0000;
+        // Subtract Flag
+        const N = 0b0100_0000;
+        // Zero Flag
+        const Z = 0b1000_0000;
     }
 }
 
