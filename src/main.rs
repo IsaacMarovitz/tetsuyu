@@ -2,7 +2,8 @@ use std::fs::File;
 use std::io::Read;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use clap::{Parser};
-use crate::cpu::{CPU, GBMode};
+use crate::cpu::CPU;
+use crate::mode::GBMode;
 
 mod cpu;
 mod registers;
