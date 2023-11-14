@@ -1,8 +1,8 @@
-use std::fmt::format;
 use std::fs::File;
 use std::io::Read;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use clap::{Parser};
+use crate::cpu::{CPU, GBMode};
 
 mod cpu;
 
@@ -24,10 +24,14 @@ fn main() -> Result<(), impl std::error::Error> {
 
     // Run checksum
 
+    // Get game name
     let name_data = &buffer[0x0134..=0x0143];
     let index = name_data.iter().position(|&r| r == 0x00).unwrap();
     let game_name = std::str::from_utf8(&name_data[0..index]).expect("Failed to get game name!");
     println!("Starting \"{game_name}\"...");
+
+    // Start CPU
+    let cpu = CPU::new(GBMode::Classic);
 
     let event_loop = EventLoop::new().unwrap();
 

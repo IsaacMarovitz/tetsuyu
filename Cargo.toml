@@ -9,3 +9,5 @@ edition = "2021"
 winit = "0.29.3"
 fundsp = "0.15.0"
 clap = { version = "4.4.8", features = ["derive"] }
+bitflags = "2.4.1"
+log = "0.4.20"
