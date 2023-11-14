@@ -94,7 +94,20 @@ impl Registers {
                     sp: 0xFFFE
                 }
             },
-            _ => panic!("Mode not yet supported!")
+            GBMode::Color => {
+                Registers {
+                    a: 0x11,
+                    f: (Flags::Z).bits(),
+                    b: 0x00,
+                    c: 0x00,
+                    d: 0xFF,
+                    e: 0x56,
+                    h: 0x00,
+                    l: 0x0D,
+                    pc: 0x0100,
+                    sp: 0xFFFE
+                }
+            }
         }
     }
 }
