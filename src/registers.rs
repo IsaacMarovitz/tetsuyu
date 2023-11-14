@@ -3,7 +3,7 @@ use crate::mode::GBMode;
 
 pub struct Registers {
     pub a: u8,
-    f: Flags,
+    f: u8,
     pub b: u8,
     pub c: u8,
     pub d: u8,
@@ -28,6 +28,44 @@ bitflags! {
 }
 
 impl Registers {
+    // Registers can be paired to be used for 16-bit operations
+    // A+F, B+C, D+E, H+L
+    pub fn get_af(&self) -> u16 {
+        (u16::from(self.a) << 8) | u16::from(self.f)
+    }
+
+    pub fn get_bc(&self) -> u16 {
+        (u16::from(self.b) << 8) | u16::from(self.c)
+    }
+
+    pub fn get_de(&self) -> u16 {
+        (u16::from(self.d) << 8) | u16::from(self.e)
+    }
+
+    pub fn get_hl(&self) -> u16 {
+        (u16::from(self.h) << 8) | u16::from(self.l)
+    }
+
+    pub fn set_af(&mut self, x: u16) {
+        self.a = (x >> 8) as u8;
+        self.f = (x & 0x00F0) as u8;
+    }
+
+    pub fn set_bc(&mut self, x: u16) {
+        self.b = (x >> 8) as u8;
+        self.c = (x & 0x00FF) as u8;
+    }
+
+    pub fn set_de(&mut self, x: u16) {
+        self.d = (x >> 8) as u8;
+        self.e = (x & 0x00FF) as u8;
+    }
+
+    pub fn set_hl(&mut self, x: u16) {
+        self.h = (x >> 8) as u8;
+        self.l = (x & 0x00FF) as u8;
+    }
+
     pub fn get_flag(&self, flag: Flags) -> bool {
         self.f.contains(flag)
     }
@@ -45,7 +83,7 @@ impl Registers {
             GBMode::Classic => {
                 Registers {
                     a: 0x01,
-                    f: Flags::C | Flags::H | Flags::Z,
+                    f: (Flags::C | Flags::H | Flags::Z).bits(),
                     b: 0x00,
                     c: 0x13,
                     d: 0x00,
