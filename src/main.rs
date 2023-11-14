@@ -5,6 +5,8 @@ use clap::{Parser};
 use crate::cpu::{CPU, GBMode};
 
 mod cpu;
+mod registers;
+mod mode;
 
 #[derive(Parser)]
 struct Args {
