@@ -1,4 +1,4 @@
-use bitflags::{bitflags};
+use bitflags::bitflags;
 use crate::mode::GBMode;
 
 pub struct Registers {
@@ -28,6 +28,18 @@ bitflags! {
 }
 
 impl Registers {
+    pub fn get_flag(&self, flag: Flags) -> bool {
+        self.f.contains(flag)
+    }
+
+    pub fn set_flag(&mut self, flag: Flags, state: bool) {
+        if state {
+            self.f |= flag;
+        } else {
+            self.f &= !flag;
+        }
+    }
+
     pub fn new(mode: GBMode) -> Registers {
         match mode {
             GBMode::Classic => {
