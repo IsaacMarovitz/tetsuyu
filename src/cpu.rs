@@ -188,7 +188,7 @@ impl CPU {
             0x7D => self.alu_bit(self.reg.l, 7),
             0x7E => {}, // BIT 7, HL
             0x7F => self.alu_bit(self.reg.a, 7),
-            code => panic!("Instruction {:2X} is unknown!", code),
+            code => panic!("CB Instruction {:2X} is unknown!", code),
         }
     }
 
