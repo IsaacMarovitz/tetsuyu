@@ -85,6 +85,22 @@ impl CPU {
             0x7D => self.reg.a = self.reg.l,
             0x7E => {}, // LD A, HL
             0x7F => self.reg.a = self.reg.a,
+            0x80 => self.alu_add(self.reg.b),
+            0x81 => self.alu_add(self.reg.c),
+            0x82 => self.alu_add(self.reg.d),
+            0x83 => self.alu_add(self.reg.e),
+            0x84 => self.alu_add(self.reg.h),
+            0x85 => self.alu_add(self.reg.l),
+            0x86 => {} // ADD A, HL
+            0x87 => self.alu_add(self.reg.a),
+            0x88 => self.alu_adc(self.reg.b),
+            0x89 => self.alu_adc(self.reg.c),
+            0x8A => self.alu_adc(self.reg.d),
+            0x8B => self.alu_adc(self.reg.e),
+            0x8C => self.alu_adc(self.reg.h),
+            0x8D => self.alu_adc(self.reg.l),
+            0x8E => {} // ADC A, HL
+            0x8F => self.alu_adc(self.reg.a),
             0xCB => {}, // CB OPs
             code => panic!("Instruction {:2X} is unknown!", code),
         }
