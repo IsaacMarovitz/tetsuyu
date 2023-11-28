@@ -14,12 +14,12 @@ impl CPU {
 
     pub fn call(&mut self, opcode: u8) {
         match opcode {
-            0x06 => self.reg.b = 0,
-            0x0E => self.reg.c = 0,
-            0x16 => self.reg.d = 0,
-            0x1E => self.reg.e = 0,
-            0x26 => self.reg.h = 0,
-            0x2E => self.reg.l = 0,
+            0x06 => {},
+            0x0E => {},
+            0x16 => {},
+            0x1E => {},
+            0x26 => {},
+            0x2E => {},
             0x36 => {},
             0x3E => {},
             0x02 => {},
@@ -30,7 +30,7 @@ impl CPU {
             0x32 => {},
             0x2A => {},
             0x3A => {},
-            0x40 => {},
+            0x40 => self.reg.b = self.reg.b,
             0x41 => self.reg.b = self.reg.c,
             0x42 => self.reg.b = self.reg.d,
             0x43 => self.reg.b = self.reg.e,
@@ -39,6 +39,7 @@ impl CPU {
             0x46 => {}, // LD B, HL
             0x47 => self.reg.b = self.reg.a,
             0x48 => self.reg.c = self.reg.b,
+            0x49 => self.reg.c = self.reg.c,
             0x4A => self.reg.c = self.reg.d,
             0x4B => self.reg.c = self.reg.e,
             0x4C => self.reg.c = self.reg.h,
@@ -84,6 +85,7 @@ impl CPU {
             0x7D => self.reg.a = self.reg.l,
             0x7E => {}, // LD A, HL
             0x7F => self.reg.a = self.reg.a,
+            0xCB => {}, // CB OPs
             code => panic!("Instruction {:2X} is unknown!", code),
         }
     }
