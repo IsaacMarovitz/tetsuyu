@@ -1,13 +1,17 @@
+use crate::context::Context;
 use crate::cpu::CPU;
 use crate::mode::GBMode;
+use bitflags::Flags;
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
+use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, ModifiersState};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
+mod context;
 mod cpu;
 mod mode;
 mod registers;
@@ -17,7 +21,8 @@ struct Args {
     rom_path: String,
 }
 
-fn main() -> Result<(), impl std::error::Error> {
+#[tokio::main]
+async fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
     let mut file = File::open(args.rom_path).expect("No ROM found!");
     let mut buffer = Vec::new();
@@ -47,11 +52,24 @@ fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
+    let mut context = Context::new(window).await;
+
     let mut modifiers = ModifiersState::default();
 
     event_loop.run(move |event, elwt| {
-        if let Event::WindowEvent { event, .. } = event {
+        if let Event::WindowEvent { event, window_id } = event {
             match event {
+                WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                    match context.render() {
+                        Ok(_) => {}
+                        Err(SurfaceError::Lost) => context.resize(context.size),
+                        Err(SurfaceError::OutOfMemory) => elwt.exit(),
+                        Err(e) => println!("{:?}", e),
+                    }
+                }
+                WindowEvent::Resized(physical_size) => {
+                    context.resize(physical_size);
+                }
                 WindowEvent::ModifiersChanged(new) => {
                     modifiers = new.state();
                 }
