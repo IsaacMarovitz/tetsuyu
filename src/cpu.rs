@@ -101,6 +101,22 @@ impl CPU {
             0x8D => self.alu_adc(self.reg.l),
             0x8E => {} // ADC A, HL
             0x8F => self.alu_adc(self.reg.a),
+            0x90 => self.alu_sub(self.reg.b),
+            0x91 => self.alu_sub(self.reg.c),
+            0x92 => self.alu_sub(self.reg.d),
+            0x93 => self.alu_sub(self.reg.e),
+            0x94 => self.alu_sub(self.reg.h),
+            0x95 => self.alu_sub(self.reg.l),
+            0x96 => {} // SUB A, HL
+            0x97 => self.alu_sub(self.reg.a),
+            0x98 => self.alu_sbc(self.reg.b),
+            0x99 => self.alu_sbc(self.reg.c),
+            0x9A => self.alu_sbc(self.reg.d),
+            0x9B => self.alu_sbc(self.reg.e),
+            0x9C => self.alu_sbc(self.reg.h),
+            0x9D => self.alu_sbc(self.reg.l),
+            0x9E => {} // SBC A, HL
+            0x9F => self.alu_sbc(self.reg.a),
             0xCB => {}, // CB OPs
             code => panic!("Instruction {:2X} is unknown!", code),
         }
