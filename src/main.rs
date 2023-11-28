@@ -1,17 +1,20 @@
-use std::fs::File;
-use std::io::Read;
-use winit::{event_loop::EventLoop, window::WindowBuilder};
-use clap::{Parser};
 use crate::cpu::CPU;
 use crate::mode::GBMode;
+use clap::Parser;
+use std::fs::File;
+use std::io::Read;
+use winit::event::{ElementState, Event, WindowEvent};
+use winit::keyboard::{Key, ModifiersState};
+use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod cpu;
-mod registers;
 mod mode;
+mod registers;
 
 #[derive(Parser)]
 struct Args {
-    rom_path: String
+    rom_path: String,
 }
 
 fn main() -> Result<(), impl std::error::Error> {
@@ -44,7 +47,26 @@ fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
+    let mut modifiers = ModifiersState::default();
+
     event_loop.run(move |event, elwt| {
-        // println!("{event:?}");
+        if let Event::WindowEvent { event, .. } = event {
+            match event {
+                WindowEvent::ModifiersChanged(new) => {
+                    modifiers = new.state();
+                }
+                WindowEvent::KeyboardInput { event, .. } => {
+                    if event.state == ElementState::Pressed && !event.repeat {
+                        match event.key_without_modifiers().as_ref() {
+                            Key::Character("w") => {
+                                println!("Got W Key!");
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
     })
 }
