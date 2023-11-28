@@ -92,11 +92,43 @@ impl CPU {
 
     fn alu_add(&mut self, x: u8) {
         let a = self.reg.a;
-        let x = a.wrapping_add(x);
-        self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) > 0xFF);
+        let r = a.wrapping_add(x);
+        self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) > u16::from(u8::max));
         self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, x == 0x00);
-        self.reg.a = x;
+        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.a = r;
+    }
+
+    fn alu_adc(&mut self, x: u8) {
+        let a = self.reg.a;
+        let c = u8::from(self.reg.get_flag(Flags::C));
+        let r = a.wrapping_add(x).wrapping_add(c);
+        self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) + u16::from(c) > u16::from(u8::max));
+        self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F)  + (c & 0x0F) > 0x0F);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.a = r;
+    }
+
+    fn alu_sub(&mut self, x: u8) {
+        let a = self.reg.a;
+        let r = a.wrapping_sub(x);
+        self.reg.set_flag(Flags::C, u16::from(a) < u16::from(x));
+        self.reg.set_flag(Flags::H, (a & 0xF) < (x & 0xF));
+        self.reg.set_flag(Flags::N, true);
+        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.a = r;
+    }
+
+    fn alu_sbc(&mut self, x: u8) {
+        let a = self.reg.a;
+        let c = u8::from(self.reg.get_flag(Flags::C));
+        let r = a.wrapping_sub(x).wrapping_sub(c);
+        self.reg.set_flag(Flags::C, u16::from(a) < u16::from(x) + u16::from(c));
+        self.reg.set_flag(Flags::H, (a & 0xF) < (x & 0xF) + c);
+        self.reg.set_flag(Flags::N, true);
+        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.a = r;
     }
 }
