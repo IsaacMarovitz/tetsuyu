@@ -67,14 +67,14 @@ impl Registers {
     }
 
     pub fn get_flag(&self, flag: Flags) -> bool {
-        self.f.contains(flag)
+        Flags::from_bits(self.f).unwrap().contains(flag)
     }
 
     pub fn set_flag(&mut self, flag: Flags, state: bool) {
         if state {
-            self.f |= flag;
+            self.f |= flag.bits();
         } else {
-            self.f &= !flag;
+            self.f &= !flag.bits();
         }
     }
 
