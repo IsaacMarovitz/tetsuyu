@@ -122,6 +122,76 @@ impl CPU {
         }
     }
 
+    pub fn cb_call(&mut self, opcode: u8) {
+        match opcode {
+            0x40 => self.alu_bit(self.reg.b, 0),
+            0x41 => self.alu_bit(self.reg.c, 0),
+            0x42 => self.alu_bit(self.reg.d, 0),
+            0x43 => self.alu_bit(self.reg.e, 0),
+            0x44 => self.alu_bit(self.reg.h, 0),
+            0x45 => self.alu_bit(self.reg.l, 0),
+            0x46 => {}, // BIT 0, HL
+            0x47 => self.alu_bit(self.reg.a, 0),
+            0x48 => self.alu_bit(self.reg.b, 1),
+            0x49 => self.alu_bit(self.reg.c, 1),
+            0x4A => self.alu_bit(self.reg.d, 1),
+            0x4B => self.alu_bit(self.reg.e, 1),
+            0x4C => self.alu_bit(self.reg.h, 1),
+            0x4D => self.alu_bit(self.reg.l, 1),
+            0x4E => {}, // BIT 1, HL
+            0x4F => self.alu_bit(self.reg.a, 1),
+            0x50 => self.alu_bit(self.reg.b, 2),
+            0x51 => self.alu_bit(self.reg.c, 2),
+            0x52 => self.alu_bit(self.reg.d, 2),
+            0x53 => self.alu_bit(self.reg.e, 2),
+            0x54 => self.alu_bit(self.reg.h, 2),
+            0x55 => self.alu_bit(self.reg.l, 2),
+            0x56 => {}, // BIT 2, HL
+            0x57 => self.alu_bit(self.reg.a, 2),
+            0x58 => self.alu_bit(self.reg.b, 3),
+            0x59 => self.alu_bit(self.reg.c, 3),
+            0x5A => self.alu_bit(self.reg.d, 3),
+            0x5B => self.alu_bit(self.reg.e, 3),
+            0x5C => self.alu_bit(self.reg.h, 3),
+            0x5D => self.alu_bit(self.reg.l, 3),
+            0x5E => {}, // BIT 3, HL
+            0x5F => self.alu_bit(self.reg.a, 3),
+            0x60 => self.alu_bit(self.reg.b, 4),
+            0x61 => self.alu_bit(self.reg.c, 4),
+            0x62 => self.alu_bit(self.reg.d, 4),
+            0x63 => self.alu_bit(self.reg.e, 4),
+            0x64 => self.alu_bit(self.reg.h, 4),
+            0x65 => self.alu_bit(self.reg.l, 4),
+            0x66 => {}, // BIT 4, HL
+            0x67 => self.alu_bit(self.reg.a, 4),
+            0x68 => self.alu_bit(self.reg.b, 5),
+            0x69 => self.alu_bit(self.reg.c, 5),
+            0x6A => self.alu_bit(self.reg.d, 5),
+            0x6B => self.alu_bit(self.reg.e, 5),
+            0x6C => self.alu_bit(self.reg.h, 5),
+            0x6D => self.alu_bit(self.reg.l, 5),
+            0x6E => {}, // BIT 5, HL
+            0x6F => self.alu_bit(self.reg.a, 5),
+            0x70 => self.alu_bit(self.reg.b, 6),
+            0x71 => self.alu_bit(self.reg.c, 6),
+            0x72 => self.alu_bit(self.reg.d, 6),
+            0x73 => self.alu_bit(self.reg.e, 6),
+            0x74 => self.alu_bit(self.reg.h, 6),
+            0x75 => self.alu_bit(self.reg.l, 6),
+            0x76 => {}, // BIT 6, HL
+            0x77 => self.alu_bit(self.reg.a, 6),
+            0x78 => self.alu_bit(self.reg.b, 7),
+            0x79 => self.alu_bit(self.reg.c, 7),
+            0x7A => self.alu_bit(self.reg.d, 7),
+            0x7B => self.alu_bit(self.reg.e, 7),
+            0x7C => self.alu_bit(self.reg.h, 7),
+            0x7D => self.alu_bit(self.reg.l, 7),
+            0x7E => {}, // BIT 7, HL
+            0x7F => self.alu_bit(self.reg.a, 7),
+            code => panic!("Instruction {:2X} is unknown!", code),
+        }
+    }
+
     fn alu_add(&mut self, x: u8) {
         let a = self.reg.a;
         let r = a.wrapping_add(x);
@@ -162,5 +232,12 @@ impl CPU {
         self.reg.set_flag(Flags::N, true);
         self.reg.set_flag(Flags::Z, r == 0x00);
         self.reg.a = r;
+    }
+
+    fn alu_bit(&mut self, a: u8, b: u8) {
+        let r = a & (1 << b) == 0x00;
+        self.reg.set_flag(Flags::H, true);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, r);
     }
 }
