@@ -13,6 +13,7 @@ use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod context;
 mod cpu;
+mod mmu;
 mod mode;
 mod registers;
 
