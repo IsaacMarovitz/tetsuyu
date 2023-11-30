@@ -156,6 +156,7 @@ impl CPU {
             0x9E => { self.alu_sbc(self.mem.read(self.reg.get_hl())); 2 },
             0x9F => { self.alu_sbc(self.reg.a);                       1 },
             0xCB => { self.cb_call()                                    },
+            // Should be a panic!, keep it as a println! for now
             code => { println!("Instruction {:} is unknown!", code); 0 },
         }
     }
@@ -227,7 +228,8 @@ impl CPU {
             0x7D => { self.alu_bit(self.reg.l, 7); 2 },
             0x7E => {                              4 }, // BIT 7, HL
             0x7F => { self.alu_bit(self.reg.a, 7); 2 },
-            code => {println!("CB Instruction {:2X} is unknown!", code); 0},
+            // Should be a panic!, keep it as a println! for now
+            code => { println!("CB Instruction {:2X} is unknown!", code); 0 },
         }
     }
 
