@@ -375,7 +375,7 @@ impl CPU {
 
     fn alu_cp(&mut self, x: u8) {
         let r = self.reg.a;
-        self.alu_sub(r);
+        self.alu_sub(x);
         self.reg.a = r
     }
 
