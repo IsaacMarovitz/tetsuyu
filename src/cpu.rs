@@ -32,19 +32,27 @@ impl CPU {
             0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
             0x03 => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_add(1));            2 },
+            0x04 => { self.reg.b = self.alu_inc(self.reg.b);          1 },
+            0x05 => { self.reg.b = self.alu_dec(self.reg.b);          1 },
             0x06 => { self.reg.b = self.read_byte();                  2 },
             0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
             0x0B => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_sub(1));            2 },
+            0x0C => { self.reg.c = self.alu_inc(self.reg.c);          1 },
+            0x0D => { self.reg.c = self.alu_dec(self.reg.c);          1 },
             0x0E => { self.reg.c = self.read_byte();                  2 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
             0x13 => { let de = self.reg.get_de();
                       self.reg.set_de(de.wrapping_add(1));            2 },
+            0x14 => { self.reg.d = self.alu_inc(self.reg.d);          1 },
+            0x15 => { self.reg.d = self.alu_dec(self.reg.d);          1 },
             0x16 => { self.reg.d = self.read_byte();                  2 },
             0x18 => { self.reg.pc += self.read_byte() as u16;         3 },
             0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
             0x1B => { let de = self.reg.get_de();
                       self.reg.set_de(de.wrapping_sub(1));            2 },
+            0x1C => { self.reg.e = self.alu_inc(self.reg.e);          1 },
+            0x1D => { self.reg.e = self.alu_dec(self.reg.e);          1 },
             0x1E => { self.reg.e = self.read_byte();                  2 },
             0x20 => { if !self.reg.get_flag(Flags::Z)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -55,6 +63,8 @@ impl CPU {
                       self.reg.set_hl(a + 1);                         2 },
             0x23 => { let hl = self.reg.get_hl();
                       self.reg.set_hl(hl.wrapping_add(1));            2 },
+            0x24 => { self.reg.h = self.alu_inc(self.reg.h);          1 },
+            0x25 => { self.reg.h = self.alu_dec(self.reg.h);          1 },
             0x26 => { self.reg.h = self.read_byte();                  2 },
             0x28 => { if self.reg.get_flag(Flags::Z)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -65,6 +75,8 @@ impl CPU {
                       self.reg.set_hl(a + 1);                         2 },
             0x2B => { let hl = self.reg.get_hl();
                       self.reg.set_hl(hl.wrapping_sub(1));            2 },
+            0x2C => { self.reg.l = self.alu_inc(self.reg.l);          1 },
+            0x2D => { self.reg.l = self.alu_dec(self.reg.l);          1 },
             0x2E => { self.reg.l = self.read_byte();                  2 },
             0x30 => { if !self.reg.get_flag(Flags::C)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -87,6 +99,8 @@ impl CPU {
                       self.reg.set_hl(a - 1);                         2 },
             0x3B => { let sp = self.reg.sp;
                       self.reg.sp = sp.wrapping_sub(1);               2 },
+            0x3C => { self.reg.a = self.alu_inc(self.reg.a);          1 },
+            0x3D => { self.reg.a = self.alu_dec(self.reg.a);          1 },
             0x3E => { self.reg.a = self.read_byte();                  2 },
             0x40 => { self.reg.b = self.reg.b;                        1 },
             0x41 => { self.reg.b = self.reg.c;                        1 },
@@ -324,7 +338,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) > u16::from(u8::MAX));
         self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
     }
 
@@ -335,7 +349,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) + u16::from(c) > u16::from(u8::MAX));
         self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F)  + (c & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
     }
 
@@ -345,7 +359,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, u16::from(a) < u16::from(x));
         self.reg.set_flag(Flags::H, (a & 0xF) < (x & 0xF));
         self.reg.set_flag(Flags::N, true);
-        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
     }
 
@@ -356,7 +370,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, u16::from(a) < u16::from(x) + u16::from(c));
         self.reg.set_flag(Flags::H, (a & 0xF) < (x & 0xF) + c);
         self.reg.set_flag(Flags::N, true);
-        self.reg.set_flag(Flags::Z, r == 0x00);
+        self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
     }
 
@@ -394,6 +408,22 @@ impl CPU {
         let r = self.reg.a;
         self.alu_sub(x);
         self.reg.a = r
+    }
+
+    fn alu_inc(&mut self, x: u8) -> u8 {
+        let r = x.wrapping_add(1);
+        self.reg.set_flag(Flags::H, (x & 0x0F) + 0x01 > 0xF);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, r == 0);
+        r
+    }
+
+    fn alu_dec(&mut self, x: u8) -> u8 {
+        let r = x.wrapping_sub(1);
+        self.reg.set_flag(Flags::H, (x & 0x0F) == 0xF);
+        self.reg.set_flag(Flags::N, true);
+        self.reg.set_flag(Flags::Z, r == 0);
+        r
     }
 
     fn alu_bit(&mut self, a: u8, b: u8) {
