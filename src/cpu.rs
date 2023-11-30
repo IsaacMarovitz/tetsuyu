@@ -28,6 +28,7 @@ impl CPU {
     pub fn call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
+            0x00 => { 1 },
             0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
             0x03 => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_add(1));            2 },
