@@ -10,8 +10,8 @@ pub struct Registers {
     pub e: u8,
     pub h: u8,
     pub l: u8,
-    pc: u16,
-    sp: u16,
+    pub pc: u16,
+    pub sp: u16,
 }
 
 bitflags! {

@@ -15,6 +15,12 @@ impl CPU {
         }
     }
 
+    pub fn read_byte(&mut self) -> u8 {
+        let byte = self.mem.read(self.reg.pc);
+        self.reg.pc += 1;
+        byte
+    }
+
     pub fn call(&mut self, opcode: u8) -> u32 {
         match opcode {
             0x40 => { self.reg.b = self.reg.b;                        1 },
@@ -104,7 +110,7 @@ impl CPU {
             0x9D => { self.alu_sbc(self.reg.l);                       1 },
             0x9E => { self.alu_sbc(self.mem.read(self.reg.get_hl())); 2 },
             0x9F => { self.alu_sbc(self.reg.a);                       1 },
-            0xCB => {                                                 0 }, // CB OPs
+            0xCB => { self.cb_call(self.read_byte());                 0 },
             code => panic!("Instruction {:2X} is unknown!", code),
         }
     }
