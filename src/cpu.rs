@@ -23,6 +23,31 @@ impl CPU {
 
     pub fn call(&mut self, opcode: u8) -> u32 {
         match opcode {
+            0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
+            0x06 => { self.reg.b = self.read_byte();                  2 },
+            0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
+            0x0E => { self.reg.c = self.read_byte();                  2 },
+            0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
+            0x16 => { self.reg.d = self.read_byte();                  2 },
+            0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
+            0x1E => { self.reg.e = self.read_byte();                  2 },
+            0x22 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.a);
+                      self.reg.set_hl(a + 1);                         2 },
+            0x26 => { self.reg.h = self.read_byte();                  2 },
+            0x2A => { let a = self.reg.get_hl();
+                      self.reg.a = self.mem.read(a);
+                      self.reg.set_hl(a + 1);                         2 },
+            0x2E => { self.reg.l = self.read_byte();                  2 },
+            0x32 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.a);
+                      self.reg.set_hl(a - 1);                         2 },
+            0x36 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.read_byte());            3 },
+            0x3A => { let a = self.reg.get_hl();
+                      self.reg.a = self.mem.read(a);
+                      self.reg.set_hl(a - 1);                         2 },
+            0x3E => { self.reg.a = self.read_byte();                  2 },
             0x40 => { self.reg.b = self.reg.b;                        1 },
             0x41 => { self.reg.b = self.reg.c;                        1 },
             0x42 => { self.reg.b = self.reg.d;                        1 },
