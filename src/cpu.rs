@@ -188,7 +188,11 @@ impl CPU {
             0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
             0xCB => { self.cb_call()                                    },
+            0xD6 => { self.alu_sub(self.read_byte());                 2 },
             0xE6 => { self.alu_and(self.read_byte());                 2 },
+            0xEE => { self.alu_xor(self.read_byte());                 2 },
+            0xF6 => { self.alu_or(self.read_byte());                  2 },
+            0xFE => { self.alu_cp(self.read_byte());                  2 },
             // Should be a panic!, keep it as a println! for now
             code => { println!("Instruction {:} is unknown!", code); 0 },
         }
