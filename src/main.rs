@@ -43,7 +43,12 @@ async fn main() -> Result<(), impl std::error::Error> {
     println!("Starting \"{game_name}\"...");
 
     // Start CPU
-    let cpu = CPU::new(GBMode::Classic);
+    let mut cpu = CPU::new(GBMode::Classic, buffer.clone().try_into().unwrap());
+    let mut cycle_count = 0;
+
+    while cycle_count < 1000 {
+        cycle_count += cpu.cycle();
+    }
 
     let event_loop = EventLoop::new().unwrap();
 

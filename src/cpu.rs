@@ -8,11 +8,15 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode) -> CPU {
+    pub fn new(mode: GBMode, rom: [u8; 0x8000]) -> CPU {
         CPU {
             reg: Registers::new(mode),
-            mem: MMU::new()
+            mem: MMU::new(rom)
         }
+    }
+
+    pub fn cycle(&mut self) -> u32 {
+        self.call()
     }
 
     pub fn read_byte(&mut self) -> u8 {
@@ -152,7 +156,7 @@ impl CPU {
             0x9E => { self.alu_sbc(self.mem.read(self.reg.get_hl())); 2 },
             0x9F => { self.alu_sbc(self.reg.a);                       1 },
             0xCB => { self.cb_call()                                    },
-            code => panic!("Instruction {:2X} is unknown!", code),
+            code => { println!("Instruction {:} is unknown!", code); 0 },
         }
     }
 
@@ -223,7 +227,7 @@ impl CPU {
             0x7D => { self.alu_bit(self.reg.l, 7); 2 },
             0x7E => {                              4 }, // BIT 7, HL
             0x7F => { self.alu_bit(self.reg.a, 7); 2 },
-            code => panic!("CB Instruction {:2X} is unknown!", code),
+            code => {println!("CB Instruction {:2X} is unknown!", code); 0},
         }
     }
 
