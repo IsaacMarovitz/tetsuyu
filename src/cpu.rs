@@ -72,8 +72,8 @@ impl CPU {
             0x32 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a - 1);                         2 },
-            0x33 => { let sp = self.reg.get_sp();
-                      self.reg.set_sp(sp.wrapping_add(1));            2 },
+            0x33 => { let sp = self.reg.sp;
+                      self.reg.sp = sp.wrapping_add(1);               2 },
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
@@ -84,8 +84,8 @@ impl CPU {
             0x3A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
                       self.reg.set_hl(a - 1);                         2 },
-            0x3B => { let sp = self.reg.get_sp();
-                      self.reg.set_sp(sp.wrapping_sub(1));            2 },
+            0x3B => { let sp = self.reg.sp;
+                      self.reg.sp = sp.wrapping_sub(1);               2 },
             0x3E => { self.reg.a = self.read_byte();                  2 },
             0x40 => { self.reg.b = self.reg.b;                        1 },
             0x41 => { self.reg.b = self.reg.c;                        1 },
@@ -233,7 +233,7 @@ impl CPU {
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
             // Should be a panic!, keep it as a println! for now
-            code => { println!("Instruction {:} is unknown!", code);  0 },
+            code => { println!("Instruction {:#04x} is unknown!", code);  0 },
         }
     }
 
@@ -313,7 +313,7 @@ impl CPU {
                 self.alu_bit(self.mem.read(a), 7);       4 },
             0x7F => { self.alu_bit(self.reg.a, 7);       2 },
             // Should be a panic!, keep it as a println! for now
-            code => { println!("CB Instruction {:2X} is unknown!", code); 0 },
+            code => { println!("CB Instruction {:#04x} is unknown!", code); 0 },
         }
     }
 
