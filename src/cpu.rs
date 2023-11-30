@@ -96,6 +96,20 @@ impl CPU {
             0x6D => { self.reg.l = self.reg.l;                        1 },
             0x6E => { self.reg.l = self.mem.read(self.reg.get_hl());  2 },
             0x6F => { self.reg.l = self.reg.a;                        1 },
+            0x70 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.b);                  2 },
+            0x71 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.c);                  2 },
+            0x72 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.d);                  2 },
+            0x73 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.e);                  2 },
+            0x74 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.h);                  2 },
+            0x75 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.l);                  2 },
+            0x77 => { let a = self.reg.get_hl();
+                      self.mem.write(a, self.reg.a);                  2 },
             0x78 => { self.reg.a = self.reg.b;                        1 },
             0x79 => { self.reg.a = self.reg.c;                        1 },
             0x7A => { self.reg.a = self.reg.d;                        1 },
