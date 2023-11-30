@@ -34,25 +34,25 @@ impl CPU {
             0x0E => { self.reg.c = self.read_byte();                  2 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
             0x16 => { self.reg.d = self.read_byte();                  2 },
-            0x18 => { self.reg.pc += self.read_byte();                3 },
+            0x18 => { self.reg.pc += self.read_byte() as u16;         3 },
             0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
             0x1E => { self.reg.e = self.read_byte();                  2 },
             0x20 => { if !self.reg.get_flag(Flags::Z)
-                      { self.reg.pc += self.read_byte();              3 }
+                      { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                      2 } },
             0x22 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a + 1);                         2 },
             0x26 => { self.reg.h = self.read_byte();                  2 },
             0x28 => { if self.reg.get_flag(Flags::Z)
-                      { self.reg.pc += self.read_byte();              3 }
+                      { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                      2 } },
             0x2A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
                       self.reg.set_hl(a + 1);                         2 },
             0x2E => { self.reg.l = self.read_byte();                  2 },
             0x30 => { if !self.reg.get_flag(Flags::C)
-                      { self.reg.pc += self.read_byte();              3 }
+                      { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                      2 } },
             0x32 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
@@ -61,7 +61,7 @@ impl CPU {
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
             0x38 => { if self.reg.get_flag(Flags::C)
-                      { self.reg.pc += self.read_byte();              3 }
+                      { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                      2 } },
             0x3A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
@@ -201,12 +201,17 @@ impl CPU {
             0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
             0xCB => { self.cb_call()                                    },
-            0xD6 => { self.alu_sub(self.read_byte());                 2 },
-            0xE6 => { self.alu_and(self.read_byte());                 2 },
-            0xEE => { self.alu_xor(self.read_byte());                 2 },
+            0xD6 => { let b = self.read_byte();
+                      self.alu_sub(b);                                2 },
+            0xE6 => { let b = self.read_byte();
+                      self.alu_and(b);                                2 },
+            0xEE => { let b = self.read_byte();
+                      self.alu_xor(b);                                2 },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
-            0xF6 => { self.alu_or(self.read_byte());                  2 },
-            0xFE => { self.alu_cp(self.read_byte());                  2 },
+            0xF6 => { let b = self.read_byte();
+                      self.alu_or(b);                                 2 },
+            0xFE => { let b = self.read_byte();
+                      self.alu_cp(b);                                 2 },
             // Should be a panic!, keep it as a println! for now
             code => { println!("Instruction {:} is unknown!", code); 0 },
         }
