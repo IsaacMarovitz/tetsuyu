@@ -27,6 +27,7 @@ impl MMU {
 
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
+            0x0000..=0x8000 => self.rom[a as usize] = v,
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             0xFFFF => self.interrupt = v,
