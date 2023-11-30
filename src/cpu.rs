@@ -87,6 +87,14 @@ impl CPU {
                       self.reg.set_hl(a - 1);                         2 },
             0x33 => { let sp = self.reg.sp;
                       self.reg.sp = sp.wrapping_add(1);               2 },
+            0x34 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_inc(v);
+                      self.mem.write(a, v);                           3 },
+            0x35 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_dec(v);
+                      self.mem.write(a, v);                           3 },
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
