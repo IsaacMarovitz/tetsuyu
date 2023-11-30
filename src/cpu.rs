@@ -171,6 +171,22 @@ impl CPU {
             0xAD => { self.alu_xor(self.reg.l);                       1 },
             0xAE => { self.alu_xor(self.mem.read(self.reg.get_hl())); 2 },
             0xAF => { self.alu_xor(self.reg.a);                       1 },
+            0xB0 => { self.alu_or(self.reg.b);                        1 },
+            0xB1 => { self.alu_or(self.reg.c);                        1 },
+            0xB2 => { self.alu_or(self.reg.d);                        1 },
+            0xB3 => { self.alu_or(self.reg.e);                        1 },
+            0xB4 => { self.alu_or(self.reg.h);                        1 },
+            0xB5 => { self.alu_or(self.reg.l);                        1 },
+            0xB6 => { self.alu_or(self.mem.read(self.reg.get_hl()));  2 },
+            0xB7 => { self.alu_or(self.reg.a);                        1 },
+            0xB8 => { self.alu_cp(self.reg.b);                        1 },
+            0xB9 => { self.alu_cp(self.reg.c);                        1 },
+            0xBA => { self.alu_cp(self.reg.d);                        1 },
+            0xBB => { self.alu_cp(self.reg.e);                        1 },
+            0xBC => { self.alu_cp(self.reg.h);                        1 },
+            0xBD => { self.alu_cp(self.reg.l);                        1 },
+            0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
+            0xBF => { self.alu_cp(self.reg.a);                        1 },
             0xCB => { self.cb_call()                                    },
             // Should be a panic!, keep it as a println! for now
             code => { println!("Instruction {:} is unknown!", code); 0 },
@@ -309,6 +325,16 @@ impl CPU {
         self.reg.a = r;
     }
 
+    fn alu_or(&mut self, x: u8) {
+        let a = self.reg.a;
+        let r = a | x;
+        self.reg.set_flag(Flags::C, false);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, r == 0);
+        self.reg.a = r;
+    }
+
     fn alu_xor(&mut self, x: u8) {
         let a = self.reg.a;
         let r = a ^ x;
@@ -317,6 +343,12 @@ impl CPU {
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
+    }
+
+    fn alu_cp(&mut self, x: u8) {
+        let r = self.reg.a;
+        self.alu_sub(r);
+        self.reg.a = r
     }
 
     fn alu_bit(&mut self, a: u8, b: u8) {
