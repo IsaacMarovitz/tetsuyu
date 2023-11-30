@@ -117,7 +117,7 @@ impl CPU {
             0x43 => { self.alu_bit(self.reg.e, 0); 2 },
             0x44 => { self.alu_bit(self.reg.h, 0); 2 },
             0x45 => { self.alu_bit(self.reg.l, 0); 2 },
-            0x46 => {                                 4 }, // BIT 0, HL
+            0x46 => {                              4 }, // BIT 0, HL
             0x47 => { self.alu_bit(self.reg.a, 0); 2 },
             0x48 => { self.alu_bit(self.reg.b, 1); 2 },
             0x49 => { self.alu_bit(self.reg.c, 1); 2 },
@@ -125,7 +125,7 @@ impl CPU {
             0x4B => { self.alu_bit(self.reg.e, 1); 2 },
             0x4C => { self.alu_bit(self.reg.h, 1); 2 },
             0x4D => { self.alu_bit(self.reg.l, 1); 2 },
-            0x4E => {                                 4 }, // BIT 1, HL
+            0x4E => {                              4 }, // BIT 1, HL
             0x4F => { self.alu_bit(self.reg.a, 1); 2 },
             0x50 => { self.alu_bit(self.reg.b, 2); 2 },
             0x51 => { self.alu_bit(self.reg.c, 2); 2 },
@@ -133,7 +133,7 @@ impl CPU {
             0x53 => { self.alu_bit(self.reg.e, 2); 2 },
             0x54 => { self.alu_bit(self.reg.h, 2); 2 },
             0x55 => { self.alu_bit(self.reg.l, 2); 2 },
-            0x56 => {                                 4 }, // BIT 2, HL
+            0x56 => {                              4 }, // BIT 2, HL
             0x57 => { self.alu_bit(self.reg.a, 2); 2 },
             0x58 => { self.alu_bit(self.reg.b, 3); 2 },
             0x59 => { self.alu_bit(self.reg.c, 3); 2 },
@@ -141,7 +141,7 @@ impl CPU {
             0x5B => { self.alu_bit(self.reg.e, 3); 2 },
             0x5C => { self.alu_bit(self.reg.h, 3); 2 },
             0x5D => { self.alu_bit(self.reg.l, 3); 2 },
-            0x5E => {                                 4 }, // BIT 3, HL
+            0x5E => {                              4 }, // BIT 3, HL
             0x5F => { self.alu_bit(self.reg.a, 3); 2 },
             0x60 => { self.alu_bit(self.reg.b, 4); 2 },
             0x61 => { self.alu_bit(self.reg.c, 4); 2 },
@@ -149,7 +149,7 @@ impl CPU {
             0x63 => { self.alu_bit(self.reg.e, 4); 2 },
             0x64 => { self.alu_bit(self.reg.h, 4); 2 },
             0x65 => { self.alu_bit(self.reg.l, 4); 2 },
-            0x66 => {                                 4 }, // BIT 4, HL
+            0x66 => {                              4 }, // BIT 4, HL
             0x67 => { self.alu_bit(self.reg.a, 4); 2 },
             0x68 => { self.alu_bit(self.reg.b, 5); 2 },
             0x69 => { self.alu_bit(self.reg.c, 5); 2 },
@@ -157,7 +157,7 @@ impl CPU {
             0x6B => { self.alu_bit(self.reg.e, 5); 2 },
             0x6C => { self.alu_bit(self.reg.h, 5); 2 },
             0x6D => { self.alu_bit(self.reg.l, 5); 2 },
-            0x6E => {                                 4 }, // BIT 5, HL
+            0x6E => {                              4 }, // BIT 5, HL
             0x6F => { self.alu_bit(self.reg.a, 5); 2 },
             0x70 => { self.alu_bit(self.reg.b, 6); 2 },
             0x71 => { self.alu_bit(self.reg.c, 6); 2 },
@@ -165,7 +165,7 @@ impl CPU {
             0x73 => { self.alu_bit(self.reg.e, 6); 2 },
             0x74 => { self.alu_bit(self.reg.h, 6); 2 },
             0x75 => { self.alu_bit(self.reg.l, 6); 2 },
-            0x76 => {                                 4 }, // BIT 6, HL
+            0x76 => {                              4 }, // BIT 6, HL
             0x77 => { self.alu_bit(self.reg.a, 6); 2 },
             0x78 => { self.alu_bit(self.reg.b, 7); 2 },
             0x79 => { self.alu_bit(self.reg.c, 7); 2 },
@@ -173,7 +173,7 @@ impl CPU {
             0x7B => { self.alu_bit(self.reg.e, 7); 2 },
             0x7C => { self.alu_bit(self.reg.h, 7); 2 },
             0x7D => { self.alu_bit(self.reg.l, 7); 2 },
-            0x7E => {                                 4 }, // BIT 7, HL
+            0x7E => {                              4 }, // BIT 7, HL
             0x7F => { self.alu_bit(self.reg.a, 7); 2 },
             code => panic!("CB Instruction {:2X} is unknown!", code),
         }
