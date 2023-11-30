@@ -306,7 +306,7 @@ impl CPU {
             0x64 => { self.alu_bit(self.reg.h, 4);       2 },
             0x65 => { self.alu_bit(self.reg.l, 4);       2 },
             0x66 => { let a = self.reg.get_hl();
-                self.alu_bit(self.mem.read(a), 4);       4 },
+                      self.alu_bit(self.mem.read(a), 4); 4 },
             0x67 => { self.alu_bit(self.reg.a, 4);       2 },
             0x68 => { self.alu_bit(self.reg.b, 5);       2 },
             0x69 => { self.alu_bit(self.reg.c, 5);       2 },
@@ -315,7 +315,7 @@ impl CPU {
             0x6C => { self.alu_bit(self.reg.h, 5);       2 },
             0x6D => { self.alu_bit(self.reg.l, 5);       2 },
             0x6E => { let a = self.reg.get_hl();
-                self.alu_bit(self.mem.read(a), 5);       4 },
+                      self.alu_bit(self.mem.read(a), 5); 4 },
             0x6F => { self.alu_bit(self.reg.a, 5);       2 },
             0x70 => { self.alu_bit(self.reg.b, 6);       2 },
             0x71 => { self.alu_bit(self.reg.c, 6);       2 },
@@ -324,7 +324,7 @@ impl CPU {
             0x74 => { self.alu_bit(self.reg.h, 6);       2 },
             0x75 => { self.alu_bit(self.reg.l, 6);       2 },
             0x76 => { let a = self.reg.get_hl();
-                self.alu_bit(self.mem.read(a), 6);       4 },
+                      self.alu_bit(self.mem.read(a), 6); 4 },
             0x77 => { self.alu_bit(self.reg.a, 6);       2 },
             0x78 => { self.alu_bit(self.reg.b, 7);       2 },
             0x79 => { self.alu_bit(self.reg.c, 7);       2 },
@@ -333,10 +333,97 @@ impl CPU {
             0x7C => { self.alu_bit(self.reg.h, 7);       2 },
             0x7D => { self.alu_bit(self.reg.l, 7);       2 },
             0x7E => { let a = self.reg.get_hl();
-                self.alu_bit(self.mem.read(a), 7);       4 },
+                      self.alu_bit(self.mem.read(a), 7); 4 },
             0x7F => { self.alu_bit(self.reg.a, 7);       2 },
-            // Should be a panic!, keep it as a println! for now
-            code => { println!("CB Instruction {:#04x} is unknown!", code); 0 },
+            0xC0 => { self.reg.b = self.alu_set(self.reg.b, 0); 2 },
+            0xC1 => { self.reg.c = self.alu_set(self.reg.c, 0); 2 },
+            0xC2 => { self.reg.d = self.alu_set(self.reg.d, 0); 2 },
+            0xC3 => { self.reg.e = self.alu_set(self.reg.e, 0); 2 },
+            0xC4 => { self.reg.h = self.alu_set(self.reg.h, 0); 2 },
+            0xC5 => { self.reg.b = self.alu_set(self.reg.b, 0); 2 },
+            0xC6 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 0);
+                      self.mem.write(a, v);                     4 },
+            0xC7 => { self.reg.a = self.alu_set(self.reg.a, 0); 2 },
+            0xC8 => { self.reg.b = self.alu_set(self.reg.b, 1); 2 },
+            0xC9 => { self.reg.c = self.alu_set(self.reg.c, 1); 2 },
+            0xCA => { self.reg.d = self.alu_set(self.reg.d, 1); 2 },
+            0xCB => { self.reg.e = self.alu_set(self.reg.e, 1); 2 },
+            0xCC => { self.reg.h = self.alu_set(self.reg.h, 1); 2 },
+            0xCD => { self.reg.b = self.alu_set(self.reg.b, 1); 2 },
+            0xCE => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 1);
+                      self.mem.write(a, v);                     4 },
+            0xCF => { self.reg.a = self.alu_set(self.reg.a, 1); 2 },
+            0xD0 => { self.reg.b = self.alu_set(self.reg.b, 2); 2 },
+            0xD1 => { self.reg.c = self.alu_set(self.reg.c, 2); 2 },
+            0xD2 => { self.reg.d = self.alu_set(self.reg.d, 2); 2 },
+            0xD3 => { self.reg.e = self.alu_set(self.reg.e, 2); 2 },
+            0xD4 => { self.reg.h = self.alu_set(self.reg.h, 2); 2 },
+            0xD5 => { self.reg.b = self.alu_set(self.reg.b, 2); 2 },
+            0xD6 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 2);
+                      self.mem.write(a, v);                     4 },
+            0xD7 => { self.reg.a = self.alu_set(self.reg.a, 2); 2 },
+            0xD8 => { self.reg.b = self.alu_set(self.reg.b, 3); 2 },
+            0xD9 => { self.reg.c = self.alu_set(self.reg.c, 3); 2 },
+            0xDA => { self.reg.d = self.alu_set(self.reg.d, 3); 2 },
+            0xDB => { self.reg.e = self.alu_set(self.reg.e, 3); 2 },
+            0xDC => { self.reg.h = self.alu_set(self.reg.h, 3); 2 },
+            0xDD => { self.reg.b = self.alu_set(self.reg.b, 3); 2 },
+            0xDE => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 3);
+                      self.mem.write(a, v);                     4 },
+            0xDF => { self.reg.a = self.alu_set(self.reg.a, 3); 2 },
+            0xE0 => { self.reg.b = self.alu_set(self.reg.b, 4); 2 },
+            0xE1 => { self.reg.c = self.alu_set(self.reg.c, 4); 2 },
+            0xE2 => { self.reg.d = self.alu_set(self.reg.d, 4); 2 },
+            0xE3 => { self.reg.e = self.alu_set(self.reg.e, 4); 2 },
+            0xE4 => { self.reg.h = self.alu_set(self.reg.h, 4); 2 },
+            0xE5 => { self.reg.b = self.alu_set(self.reg.b, 4); 2 },
+            0xE6 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 4);
+                      self.mem.write(a, v);                     4 },
+            0xE7 => { self.reg.a = self.alu_set(self.reg.a, 4); 2 },
+            0xE8 => { self.reg.b = self.alu_set(self.reg.b, 5); 2 },
+            0xE9 => { self.reg.c = self.alu_set(self.reg.c, 5); 2 },
+            0xEA => { self.reg.d = self.alu_set(self.reg.d, 5); 2 },
+            0xEB => { self.reg.e = self.alu_set(self.reg.e, 5); 2 },
+            0xEC => { self.reg.h = self.alu_set(self.reg.h, 5); 2 },
+            0xED => { self.reg.b = self.alu_set(self.reg.b, 5); 2 },
+            0xEE => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 5);
+                      self.mem.write(a, v);                     4 },
+            0xEF => { self.reg.a = self.alu_set(self.reg.a, 5); 2 },
+            0xF0 => { self.reg.b = self.alu_set(self.reg.b, 6); 2 },
+            0xF1 => { self.reg.c = self.alu_set(self.reg.c, 6); 2 },
+            0xF2 => { self.reg.d = self.alu_set(self.reg.d, 6); 2 },
+            0xF3 => { self.reg.e = self.alu_set(self.reg.e, 6); 2 },
+            0xF4 => { self.reg.h = self.alu_set(self.reg.h, 6); 2 },
+            0xF5 => { self.reg.b = self.alu_set(self.reg.b, 6); 2 },
+            0xF6 => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 6);
+                      self.mem.write(a, v);                     4 },
+            0xF7 => { self.reg.a = self.alu_set(self.reg.a, 6); 2 },
+            0xF8 => { self.reg.b = self.alu_set(self.reg.b, 7); 2 },
+            0xF9 => { self.reg.c = self.alu_set(self.reg.c, 7); 2 },
+            0xFA => { self.reg.d = self.alu_set(self.reg.d, 7); 2 },
+            0xFB => { self.reg.e = self.alu_set(self.reg.e, 7); 2 },
+            0xFC => { self.reg.h = self.alu_set(self.reg.h, 7); 2 },
+            0xFD => { self.reg.b = self.alu_set(self.reg.b, 7); 2 },
+            0xFE => { let a = self.reg.get_hl();
+                      let mut v = self.mem.read(a);
+                      v = self.alu_set(v, 7);
+                      self.mem.write(a, v);                     4 },
+            0xFF => { self.reg.a = self.alu_set(self.reg.a, 7); 2 },
+            code => panic!("CB Instruction {:#04x} is unknown!", code)
         }
     }
 
@@ -439,5 +526,9 @@ impl CPU {
         self.reg.set_flag(Flags::H, true);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r);
+    }
+
+    fn alu_set(&mut self, a: u8, b: u8) -> u8 {
+        a | (1 << b)
     }
 }
