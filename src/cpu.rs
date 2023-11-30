@@ -29,13 +29,21 @@ impl CPU {
         let opcode = self.read_byte();
         match opcode {
             0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
+            0x03 => { let bc = self.reg.get_bc();
+                      self.reg.set_bc(bc.wrapping_add(1));            2 },
             0x06 => { self.reg.b = self.read_byte();                  2 },
             0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
+            0x0B => { let bc = self.reg.get_bc();
+                      self.reg.set_bc(bc.wrapping_sub(1));            2 },
             0x0E => { self.reg.c = self.read_byte();                  2 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
+            0x13 => { let de = self.reg.get_de();
+                      self.reg.set_de(de.wrapping_add(1));            2 },
             0x16 => { self.reg.d = self.read_byte();                  2 },
             0x18 => { self.reg.pc += self.read_byte() as u16;         3 },
             0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
+            0x1B => { let de = self.reg.get_de();
+                      self.reg.set_de(de.wrapping_sub(1));            2 },
             0x1E => { self.reg.e = self.read_byte();                  2 },
             0x20 => { if !self.reg.get_flag(Flags::Z)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -44,6 +52,8 @@ impl CPU {
             0x22 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a + 1);                         2 },
+            0x23 => { let hl = self.reg.get_hl();
+                      self.reg.set_hl(hl.wrapping_add(1));            2 },
             0x26 => { self.reg.h = self.read_byte();                  2 },
             0x28 => { if self.reg.get_flag(Flags::Z)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -52,6 +62,8 @@ impl CPU {
             0x2A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
                       self.reg.set_hl(a + 1);                         2 },
+            0x2B => { let hl = self.reg.get_hl();
+                      self.reg.set_hl(hl.wrapping_sub(1));            2 },
             0x2E => { self.reg.l = self.read_byte();                  2 },
             0x30 => { if !self.reg.get_flag(Flags::C)
                       { self.reg.pc += self.read_byte() as u16;       3 }
@@ -60,6 +72,8 @@ impl CPU {
             0x32 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a - 1);                         2 },
+            0x33 => { let sp = self.reg.get_sp();
+                      self.reg.set_sp(sp.wrapping_add(1));            2 },
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
@@ -70,6 +84,8 @@ impl CPU {
             0x3A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
                       self.reg.set_hl(a - 1);                         2 },
+            0x3B => { let sp = self.reg.get_sp();
+                      self.reg.set_sp(sp.wrapping_sub(1));            2 },
             0x3E => { self.reg.a = self.read_byte();                  2 },
             0x40 => { self.reg.b = self.reg.b;                        1 },
             0x41 => { self.reg.b = self.reg.c;                        1 },
