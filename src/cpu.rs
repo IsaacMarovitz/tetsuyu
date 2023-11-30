@@ -43,7 +43,8 @@ impl CPU {
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a - 1);                         2 },
             0x36 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.read_byte());            3 },
+                      let b = self.read_byte();
+                      self.mem.write(a, b);                           3 },
             0x3A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
                       self.reg.set_hl(a - 1);                         2 },
@@ -135,7 +136,8 @@ impl CPU {
             0x9D => { self.alu_sbc(self.reg.l);                       1 },
             0x9E => { self.alu_sbc(self.mem.read(self.reg.get_hl())); 2 },
             0x9F => { self.alu_sbc(self.reg.a);                       1 },
-            0xCB => { self.cb_call(self.read_byte());                 0 },
+            0xCB => { let b = self.read_byte();
+                      self.cb_call(b);                                0 },
             code => panic!("Instruction {:2X} is unknown!", code),
         }
     }
