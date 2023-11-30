@@ -5,6 +5,14 @@ pub struct MMU {
 }
 
 impl MMU {
+    pub fn new() -> MMU {
+        MMU {
+            wram: [0; 0x8000],
+            hram: [0; 0x7f],
+            interrupt: 0,
+        }
+    }
+
     pub fn read(&self, a: u16) -> u8 {
         match a {
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
