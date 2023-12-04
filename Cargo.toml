@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 winit = { version = "0.29.4", features = ["rwh_05"] }
 fundsp = "0.15.0"
-clap = { version = "4.4.10", features = ["derive"] }
+clap = { version = "4.4.11", features = ["derive"] }
 bitflags = "2.4.1"
 log = "0.4.20"
 wgpu = "0.18.0"
