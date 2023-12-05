@@ -263,6 +263,26 @@ impl CPU {
     pub fn cb_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
+            0x20 => { self.reg.b = self.alu_sla(self.reg.b);  2 },
+            0x21 => { self.reg.c = self.alu_sla(self.reg.c);  2 },
+            0x22 => { self.reg.d = self.alu_sla(self.reg.d);  2 },
+            0x23 => { self.reg.e = self.alu_sla(self.reg.e);  2 },
+            0x24 => { self.reg.h = self.alu_sla(self.reg.h);  2 },
+            0x25 => { self.reg.l = self.alu_sla(self.reg.l);  2 },
+            0x26 => { let a = self.reg.get_hl();
+                      let v = self.alu_sla(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x27 => { self.reg.a = self.alu_sla(self.reg.a);  2 },
+            0x28 => { self.reg.b = self.alu_sra(self.reg.b);  2 },
+            0x29 => { self.reg.c = self.alu_sra(self.reg.c);  2 },
+            0x2A => { self.reg.d = self.alu_sra(self.reg.d);  2 },
+            0x2B => { self.reg.e = self.alu_sra(self.reg.e);  2 },
+            0x2C => { self.reg.h = self.alu_sra(self.reg.h);  2 },
+            0x2D => { self.reg.l = self.alu_sra(self.reg.l);  2 },
+            0x2E => { let a = self.reg.get_hl();
+                      let v = self.alu_sra(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x2F => { self.reg.a = self.alu_sra(self.reg.a);  2 },
             0x30 => { self.reg.b = self.alu_swap(self.reg.b); 2 },
             0x31 => { self.reg.c = self.alu_swap(self.reg.c); 2 },
             0x32 => { self.reg.d = self.alu_swap(self.reg.d); 2 },
@@ -273,6 +293,16 @@ impl CPU {
                       let v = self.alu_swap(self.mem.read(a));
                       self.mem.write(a, v);                   4 },
             0x37 => { self.reg.a = self.alu_swap(self.reg.a); 2 },
+            0x38 => { self.reg.b = self.alu_srl(self.reg.b);  2 },
+            0x39 => { self.reg.c = self.alu_srl(self.reg.c);  2 },
+            0x3A => { self.reg.d = self.alu_srl(self.reg.d);  2 },
+            0x3B => { self.reg.e = self.alu_srl(self.reg.e);  2 },
+            0x3C => { self.reg.h = self.alu_srl(self.reg.h);  2 },
+            0x3D => { self.reg.l = self.alu_srl(self.reg.l);  2 },
+            0x3E => { let a = self.reg.get_hl();
+                      let v = self.alu_srl(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x3F => { self.reg.a = self.alu_srl(self.reg.a);  2 },
             0x40 => { self.alu_bit(self.reg.b, 0);       2 },
             0x41 => { self.alu_bit(self.reg.c, 0);       2 },
             0x42 => { self.alu_bit(self.reg.d, 0);       2 },
@@ -596,7 +626,7 @@ impl CPU {
 
     fn alu_inc(&mut self, x: u8) -> u8 {
         let r = x.wrapping_add(1);
-        self.reg.set_flag(Flags::H, (x & 0x0F) + 0x01 > 0xF);
+        self.reg.set_flag(Flags::H, (x & 0b0000_1111) + 0b0000_0001 > 0b0000_1111);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         r
@@ -604,7 +634,7 @@ impl CPU {
 
     fn alu_dec(&mut self, x: u8) -> u8 {
         let r = x.wrapping_sub(1);
-        self.reg.set_flag(Flags::H, (x & 0x0F) == 0xF);
+        self.reg.set_flag(Flags::H, (x & 0b0000_1111) == 0b0000_1111);
         self.reg.set_flag(Flags::N, true);
         self.reg.set_flag(Flags::Z, r == 0);
         r
@@ -631,5 +661,35 @@ impl CPU {
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, a == 0);
         (a >> 4) | (a << 4)
+    }
+
+    fn alu_srl(&mut self, a: u8) -> u8 {
+        let c = a & 0b0000_0001 == 0b0000_0001;
+        let r = a >> 1;
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_sla(&mut self, a: u8) -> u8 {
+        let c = a & 0b1000_0000 == 0b1000_0000;
+        let r = a << 1;
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_sra(&mut self, a: u8) -> u8 {
+        let c = a & 0b0000_0001 == 0b0000_0001;
+        let r = (a >> 1) | (a & 0b1000_0000);
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
     }
 }
