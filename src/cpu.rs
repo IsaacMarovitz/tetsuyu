@@ -263,6 +263,46 @@ impl CPU {
     pub fn cb_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
+            0x00 => { self.reg.b = self.alu_rlc(self.reg.b);  2 },
+            0x01 => { self.reg.c = self.alu_rlc(self.reg.c);  2 },
+            0x02 => { self.reg.d = self.alu_rlc(self.reg.d);  2 },
+            0x03 => { self.reg.e = self.alu_rlc(self.reg.e);  2 },
+            0x04 => { self.reg.h = self.alu_rlc(self.reg.h);  2 },
+            0x05 => { self.reg.l = self.alu_rlc(self.reg.l);  2 },
+            0x06 => { let a = self.reg.get_hl();
+                      let v = self.alu_rlc(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x07 => { self.reg.a = self.alu_rlc(self.reg.a);  2 },
+            0x08 => { self.reg.b = self.alu_rrc(self.reg.b);  2 },
+            0x09 => { self.reg.c = self.alu_rrc(self.reg.c);  2 },
+            0x0A => { self.reg.d = self.alu_rrc(self.reg.d);  2 },
+            0x0B => { self.reg.e = self.alu_rrc(self.reg.e);  2 },
+            0x0C => { self.reg.h = self.alu_rrc(self.reg.h);  2 },
+            0x0D => { self.reg.l = self.alu_rrc(self.reg.l);  2 },
+            0x0E => { let a = self.reg.get_hl();
+                      let v = self.alu_rrc(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x0F => { self.reg.a = self.alu_rrc(self.reg.a);  2 },
+            0x10 => { self.reg.b = self.alu_rl(self.reg.b);   2 },
+            0x11 => { self.reg.c = self.alu_rl(self.reg.c);   2 },
+            0x12 => { self.reg.d = self.alu_rl(self.reg.d);   2 },
+            0x13 => { self.reg.e = self.alu_rl(self.reg.e);   2 },
+            0x14 => { self.reg.h = self.alu_rl(self.reg.h);   2 },
+            0x15 => { self.reg.l = self.alu_rl(self.reg.l);   2 },
+            0x16 => { let a = self.reg.get_hl();
+                      let v = self.alu_rl(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x17 => { self.reg.a = self.alu_rl(self.reg.a);   2 },
+            0x18 => { self.reg.b = self.alu_rr(self.reg.b);   2 },
+            0x19 => { self.reg.c = self.alu_rr(self.reg.c);   2 },
+            0x1A => { self.reg.d = self.alu_rr(self.reg.d);   2 },
+            0x1B => { self.reg.e = self.alu_rr(self.reg.e);   2 },
+            0x1C => { self.reg.h = self.alu_rr(self.reg.h);   2 },
+            0x1D => { self.reg.l = self.alu_rr(self.reg.l);   2 },
+            0x1E => { let a = self.reg.get_hl();
+                      let v = self.alu_rr(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x1F => { self.reg.a = self.alu_rr(self.reg.a);   2 },
             0x20 => { self.reg.b = self.alu_sla(self.reg.b);  2 },
             0x21 => { self.reg.c = self.alu_sla(self.reg.c);  2 },
             0x22 => { self.reg.d = self.alu_sla(self.reg.d);  2 },
@@ -686,6 +726,56 @@ impl CPU {
     fn alu_sra(&mut self, a: u8) -> u8 {
         let c = a & 0b0000_0001 == 0b0000_0001;
         let r = (a >> 1) | (a & 0b1000_0000);
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_rrc(&mut self, a: u8) -> u8 {
+        let c = a & 0b0000_0001 == 0b0000_0001;
+        let r = a.rotate_right(1);
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_rr(&mut self, a: u8) -> u8 {
+        let c = a & 0b0000_0001 == 0b0000_0001;
+        let mut r = a >> 1;
+
+        if self.reg.get_flag(Flags::C) {
+            r = r | 0b1000_0000;
+        }
+
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_rlc(&mut self, a: u8) -> u8 {
+        let c = a & 0b1000_0000 == 0b1000_0000;
+        let r = a.rotate_left(1);
+        self.reg.set_flag(Flags::C, c);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        r
+    }
+
+    fn alu_rl(&mut self, a: u8) -> u8 {
+        let c = a & 0b1000_0000 == 0b1000_0000;
+        let mut r = a << 1;
+
+        if self.reg.get_flag(Flags::C) {
+            r = r | 0b0000_0001;
+        }
+
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
