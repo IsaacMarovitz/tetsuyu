@@ -263,6 +263,16 @@ impl CPU {
     pub fn cb_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
+            0x30 => { self.reg.b = self.alu_swap(self.reg.b); 2 },
+            0x31 => { self.reg.c = self.alu_swap(self.reg.c); 2 },
+            0x32 => { self.reg.d = self.alu_swap(self.reg.d); 2 },
+            0x33 => { self.reg.e = self.alu_swap(self.reg.e); 2 },
+            0x34 => { self.reg.h = self.alu_swap(self.reg.h); 2 },
+            0x35 => { self.reg.l = self.alu_swap(self.reg.l); 2 },
+            0x36 => { let a = self.reg.get_hl();
+                      let v = self.alu_swap(self.mem.read(a));
+                      self.mem.write(a, v);                   4 },
+            0x37 => { self.reg.a = self.alu_swap(self.reg.a); 2 },
             0x40 => { self.alu_bit(self.reg.b, 0);       2 },
             0x41 => { self.alu_bit(self.reg.c, 0);       2 },
             0x42 => { self.alu_bit(self.reg.d, 0);       2 },
@@ -613,5 +623,13 @@ impl CPU {
 
     fn alu_res(&mut self, a: u8, b: u8) -> u8 {
         a & !(1 << b)
+    }
+
+    fn alu_swap(&mut self, a: u8) -> u8 {
+        self.reg.set_flag(Flags::C, false);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, a == 0);
+        (a >> 4) | (a << 4)
     }
 }
