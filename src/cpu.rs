@@ -43,12 +43,16 @@ impl CPU {
             0x04 => { self.reg.b = self.alu_inc(self.reg.b);          1 },
             0x05 => { self.reg.b = self.alu_dec(self.reg.b);          1 },
             0x06 => { self.reg.b = self.read_byte();                  2 },
+            0x07 => { self.reg.a = self.alu_rlc(self.reg.a);
+                      self.reg.set_flag(Flags::Z, false);             1 },
             0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
             0x0B => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_sub(1));            2 },
             0x0C => { self.reg.c = self.alu_inc(self.reg.c);          1 },
             0x0D => { self.reg.c = self.alu_dec(self.reg.c);          1 },
             0x0E => { self.reg.c = self.read_byte();                  2 },
+            0x0F => { self.reg.a = self.alu_rrc(self.reg.a);
+                      self.reg.set_flag(Flags::Z, false);             2 },
             0x11 => { let v = self.read_word();
                       self.reg.set_de(v);                             3 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
@@ -57,6 +61,8 @@ impl CPU {
             0x14 => { self.reg.d = self.alu_inc(self.reg.d);          1 },
             0x15 => { self.reg.d = self.alu_dec(self.reg.d);          1 },
             0x16 => { self.reg.d = self.read_byte();                  2 },
+            0x17 => { self.reg.a = self.alu_rl(self.reg.a);
+                      self.reg.set_flag(Flags::Z, false);             1 },
             0x18 => { self.reg.pc += self.read_byte() as u16;         3 },
             0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
             0x1B => { let de = self.reg.get_de();
@@ -64,6 +70,8 @@ impl CPU {
             0x1C => { self.reg.e = self.alu_inc(self.reg.e);          1 },
             0x1D => { self.reg.e = self.alu_dec(self.reg.e);          1 },
             0x1E => { self.reg.e = self.read_byte();                  2 },
+            0x1F => { self.reg.a = self.alu_rr(self.reg.a);
+                      self.reg.set_flag(Flags::Z, false);             1 },
             0x20 => { if !self.reg.get_flag(Flags::Z)
                       { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                        2 }
