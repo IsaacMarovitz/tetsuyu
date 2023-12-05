@@ -25,10 +25,18 @@ impl CPU {
         byte
     }
 
+    pub fn read_word(&mut self) -> u16 {
+        let word = self.mem.read_word(self.reg.pc);
+        self.reg.pc += 2;
+        word
+    }
+
     pub fn call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
             0x00 => { 1 },
+            0x01 => { let v = self.read_word();
+                      self.reg.set_bc(v);                             3 },
             0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
             0x03 => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_add(1));            2 },
@@ -41,6 +49,8 @@ impl CPU {
             0x0C => { self.reg.c = self.alu_inc(self.reg.c);          1 },
             0x0D => { self.reg.c = self.alu_dec(self.reg.c);          1 },
             0x0E => { self.reg.c = self.read_byte();                  2 },
+            0x11 => { let v = self.read_word();
+                      self.reg.set_de(v);                             3 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
             0x13 => { let de = self.reg.get_de();
                       self.reg.set_de(de.wrapping_add(1));            2 },
@@ -58,6 +68,8 @@ impl CPU {
                       { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                        2 }
                     },
+            0x21 => { let v = self.read_word();
+                      self.reg.set_hl(v);                             3 },
             0x22 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a + 1);                         2 },
@@ -82,6 +94,8 @@ impl CPU {
                       { self.reg.pc += self.read_byte() as u16;       3 }
                       else { self.reg.pc += 1;                        2 }
                     },
+            0x31 => { let v = self.read_word();
+                      self.reg.sp = v;                                3 },
             0x32 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);
                       self.reg.set_hl(a - 1);                         2 },
