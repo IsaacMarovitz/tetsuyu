@@ -339,8 +339,7 @@ impl CPU {
             0xFB => { self.ei = true;                                 1 },
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
-            // Should be a panic!, keep it as a println! for now
-            code => { println!("Instruction {:#04x} is unknown!", code);  0 },
+            code => panic!("Instruction {:#04x} is unknown!", code),
         }
     }
 
