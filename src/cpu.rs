@@ -31,6 +31,17 @@ impl CPU {
         word
     }
 
+    pub fn push(&mut self, v: u16) {
+        self.reg.sp = self.reg.sp.wrapping_sub(2);
+        self.mem.write_word(self.reg.sp, v);
+    }
+
+    pub fn pop(&mut self) -> u16 {
+        let word = self.mem.read_word(self.reg.sp);
+        self.reg.sp += 2;
+        word
+    }
+
     pub fn call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
@@ -265,14 +276,26 @@ impl CPU {
             0xBD => { self.alu_cp(self.reg.l);                        1 },
             0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
+            0xC1 => { let v = self.pop();
+                      self.reg.set_bc(v);                             3 },
+            0xC5 => { self.push(self.reg.get_bc());                   4 },
             0xCB => { self.cb_call()                                    },
+            0xD1 => { let v = self.pop();
+                      self.reg.set_de(v);                             3 },
+            0xD5 => { self.push(self.reg.get_de());                   4 },
             0xD6 => { let b = self.read_byte();
                       self.alu_sub(b);                                2 },
+            0xE1 => { let v = self.pop();
+                      self.reg.set_de(v);                             3 },
+            0xE5 => { self.push(self.reg.get_hl());                   4 },
             0xE6 => { let b = self.read_byte();
                       self.alu_and(b);                                2 },
             0xEE => { let b = self.read_byte();
                       self.alu_xor(b);                                2 },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
+            0xF1 => { let v = self.pop();
+                      self.reg.set_af(v);                             3 },
+            0xF5 => { self.push(self.reg.get_af());                   4 },
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
             0xFE => { let b = self.read_byte();
