@@ -279,6 +279,10 @@ impl CPU {
             0xBD => { self.alu_cp(self.reg.l);                        1 },
             0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
+            0xC0 => { if !self.reg.get_flag(Flags::Z)
+                      { self.reg.pc = self.pop();                     5 }
+                      else {                                          2 }
+                    },
             0xC1 => { let v = self.pop();
                       self.reg.set_bc(v);                             3 },
             0xC2 => { if !self.reg.get_flag(Flags::Z)
@@ -287,12 +291,20 @@ impl CPU {
                     },
             0xC3 => { self.reg.pc = self.read_word();                 4 },
             0xC5 => { self.push(self.reg.get_bc());                   4 },
+            0xC8 => { if self.reg.get_flag(Flags::Z)
+                      { self.reg.pc = self.pop();                     5 }
+                      else {                                          2 }
+                    },
             0xC9 => { self.reg.pc = self.pop();                       4 },
             0xCA => { if self.reg.get_flag(Flags::Z)
                       { self.reg.pc = self.read_word();               4 }
                       else { self.reg.pc += 2;                        3 }
                     },
             0xCB => { self.cb_call()                                    },
+            0xD0 => { if !self.reg.get_flag(Flags::C)
+                      { self.reg.pc = self.pop();                     5 }
+                      else {                                          2 }
+                    },
             0xD1 => { let v = self.pop();
                       self.reg.set_de(v);                             3 },
             0xD2 => { if !self.reg.get_flag(Flags::C)
@@ -302,6 +314,10 @@ impl CPU {
             0xD5 => { self.push(self.reg.get_de());                   4 },
             0xD6 => { let b = self.read_byte();
                       self.alu_sub(b);                                2 },
+            0xD8 => { if self.reg.get_flag(Flags::C)
+                      { self.reg.pc = self.pop();                     5 }
+                      else {                                          2 }
+                    },
             0xDA => { if self.reg.get_flag(Flags::C)
                       { self.reg.pc = self.read_word();               4 }
                       else { self.reg.pc += 2;                        3 }
