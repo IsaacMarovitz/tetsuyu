@@ -19,7 +19,7 @@ impl CPU {
     }
 
     pub fn cycle(&mut self) -> u32 {
-        self.call()
+        self.op_call()
     }
 
     pub fn read_byte(&mut self) -> u8 {
@@ -45,7 +45,7 @@ impl CPU {
         word
     }
 
-    pub fn call(&mut self) -> u32 {
+    pub fn op_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
             0x00 => { 1 },
@@ -88,10 +88,7 @@ impl CPU {
             0x1E => { self.reg.e = self.read_byte();                  2 },
             0x1F => { self.reg.a = self.alu_rr(self.reg.a);
                       self.reg.set_flag(Flags::Z, false);             1 },
-            0x20 => { if !self.reg.get_flag(Flags::Z)
-                      { self.reg.pc += self.read_byte() as u16;       3 }
-                      else { self.reg.pc += 1;                        2 }
-                    },
+            0x20 => { self.jr(!self.reg.get_flag(Flags::Z))             },
             0x21 => { let v = self.read_word();
                       self.reg.set_hl(v);                             3 },
             0x22 => { let a = self.reg.get_hl();
@@ -102,10 +99,7 @@ impl CPU {
             0x24 => { self.reg.h = self.alu_inc(self.reg.h);          1 },
             0x25 => { self.reg.h = self.alu_dec(self.reg.h);          1 },
             0x26 => { self.reg.h = self.read_byte();                  2 },
-            0x28 => { if self.reg.get_flag(Flags::Z)
-                      { self.reg.pc += self.read_byte() as u16;       3 }
-                      else { self.reg.pc += 1;                        2 }
-                    },
+            0x28 => { self.jr(self.reg.get_flag(Flags::Z))              },
             0x29 => { self.alu_add_16(self.reg.get_hl());             2 },
             0x2A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
@@ -115,10 +109,7 @@ impl CPU {
             0x2C => { self.reg.l = self.alu_inc(self.reg.l);          1 },
             0x2D => { self.reg.l = self.alu_dec(self.reg.l);          1 },
             0x2E => { self.reg.l = self.read_byte();                  2 },
-            0x30 => { if !self.reg.get_flag(Flags::C)
-                      { self.reg.pc += self.read_byte() as u16;       3 }
-                      else { self.reg.pc += 1;                        2 }
-                    },
+            0x30 => { self.jr(!self.reg.get_flag(Flags::C))             },
             0x31 => { let v = self.read_word();
                       self.reg.sp = v;                                3 },
             0x32 => { let a = self.reg.get_hl();
@@ -137,10 +128,7 @@ impl CPU {
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
-            0x38 => { if self.reg.get_flag(Flags::C)
-                      { self.reg.pc += self.read_byte() as u16;       3 }
-                      else { self.reg.pc += 1;                        2 }
-                    },
+            0x38 => { self.jr(self.reg.get_flag(Flags::C))              },
             0x39 => { self.alu_add_16(self.reg.sp);                   2 },
             0x3A => { let a = self.reg.get_hl();
                       self.reg.a = self.mem.read(a);
@@ -283,73 +271,33 @@ impl CPU {
             0xBD => { self.alu_cp(self.reg.l);                        1 },
             0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
-            0xC0 => { if !self.reg.get_flag(Flags::Z)
-                      { self.reg.pc = self.pop();                     5 }
-                      else {                                          2 }
-                    },
+            0xC0 => { self.ret(!self.reg.get_flag(Flags::Z))            },
             0xC1 => { let v = self.pop();
                       self.reg.set_bc(v);                             3 },
-            0xC2 => { if !self.reg.get_flag(Flags::Z)
-                      { self.reg.pc = self.read_word();               4 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xC2 => { self.jp(!self.reg.get_flag(Flags::Z))             },
             0xC3 => { self.reg.pc = self.read_word();                 4 },
-            0xC4 => { if !self.reg.get_flag(Flags::Z)
-                      { self.push(self.reg.pc + 2);
-                        self.reg.pc = self.read_word();               6 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xC4 => { self.call(!self.reg.get_flag(Flags::Z))           },
             0xC5 => { self.push(self.reg.get_bc());                   4 },
-            0xC8 => { if self.reg.get_flag(Flags::Z)
-                      { self.reg.pc = self.pop();                     5 }
-                      else {                                          2 }
-                    },
+            0xC8 => { self.ret(self.reg.get_flag(Flags::Z))             },
             0xC9 => { self.reg.pc = self.pop();                       4 },
-            0xCA => { if self.reg.get_flag(Flags::Z)
-                      { self.reg.pc = self.read_word();               4 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xCA => { self.jp(self.reg.get_flag(Flags::Z))              },
             0xCB => { self.cb_call()                                    },
-            0xCC => { if self.reg.get_flag(Flags::Z)
-                      { self.push(self.reg.pc + 2);
-                        self.reg.pc = self.read_word();               6 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xCC => { self.call(self.reg.get_flag(Flags::Z))            },
             0xCD => { self.push(self.reg.pc + 2);
                       self.reg.pc = self.read_word();                 6 },
-            0xD0 => { if !self.reg.get_flag(Flags::C)
-                      { self.reg.pc = self.pop();                     5 }
-                      else {                                          2 }
-                    },
+            0xD0 => { self.ret(!self.reg.get_flag(Flags::C))            },
             0xD1 => { let v = self.pop();
                       self.reg.set_de(v);                             3 },
-            0xD2 => { if !self.reg.get_flag(Flags::C)
-                      { self.reg.pc = self.read_word();               4 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
-            0xD4 => { if !self.reg.get_flag(Flags::C)
-                      { self.push(self.reg.pc + 2);
-                        self.reg.pc = self.read_word();               6 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xD2 => { self.jp(!self.reg.get_flag(Flags::C))             },
+            0xD4 => { self.call(!self.reg.get_flag(Flags::C))           },
             0xD5 => { self.push(self.reg.get_de());                   4 },
             0xD6 => { let b = self.read_byte();
                       self.alu_sub(b);                                2 },
-            0xD8 => { if self.reg.get_flag(Flags::C)
-                      { self.reg.pc = self.pop();                     5 }
-                      else {                                          2 }
-                    },
+            0xD8 => { self.ret(self.reg.get_flag(Flags::C))             },
             0xD9 => { self.reg.pc = self.pop();
                       self.ei = true;                                 4 },
-            0xDA => { if self.reg.get_flag(Flags::C)
-                      { self.reg.pc = self.read_word();               4 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
-            0xDC => { if self.reg.get_flag(Flags::C)
-                      { self.push(self.reg.pc + 2);
-                        self.reg.pc = self.read_word();               6 }
-                      else { self.reg.pc += 2;                        3 }
-                    },
+            0xDA => { self.jp(self.reg.get_flag(Flags::C))              },
+            0xDC => { self.call(self.reg.get_flag(Flags::C))            },
             0xE1 => { let v = self.pop();
                       self.reg.set_de(v);                             3 },
             0xE5 => { self.push(self.reg.get_hl());                   4 },
@@ -694,6 +642,46 @@ impl CPU {
                       self.mem.write(a, v);                     4 },
             0xFF => { self.reg.a = self.alu_set(self.reg.a, 7); 2 },
             code => panic!("CB Instruction {:#04x} is unknown!", code)
+        }
+    }
+
+    fn jr(&mut self, cond: bool) -> u32 {
+        let byte = self.read_byte();
+        if cond {
+            self.reg.pc += byte as u16;
+            3
+        } else {
+            2
+        }
+    }
+
+    fn jp(&mut self, cond: bool) -> u32 {
+        let word = self.read_word();
+        if cond {
+            self.reg.pc = word;
+            4
+        } else {
+            3
+        }
+    }
+
+    fn call(&mut self, cond: bool) -> u32 {
+        let word = self.read_word();
+        if cond {
+            self.push(self.reg.pc);
+            self.reg.pc = word;
+            6
+        } else {
+            3
+        }
+    }
+
+    fn ret(&mut self, cond: bool) -> u32 {
+        if cond {
+            self.reg.pc = self.pop();
+            5
+        } else {
+            2
         }
     }
 
