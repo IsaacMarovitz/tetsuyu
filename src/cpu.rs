@@ -5,6 +5,7 @@ use crate::registers::{Registers, Flags};
 pub struct CPU {
     reg: Registers,
     mem: MMU,
+    halted: bool,
     // Enabled Interrupts
     ei: bool
 }
@@ -14,12 +15,50 @@ impl CPU {
         CPU {
             reg: Registers::new(mode),
             mem: MMU::new(rom),
+            halted: false,
             ei: true
         }
     }
 
     pub fn cycle(&mut self) -> u32 {
-        self.op_call()
+        let cycles = {
+            let count = self.interrupt();
+            if count != 0 {
+                count
+            } else if self.halted {
+                1
+            } else {
+                self.op_call()
+            }
+        };
+        cycles * 4
+    }
+
+    fn interrupt(&mut self) -> u32 {
+        if !self.ei && !self.halted {
+            return 0;
+        }
+
+        let intf = self.mem.read(0xFFFF);
+        let inte = self.mem.read(0xFF0F);
+        let triggered = intf & inte;
+        if triggered == 0 {
+            return 0;
+        }
+
+        self.halted = false;
+        if !self.ei {
+            return 0;
+        }
+        self.ei = false;
+
+        let n = triggered.trailing_zeros();
+        let remaining = intf & !(1 << n);
+        self.mem.write(0xFF0F, remaining);
+
+        self.push(self.reg.pc);
+        self.reg.pc = 0x0040 | ((n as u16) << 3);
+        4
     }
 
     pub fn read_byte(&mut self) -> u8 {
@@ -197,6 +236,7 @@ impl CPU {
                       self.mem.write(a, self.reg.h);                  2 },
             0x75 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.l);                  2 },
+            0x76 => { self.halted = true;                             1 },
             0x77 => { let a = self.reg.get_hl();
                       self.mem.write(a, self.reg.a);                  2 },
             0x78 => { self.reg.a = self.reg.b;                        1 },
