@@ -4,14 +4,17 @@ use crate::registers::{Registers, Flags};
 
 pub struct CPU {
     reg: Registers,
-    mem: MMU
+    mem: MMU,
+    // Enabled Interrupts
+    ei: bool
 }
 
 impl CPU {
     pub fn new(mode: GBMode, rom: [u8; 0x8000]) -> CPU {
         CPU {
             reg: Registers::new(mode),
-            mem: MMU::new(rom)
+            mem: MMU::new(rom),
+            ei: true
         }
     }
 
@@ -313,9 +316,11 @@ impl CPU {
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
             0xF1 => { let v = self.pop();
                       self.reg.set_af(v);                             3 },
+            0xF3 => { self.ei = false;                                1 },
             0xF5 => { self.push(self.reg.get_af());                   4 },
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
+            0xFB => { self.ei = true;                                 1 },
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
             // Should be a panic!, keep it as a println! for now
