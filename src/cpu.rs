@@ -294,6 +294,11 @@ impl CPU {
                       else { self.reg.pc += 2;                        3 }
                     },
             0xC3 => { self.reg.pc = self.read_word();                 4 },
+            0xC4 => { if !self.reg.get_flag(Flags::Z)
+                      { self.push(self.reg.pc + 2);
+                        self.reg.pc = self.read_word();               6 }
+                      else { self.reg.pc += 2;                        3 }
+                    },
             0xC5 => { self.push(self.reg.get_bc());                   4 },
             0xC8 => { if self.reg.get_flag(Flags::Z)
                       { self.reg.pc = self.pop();                     5 }
@@ -305,6 +310,13 @@ impl CPU {
                       else { self.reg.pc += 2;                        3 }
                     },
             0xCB => { self.cb_call()                                    },
+            0xCC => { if self.reg.get_flag(Flags::Z)
+                      { self.push(self.reg.pc + 2);
+                        self.reg.pc = self.read_word();               6 }
+                      else { self.reg.pc += 2;                        3 }
+                    },
+            0xCD => { self.push(self.reg.pc + 2);
+                      self.reg.pc = self.read_word();                 6 },
             0xD0 => { if !self.reg.get_flag(Flags::C)
                       { self.reg.pc = self.pop();                     5 }
                       else {                                          2 }
@@ -313,6 +325,11 @@ impl CPU {
                       self.reg.set_de(v);                             3 },
             0xD2 => { if !self.reg.get_flag(Flags::C)
                       { self.reg.pc = self.read_word();               4 }
+                      else { self.reg.pc += 2;                        3 }
+                    },
+            0xD4 => { if !self.reg.get_flag(Flags::C)
+                      { self.push(self.reg.pc + 2);
+                        self.reg.pc = self.read_word();               6 }
                       else { self.reg.pc += 2;                        3 }
                     },
             0xD5 => { self.push(self.reg.get_de());                   4 },
@@ -326,6 +343,11 @@ impl CPU {
                       self.ei = true;                                 4 },
             0xDA => { if self.reg.get_flag(Flags::C)
                       { self.reg.pc = self.read_word();               4 }
+                      else { self.reg.pc += 2;                        3 }
+                    },
+            0xDC => { if self.reg.get_flag(Flags::C)
+                      { self.push(self.reg.pc + 2);
+                        self.reg.pc = self.read_word();               6 }
                       else { self.reg.pc += 2;                        3 }
                     },
             0xE1 => { let v = self.pop();
