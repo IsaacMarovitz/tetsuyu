@@ -322,6 +322,8 @@ impl CPU {
                       { self.reg.pc = self.pop();                     5 }
                       else {                                          2 }
                     },
+            0xD9 => { self.reg.pc = self.pop();
+                      self.ei = true;                                 4 },
             0xDA => { if self.reg.get_flag(Flags::C)
                       { self.reg.pc = self.read_word();               4 }
                       else { self.reg.pc += 2;                        3 }
