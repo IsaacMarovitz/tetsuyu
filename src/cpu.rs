@@ -382,6 +382,9 @@ impl CPU {
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
             0xF7 => { self.rst(0x30)                                    },
+            0xF8 => { let b = self.read_byte();
+                      self.alu_ld_sp(b);                              3 },
+            0xF9 => { self.reg.sp = self.reg.get_hl();                2 },
             0xFA => { let a = self.read_word();
                       self.reg.a = self.mem.read(a);                  4 },
             0xFB => { self.ei = true;                                 1 },
@@ -804,6 +807,16 @@ impl CPU {
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, false);
         self.reg.sp = a.wrapping_add(v);
+    }
+
+    fn alu_ld_sp(&mut self, x: u8) {
+        let a = self.reg.sp;
+        let v = x as u16;
+        self.reg.set_flag(Flags::C, u32::from(a) + u32::from(v) > u32::from(u16::MAX));
+        self.reg.set_flag(Flags::H, (a & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, false);
+        self.reg.set_hl(a.wrapping_add(v));
     }
 
     fn alu_sub(&mut self, x: u8) {
