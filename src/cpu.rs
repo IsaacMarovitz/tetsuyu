@@ -98,6 +98,8 @@ impl CPU {
             0x06 => { self.reg.b = self.read_byte();                  2 },
             0x07 => { self.reg.a = self.alu_rlc(self.reg.a);
                       self.reg.set_flag(Flags::Z, false);             1 },
+            0x08 => { let a = self.read_word();
+                      self.mem.write_word(a, self.reg.sp);            5 },
             0x09 => { self.alu_add_16(self.reg.get_bc());             2 },
             0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
             0x0B => { let bc = self.reg.get_bc();
@@ -168,6 +170,7 @@ impl CPU {
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
                       self.mem.write(a, b);                           3 },
+            0x37 => { self.alu_scf();                                 1 },
             0x38 => { self.jr(self.reg.get_flag(Flags::C))              },
             0x39 => { self.alu_add_16(self.reg.sp);                   2 },
             0x3A => { let a = self.reg.get_hl();
@@ -178,6 +181,7 @@ impl CPU {
             0x3C => { self.reg.a = self.alu_inc(self.reg.a);          1 },
             0x3D => { self.reg.a = self.alu_dec(self.reg.a);          1 },
             0x3E => { self.reg.a = self.read_byte();                  2 },
+            0x3F => { self.alu_ccf();                                 1 },
             0x40 => { self.reg.b = self.reg.b;                        1 },
             0x41 => { self.reg.b = self.reg.c;                        1 },
             0x42 => { self.reg.b = self.reg.d;                        1 },
@@ -359,6 +363,8 @@ impl CPU {
             0xE6 => { let b = self.read_byte();
                       self.alu_and(b);                                2 },
             0xE7 => { self.rst(0x20)                                    },
+            0xE8 => { let v = self.read_byte();
+                      self.alu_add_sp(v);                             4 },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
             0xEA => { let a = self.read_word();
                       self.mem.write(a, self.reg.a);                  4 },
@@ -788,6 +794,18 @@ impl CPU {
         self.reg.set_hl(r);
     }
 
+    fn alu_add_sp(&mut self, x: u8) {
+        let a = self.reg.sp;
+        // rboy and gameboy go u8 -> i8 -> i16 -> u16
+        // this doesn't seem necessary but check later
+        let v = x as u16;
+        self.reg.set_flag(Flags::C, u32::from(a) + u32::from(v) > u32::from(u16::MAX));
+        self.reg.set_flag(Flags::H, (a & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
+        self.reg.set_flag(Flags::N, false);
+        self.reg.set_flag(Flags::Z, false);
+        self.reg.sp = a.wrapping_add(v);
+    }
+
     fn alu_sub(&mut self, x: u8) {
         let a = self.reg.a;
         let r = a.wrapping_sub(x);
@@ -962,5 +980,18 @@ impl CPU {
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, a == 0);
         r
+    }
+
+    fn alu_ccf(&mut self) {
+        let v = !self.reg.get_flag(Flags::C);
+        self.reg.set_flag(Flags::C, v);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
+    }
+
+    fn alu_scf(&mut self) {
+        self.reg.set_flag(Flags::C, true);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::N, false);
     }
 }
