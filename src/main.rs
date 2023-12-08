@@ -44,10 +44,9 @@ async fn main() -> Result<(), impl std::error::Error> {
 
     // Start CPU
     let mut cpu = CPU::new(GBMode::Classic, buffer.clone().try_into().unwrap());
-    let mut cycle_count = 0;
 
-    while cycle_count < 3000 {
-        cycle_count += cpu.cycle();
+    while true {
+        cpu.cycle();
     }
 
     let event_loop = EventLoop::new().unwrap();

@@ -319,6 +319,8 @@ impl CPU {
             0xC3 => { self.reg.pc = self.read_word();                 4 },
             0xC4 => { self.call(!self.reg.get_flag(Flags::Z))           },
             0xC5 => { self.push(self.reg.get_bc());                   4 },
+            0xC6 => { let v = self.read_byte();
+                      self.alu_add(v);                                2 },
             0xC7 => { self.rst(0x00)                                    },
             0xC8 => { self.ret(self.reg.get_flag(Flags::Z))             },
             0xC9 => { self.reg.pc = self.pop();                       4 },
@@ -327,6 +329,8 @@ impl CPU {
             0xCC => { self.call(self.reg.get_flag(Flags::Z))            },
             0xCD => { self.push(self.reg.pc + 2);
                       self.reg.pc = self.read_word();                 6 },
+            0xCE => { let v = self.read_byte();
+                      self.alu_adc(v);                                2 },
             0xCF => { self.rst(0x08)                                    },
             0xD0 => { self.ret(!self.reg.get_flag(Flags::C))            },
             0xD1 => { let v = self.pop();
@@ -342,24 +346,38 @@ impl CPU {
                       self.ei = true;                                 4 },
             0xDA => { self.jp(self.reg.get_flag(Flags::C))              },
             0xDC => { self.call(self.reg.get_flag(Flags::C))            },
+            0xDE => { let v = self.read_byte();
+                      self.alu_sbc(v);                                2 },
             0xDF => { self.rst(0x18)                                    },
+            0xE0 => { let a = 0xFF00 | u16::from(self.read_byte());
+                      self.mem.write(a, self.reg.a);                  3 },
             0xE1 => { let v = self.pop();
                       self.reg.set_de(v);                             3 },
+            0xE2 => { let a = 0xFF00 | u16::from(self.reg.c);
+                      self.mem.write(a, self.reg.a);                  2 },
             0xE5 => { self.push(self.reg.get_hl());                   4 },
             0xE6 => { let b = self.read_byte();
                       self.alu_and(b);                                2 },
             0xE7 => { self.rst(0x20)                                    },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
+            0xEA => { let a = self.read_word();
+                      self.mem.write(a, self.reg.a);                  4 },
             0xEE => { let b = self.read_byte();
                       self.alu_xor(b);                                2 },
             0xEF => { self.rst(0x28)                                    },
+            0xF0 => { let a = 0xFF00 | u16::from(self.read_byte());
+                      self.reg.a = self.mem.read(a);                  3 },
             0xF1 => { let v = self.pop();
                       self.reg.set_af(v);                             3 },
+            0xF2 => { let a = 0xFF00 | u16::from(self.reg.c);
+                      self.reg.a = self.mem.read(a);                  2 },
             0xF3 => { self.ei = false;                                1 },
             0xF5 => { self.push(self.reg.get_af());                   4 },
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
             0xF7 => { self.rst(0x30)                                    },
+            0xFA => { let a = self.read_word();
+                      self.reg.a = self.mem.read(a);                  4 },
             0xFB => { self.ei = true;                                 1 },
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
