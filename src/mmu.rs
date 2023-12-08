@@ -1,5 +1,5 @@
 pub struct MMU {
-    rom: [u8; 0x10000],
+    rom: Vec<u8>,
     gpu: [u8; 0x2000],
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
@@ -8,7 +8,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(rom: [u8; 0x10000]) -> MMU {
+    pub fn new(rom: Vec<u8>) -> MMU {
         MMU {
             rom,
             gpu: [0; 0x2000],

@@ -11,7 +11,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode, rom: [u8; 0x10000]) -> CPU {
+    pub fn new(mode: GBMode, rom: Vec<u8>) -> CPU {
         CPU {
             reg: Registers::new(mode),
             mem: MMU::new(rom),
