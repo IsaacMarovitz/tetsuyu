@@ -695,9 +695,9 @@ impl CPU {
     }
 
     fn jr(&mut self, cond: bool) -> u32 {
-        let byte = self.read_byte();
+        let byte = self.read_byte() as i8;
         if cond {
-            self.reg.pc += byte as u16;
+            self.reg.pc = ((self.reg.pc as u32 as i32) + byte as i32) as u16;
             3
         } else {
             2
