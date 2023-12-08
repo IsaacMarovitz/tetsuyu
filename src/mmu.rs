@@ -1,5 +1,5 @@
 pub struct MMU {
-    rom: [u8; 0x8000],
+    rom: [u8; 0x10000],
     gpu: [u8; 0x2000],
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
@@ -8,7 +8,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(rom: [u8; 0x8000]) -> MMU {
+    pub fn new(rom: [u8; 0x10000]) -> MMU {
         MMU {
             rom,
             gpu: [0; 0x2000],
@@ -22,7 +22,7 @@ impl MMU {
     pub fn read(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize],
-            0x8000..=0x9FFF => self.gpu[a as usize],
+            0x8000..=0x9FFF => self.gpu[a as usize - 0x8000],
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
@@ -36,7 +36,7 @@ impl MMU {
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize] = v,
-            0x8000..=0x9FFF => self.gpu[a as usize] = v,
+            0x8000..=0x9FFF => self.gpu[a as usize - 0x8000] = v,
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,

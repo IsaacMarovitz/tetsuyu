@@ -11,7 +11,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode, rom: [u8; 0x8000]) -> CPU {
+    pub fn new(mode: GBMode, rom: [u8; 0x10000]) -> CPU {
         CPU {
             reg: Registers::new(mode),
             mem: MMU::new(rom),
@@ -109,7 +109,7 @@ impl CPU {
             0x0E => { self.reg.c = self.read_byte();                  2 },
             0x0F => { self.reg.a = self.alu_rrc(self.reg.a);
                       self.reg.set_flag(Flags::Z, false);             2 },
-            0x10 => {                                                 1 },
+            0x10 => { println!("Stopped!");                           1 },
             0x11 => { let v = self.read_word();
                       self.reg.set_de(v);                             3 },
             0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
