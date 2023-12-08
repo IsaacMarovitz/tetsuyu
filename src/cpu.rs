@@ -141,6 +141,7 @@ impl CPU {
             0x24 => { self.reg.h = self.alu_inc(self.reg.h);          1 },
             0x25 => { self.reg.h = self.alu_dec(self.reg.h);          1 },
             0x26 => { self.reg.h = self.read_byte();                  2 },
+            0x27 => { self.alu_daa();                                 1 },
             0x28 => { self.jr(self.reg.get_flag(Flags::Z))              },
             0x29 => { self.alu_add_16(self.reg.get_hl());             2 },
             0x2A => { let a = self.reg.get_hl();
@@ -151,6 +152,7 @@ impl CPU {
             0x2C => { self.reg.l = self.alu_inc(self.reg.l);          1 },
             0x2D => { self.reg.l = self.alu_dec(self.reg.l);          1 },
             0x2E => { self.reg.l = self.read_byte();                  2 },
+            0x2F => { self.alu_cpl();                                 1 },
             0x30 => { self.jr(!self.reg.get_flag(Flags::C))             },
             0x31 => { let v = self.read_word();
                       self.reg.sp = v;                                3 },
@@ -993,6 +995,41 @@ impl CPU {
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, a == 0);
         r
+    }
+
+    fn alu_daa(&mut self) {
+        let mut a = self.reg.a;
+        let mut adjust = if self.reg.get_flag(Flags::C) {
+            0x60
+        } else {
+            0x00
+        };
+
+        if self.reg.get_flag(Flags::H) {
+            adjust |= 0x06;
+        };
+        if !self.reg.get_flag(Flags::N) {
+            if a & 0x0F > 0x09 {
+                adjust |= 0x06;
+            };
+            if a > 0x99 {
+                adjust |= 0x60;
+            };
+            a = a.wrapping_add(adjust);
+        } else {
+            a = a.wrapping_sub(adjust);
+        }
+
+        self.reg.set_flag(Flags::C, adjust >= 0x60);
+        self.reg.set_flag(Flags::H, false);
+        self.reg.set_flag(Flags::Z, a == 0x00);
+        self.reg.a = a;
+    }
+
+    fn alu_cpl(&mut self) {
+        self.reg.a = !self.reg.a;
+        self.reg.set_flag(Flags::H, true);
+        self.reg.set_flag(Flags::N, true);
     }
 
     fn alu_ccf(&mut self) {
