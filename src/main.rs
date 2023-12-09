@@ -5,6 +5,7 @@ use bitflags::Flags;
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
+use tokio::time::{sleep, Duration};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, ModifiersState};
@@ -48,7 +49,8 @@ async fn main() -> Result<(), impl std::error::Error> {
         let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
 
         while true {
-            cpu.cycle();
+            let cycles = cpu.cycle();
+            sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
         }
     });
 
