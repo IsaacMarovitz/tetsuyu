@@ -17,6 +17,7 @@ mod cpu;
 mod mmu;
 mod mode;
 mod registers;
+mod gpu;
 
 #[derive(Parser)]
 struct Args {

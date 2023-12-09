@@ -1,6 +1,8 @@
+use crate::gpu::GPU;
+
 pub struct MMU {
     rom: Vec<u8>,
-    gpu: [u8; 0x2000],
+    gpu: GPU,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     interrupt: u8,
@@ -8,10 +10,10 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(rom: Vec<u8>) -> MMU {
-        MMU {
+    pub fn new(rom: Vec<u8>) -> Self {
+        Self {
             rom,
-            gpu: [0; 0x2000],
+            gpu: GPU::new(),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             interrupt: 0,
@@ -22,11 +24,12 @@ impl MMU {
     pub fn read(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize],
-            0x8000..=0x9FFF => self.gpu[a as usize - 0x8000],
+            0x8000..=0x9FFF => self.gpu.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
+            0xFF40..=0xFF4F => self.gpu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFFFF => self.interrupt,
             _ => 0x00,
@@ -36,11 +39,12 @@ impl MMU {
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize] = v,
-            0x8000..=0x9FFF => self.gpu[a as usize - 0x8000] = v,
+            0x8000..=0x9FFF => self.gpu.write(a, v),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
+            0xFF40..=0xFF4F => self.gpu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             0xFFFF => self.interrupt = v,
             _ => {},
