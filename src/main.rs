@@ -81,6 +81,7 @@ async fn main() -> Result<(), impl std::error::Error> {
                     }
                 }
                 WindowEvent::Resized(physical_size) => {
+                    context.update(vec![0xFF; 40000]);
                     context.resize(physical_size);
                 }
                 WindowEvent::ModifiersChanged(new) => {
