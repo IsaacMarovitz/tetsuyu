@@ -69,7 +69,6 @@ async fn main() -> Result<(), impl std::error::Error> {
                 cpu.mem.gpu.cycle();
                 context.lock().unwrap().update(cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect());
 
-
                 sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
             }
         });
