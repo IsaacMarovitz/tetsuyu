@@ -73,6 +73,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         if let Event::WindowEvent { event, window_id } = event {
             match event {
                 WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                    context.update([0xFF; 92160]);
                     match context.render() {
                         Ok(_) => {}
                         Err(SurfaceError::Lost) => context.resize(context.size),
@@ -81,7 +82,6 @@ async fn main() -> Result<(), impl std::error::Error> {
                     }
                 }
                 WindowEvent::Resized(physical_size) => {
-                    context.update(vec![0xFF; 40000]);
                     context.resize(physical_size);
                 }
                 WindowEvent::ModifiersChanged(new) => {

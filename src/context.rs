@@ -1,6 +1,7 @@
 use bitflags::Flags;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
+use crate::gpu::{SCREEN_H, SCREEN_W};
 
 // Code here is mostly derived from https://sotrh.github.io/learn-wgpu/beginner/tutorial1-window/
 
@@ -122,8 +123,8 @@ impl Context {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Texture"),
             size: wgpu::Extent3d {
-                width: 100,
-                height: 100,
+                width: SCREEN_W as u32,
+                height: SCREEN_H as u32,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -273,7 +274,7 @@ impl Context {
         self.window.request_redraw();
     }
 
-    pub fn update(&mut self, rgb: Vec<u8>) {
+    pub fn update(&mut self, rgba: [u8; 92160]) {
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 aspect: wgpu::TextureAspect::All,
@@ -281,15 +282,15 @@ impl Context {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &rgb,
+            &rgba,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * 100),
-                rows_per_image: Some(100),
+                bytes_per_row: Some(4 * SCREEN_W as u32),
+                rows_per_image: Some(SCREEN_H as u32),
             },
             wgpu::Extent3d {
-                width: 100,
-                height: 100,
+                width: SCREEN_W as u32,
+                height: SCREEN_H as u32,
                 depth_or_array_layers: 1,
             },
         );
