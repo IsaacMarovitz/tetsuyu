@@ -295,7 +295,7 @@ impl Context {
             },
         );
 
-        // self.window.request_redraw();
+        self.render();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
