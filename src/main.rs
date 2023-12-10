@@ -59,10 +59,9 @@ async fn main() -> Result<(), impl std::error::Error> {
 
     {
         let context = Arc::clone(&context);
-        let buffer_copy = buffer.clone();
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
+            let mut cpu = CPU::new(GBMode::Classic, buffer);
 
             loop {
                 let cycles = cpu.cycle();
