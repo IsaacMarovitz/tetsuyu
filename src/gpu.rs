@@ -67,15 +67,16 @@ impl GPU {
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             ram: [0; 0x4000],
-            frame_buffer: [[[0xFF, 0x00, 0x00, 0xFF]; SCREEN_W]; SCREEN_H]
+            frame_buffer: [[[0x00; 4]; SCREEN_W]; SCREEN_H]
         }
     }
 
     pub fn cycle(&mut self) {
-        self.ly = self.ly.wrapping_add(1);
-        self.frame_buffer = [[[self.ly, 0x00, 0x00, 0xFF]; SCREEN_W]; SCREEN_H];
+        if !self.lcdc.contains(LCDC::LCD_ENABLE) {
+            return;
+        }
 
-        // self.draw_bg();
+        self.draw_bg();
     }
 
     fn grey_to_l(v: u8, i: usize) -> u8 {
