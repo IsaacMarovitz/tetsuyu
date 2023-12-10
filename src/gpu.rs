@@ -15,7 +15,7 @@ pub struct GPU {
     lcdc: LCDC,
     lcds: LCDS,
     ram: [u8; 0x4000],
-    frame_buffer: [[[u8; 3]; SCREEN_W]; SCREEN_H]
+    frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
 }
 
 bitflags! {
@@ -67,7 +67,7 @@ impl GPU {
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             ram: [0; 0x4000],
-            frame_buffer: [[[0; 3]; SCREEN_W]; SCREEN_H]
+            frame_buffer: [[[0; 4]; SCREEN_W]; SCREEN_H]
         }
     }
 
@@ -86,7 +86,7 @@ impl GPU {
 
     fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
         // TODO: Color mapping from CGB -> sRGB
-        self.frame_buffer[self.ly as usize][x] = [r, g, b];
+        self.frame_buffer[self.ly as usize][x] = [r, g, b, 0xFF];
     }
 
     fn draw_bg(&mut self) {

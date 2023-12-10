@@ -59,7 +59,7 @@ async fn main() -> Result<(), impl std::error::Error> {
     tokio::spawn(async move {
         let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
 
-        while true {
+        loop {
             let cycles = cpu.cycle();
             cpu.mem.gpu.cycle();
 
