@@ -72,7 +72,10 @@ impl GPU {
     }
 
     pub fn cycle(&mut self) {
-        self.draw_bg();
+        self.ly = self.ly.wrapping_add(1);
+        self.frame_buffer = [[[self.ly, 0x00, 0x00, 0xFF]; SCREEN_W]; SCREEN_H];
+
+        // self.draw_bg();
     }
 
     fn grey_to_l(v: u8, i: usize) -> u8 {

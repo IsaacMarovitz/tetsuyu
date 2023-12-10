@@ -12,6 +12,7 @@ use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, ModifiersState};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
+use winit::event_loop::ControlFlow;
 
 mod context;
 mod cpu;
@@ -46,6 +47,7 @@ async fn main() -> Result<(), impl std::error::Error> {
     println!("Starting \"{game_name}\"...");
 
     let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
 
     let window = WindowBuilder::new()
         .with_title(format!("gb-rs - {:}", game_name))
