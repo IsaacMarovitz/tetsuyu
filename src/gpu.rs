@@ -15,7 +15,7 @@ pub struct GPU {
     lcdc: LCDC,
     lcds: LCDS,
     ram: [u8; 0x4000],
-    frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
+    pub frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
 }
 
 bitflags! {
@@ -67,7 +67,7 @@ impl GPU {
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             ram: [0; 0x4000],
-            frame_buffer: [[[0; 4]; SCREEN_W]; SCREEN_H]
+            frame_buffer: [[[0xFF, 0x00, 0x00, 0xFF]; SCREEN_W]; SCREEN_H]
         }
     }
 

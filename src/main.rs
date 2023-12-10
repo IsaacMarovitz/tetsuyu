@@ -5,6 +5,7 @@ use bitflags::Flags;
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
@@ -52,53 +53,61 @@ async fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
-    let mut context = Context::new(window).await;
+    let context = Arc::new(Mutex::new(Context::new(window).await));
 
-    let buffer_copy = buffer.clone();
-    // Start CPU
-    tokio::spawn(async move {
-        let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
+    {
+        let context = Arc::clone(&context);
+        let buffer_copy = buffer.clone();
+        // Start CPU
+        tokio::spawn(async move {
+            let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
 
-        loop {
-            let cycles = cpu.cycle();
-            cpu.mem.gpu.cycle();
+            loop {
+                let cycles = cpu.cycle();
+                cpu.mem.gpu.cycle();
+                context.lock().unwrap().update(cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect());
 
-            sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
-        }
-    });
 
-    let mut modifiers = ModifiersState::default();
+                sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
+            }
+        });
+    }
 
-    event_loop.run(move |event, elwt| {
-        if let Event::WindowEvent { event, window_id } = event {
-            match event {
-                WindowEvent::RedrawRequested if window_id == context.window().id() => {
-                    context.update([0xFF; 92160]);
-                    match context.render() {
-                        Ok(_) => {}
-                        Err(SurfaceError::Lost) => context.resize(context.size),
-                        Err(SurfaceError::OutOfMemory) => elwt.exit(),
-                        Err(e) => println!("{:?}", e),
-                    }
-                }
-                WindowEvent::Resized(physical_size) => {
-                    context.resize(physical_size);
-                }
-                WindowEvent::ModifiersChanged(new) => {
-                    modifiers = new.state();
-                }
-                WindowEvent::KeyboardInput { event, .. } => {
-                    if event.state == ElementState::Pressed && !event.repeat {
-                        match event.key_without_modifiers().as_ref() {
-                            Key::Character("w") => {
-                                println!("Got W Key!");
-                            }
-                            _ => (),
+    {
+        let context = Arc::clone(&context);
+        let mut modifiers = ModifiersState::default();
+        event_loop.run(move |event, elwt| {
+            if let Event::WindowEvent { event, window_id } = event {
+                let mut context = context.lock().unwrap();
+                let size = context.size;
+                match event {
+                    WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                        match context.render() {
+                            Ok(_) => {}
+                            Err(SurfaceError::Lost) => context.resize(size),
+                            Err(SurfaceError::OutOfMemory) => elwt.exit(),
+                            Err(e) => println!("{:?}", e),
                         }
                     }
+                    WindowEvent::Resized(physical_size) => {
+                        context.resize(physical_size);
+                    }
+                    WindowEvent::ModifiersChanged(new) => {
+                        modifiers = new.state();
+                    }
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        if event.state == ElementState::Pressed && !event.repeat {
+                            match event.key_without_modifiers().as_ref() {
+                                Key::Character("w") => {
+                                    println!("Got W Key!");
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
-        }
-    })
+        })
+    }
 }

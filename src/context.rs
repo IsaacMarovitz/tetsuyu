@@ -274,7 +274,7 @@ impl Context {
         self.window.request_redraw();
     }
 
-    pub fn update(&mut self, rgba: [u8; 92160]) {
+    pub fn update(&mut self, rgba: Vec<u8>) {
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 aspect: wgpu::TextureAspect::All,
