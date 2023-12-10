@@ -1,9 +1,11 @@
 use bitflags::{bitflags, Flags};
+use crate::mode::GBMode;
 
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
 pub struct GPU {
+    mode: GBMode,
     sy: u8,
     sx: u8,
     ly: u8,
@@ -12,7 +14,8 @@ pub struct GPU {
     wx: u8,
     lcdc: LCDC,
     lcds: LCDS,
-    ram: [u8; 0x4000]
+    ram: [u8; 0x4000],
+    frame_buffer: [[[u8; 3]; SCREEN_W]; SCREEN_H]
 }
 
 bitflags! {
@@ -52,8 +55,9 @@ bitflags! {
     }
 }
 impl GPU {
-    pub fn new() -> Self {
+    pub fn new(mode: GBMode) -> Self {
         Self {
+            mode,
             sy: 0,
             sx: 0,
             ly: 0,
@@ -62,8 +66,45 @@ impl GPU {
             wx: 0,
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
-            ram: [0; 0x4000]
+            ram: [0; 0x4000],
+            frame_buffer: [[[0; 3]; SCREEN_W]; SCREEN_H]
         }
+    }
+
+    pub fn cycle(&mut self) {
+        self.draw_bg();
+    }
+
+    fn grey_to_l(v: u8, i: usize) -> u8 {
+        match v >> (2 * i) & 0x03 {
+            0x00 => 0xFF,
+            0x01 => 0xFC,
+            0x02 => 0x60,
+            _ => 0x00
+        }
+    }
+
+    fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
+        // TODO: Color mapping from CGB -> sRGB
+        self.frame_buffer[self.ly as usize][x] = [r, g, b];
+    }
+
+    fn draw_bg(&mut self) {
+        for x in 0..SCREEN_W {
+            if self.mode == GBMode::Color {
+                let r = 0;
+                let g = 0;
+                let b = 0;
+                self.set_rgb(x, r, g, b);
+            } else {
+                let lightness = Self::grey_to_l(0, 0);
+                self.set_rgb(x, lightness, lightness, lightness);
+            }
+        }
+    }
+
+    fn draw_sprites(&mut self) {
+
     }
 
     pub fn read(&self, a: u16) -> u8 {

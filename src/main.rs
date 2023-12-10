@@ -44,17 +44,6 @@ async fn main() -> Result<(), impl std::error::Error> {
     let game_name = std::str::from_utf8(&name_data[0..index]).expect("Failed to get game name!");
     println!("Starting \"{game_name}\"...");
 
-    let buffer_copy = buffer.clone();
-    // Start CPU
-    tokio::spawn(async move {
-        let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
-
-        while true {
-            let cycles = cpu.cycle();
-            sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
-        }
-    });
-
     let event_loop = EventLoop::new().unwrap();
 
     let window = WindowBuilder::new()
@@ -64,6 +53,19 @@ async fn main() -> Result<(), impl std::error::Error> {
         .unwrap();
 
     let mut context = Context::new(window).await;
+
+    let buffer_copy = buffer.clone();
+    // Start CPU
+    tokio::spawn(async move {
+        let mut cpu = CPU::new(GBMode::Classic, buffer_copy);
+
+        while true {
+            let cycles = cpu.cycle();
+            cpu.mem.gpu.cycle();
+
+            sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
+        }
+    });
 
     let mut modifiers = ModifiersState::default();
 

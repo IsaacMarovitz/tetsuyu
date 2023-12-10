@@ -4,7 +4,7 @@ use crate::registers::{Registers, Flags};
 
 pub struct CPU {
     reg: Registers,
-    mem: MMU,
+    pub mem: MMU,
     halted: bool,
     // Enabled Interrupts
     ei: bool
@@ -14,7 +14,7 @@ impl CPU {
     pub fn new(mode: GBMode, rom: Vec<u8>) -> Self {
         Self {
             reg: Registers::new(mode),
-            mem: MMU::new(rom),
+            mem: MMU::new(mode, rom),
             halted: false,
             ei: true
         }

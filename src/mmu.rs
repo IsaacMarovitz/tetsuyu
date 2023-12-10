@@ -1,8 +1,9 @@
 use crate::gpu::GPU;
+use crate::mode::GBMode;
 
 pub struct MMU {
     rom: Vec<u8>,
-    gpu: GPU,
+    pub gpu: GPU,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     interrupt: u8,
@@ -10,10 +11,10 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(rom: Vec<u8>) -> Self {
+    pub fn new(mode: GBMode, rom: Vec<u8>) -> Self {
         Self {
             rom,
-            gpu: GPU::new(),
+            gpu: GPU::new(mode),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             interrupt: 0,
