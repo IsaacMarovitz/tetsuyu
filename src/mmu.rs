@@ -47,7 +47,7 @@ impl MMU {
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFF0F => self.intf.bits(),
             0xFFFF => self.inte.bits(),
-            _ => 0x00,
+            _ => panic!("Read to unsupported address ({:#06x})!", a),
         }
     }
 
@@ -63,7 +63,7 @@ impl MMU {
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
             0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
-            _ => {},
+            _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
     }
 

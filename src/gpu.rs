@@ -212,7 +212,7 @@ impl GPU {
             0xFF4A => self.wy,
             0xFF4B => self.wx,
             0xFF4F => 0xFE | self.ram_bank as u8,
-            _ => 0x00,
+            _ => panic!("Read to unsupported GPU address ({:#06x})!", a),
         }
     }
 
@@ -233,7 +233,7 @@ impl GPU {
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
-            _ => {},
+            _ => panic!("Write to unsupported GPU address ({:#06x})!", a),
         }
     }
 }
