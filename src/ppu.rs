@@ -22,14 +22,23 @@ pub struct PPU {
     ram: [u8; 0x4000],
     ram_bank: usize,
     oam: [u8; 0xA0],
+    bgprio: [Priority; SCREEN_W],
     pub frame_buffer: Vec<u8>
 }
 
+#[derive(PartialEq, Copy, Clone)]
 enum PPUMode {
     OAMScan,
     Draw,
     HBlank,
     VBlank
+}
+
+#[derive(PartialEq, Copy, Clone)]
+enum Priority {
+    Color0,
+    Priority,
+    Normal
 }
 
 bitflags! {
@@ -98,6 +107,7 @@ impl PPU {
             ram: [0; 0x4000],
             ram_bank: 0,
             oam: [0; 0xA0],
+            bgprio: [Priority::Normal; SCREEN_W],
             frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H]
         }
     }
@@ -122,7 +132,12 @@ impl PPU {
                 // TODO: Allow variable length Mode 3
                 if self.cycle_count > 172 {
                     self.ppu_mode = PPUMode::HBlank;
-                    self.draw_bg();
+                    if self.mode == GBMode::Color || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                        self.draw_bg();
+                    }
+                    if self.lcdc.contains(LCDC::OBJ_ENABLE) {
+                        self.draw_sprites();
+                    }
                     // println!("[PPU] Switching to HBlank!");
                     true
                 } else {
@@ -237,6 +252,16 @@ impl PPU {
             let color_low = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
             let color_high = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
             let color = color_high | color_low;
+
+            self.bgprio[x] = if color == 0 {
+                Priority::Color0
+            } else {
+                if tile_attributes.contains(Attributes::PRIORITY) {
+                    Priority::Priority
+                } else {
+                    Priority::Normal
+                }
+            };
 
             if self.mode == GBMode::Color {
                 let r = 0;
