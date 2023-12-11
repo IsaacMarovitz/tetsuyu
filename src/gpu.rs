@@ -24,6 +24,16 @@ pub struct GPU {
 }
 
 bitflags! {
+    pub struct Attributes: u8 {
+        const PRIORITY = 0b1000_0000;
+        const Y_FLIP = 0b0100_0000;
+        const X_FLIP = 0b0010_0000;
+        const PALLETE_NO_0 = 0b0001_0000;
+        const BANK = 0b0000_1000;
+    }
+}
+
+bitflags! {
     pub struct LCDC: u8 {
         // LCD & PPU enable: 0 = Off; 1 = On
         const LCD_ENABLE = 0b1000_0000;
@@ -104,14 +114,71 @@ impl GPU {
     }
 
     fn draw_bg(&mut self) {
+        let show_window = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
+        let tile_base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) { 0x8000 } else { 0x8800 };
+
+        let wx = self.wx.wrapping_sub(7);
+        let py = if show_window {
+            self.ly.wrapping_sub(self.wy)
+        } else {
+            self.sy.wrapping_sub(self.ly)
+        };
+        let tile_index_y = (py as u16 >> 3) & 31;
+
         for x in 0..SCREEN_W {
+            let px = if show_window && x as u8 >= wx {
+                x as u8 - wx
+            } else {
+                self.sx.wrapping_add(x as u8)
+            };
+            let tile_index_x = (px as u16 >> 3) & 31;
+
+            let bg_base = if show_window && x as u8 >= wx {
+                if self.lcdc.contains(LCDC::WINDOW_AREA) {
+                    0x9C00
+                } else {
+                    0x9800
+                }
+            } else if self.lcdc.contains(LCDC::TILE_MAP_AREA) {
+                0x9C00
+            } else {
+                0x9800
+            };
+
+            let tile_address = bg_base + tile_index_y * 32 + tile_index_x;
+            let tile_number = self.read_ram0(tile_address);
+            let tile_offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
+                tile_number as i16
+            } else {
+                tile_number as i8 as i16 + 128
+            } as u16 * 16;
+            let tile_location = tile_base + tile_offset;
+            let tile_attributes = Attributes::from_bits(self.read_ram1(tile_address)).unwrap();
+
+            let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
+            let tile_y_data = if self.mode == GBMode::Color && tile_attributes.contains(Attributes::BANK) {
+                let a = self.read_ram1(tile_location + (tile_y * 2) as u16);
+                let b = self.read_ram1(tile_location + (tile_y * 2) as u16 + 1);
+                [a, b]
+            } else {
+                let a = self.read_ram0(tile_location + (tile_y * 2) as u16);
+                let b = self.read_ram0(tile_location + (tile_y * 2) as u16 + 1);
+                [a, b]
+            };
+
+            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
+
+            let color_low = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
+            let color_high = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+            let color = color_high | color_low;
+
             if self.mode == GBMode::Color {
                 let r = 0;
                 let g = 0;
                 let b = 0;
                 self.set_rgb(x, r, g, b);
             } else {
-                let lightness = Self::grey_to_l(0, 0);
+                let lightness = Self::grey_to_l(self.bgp, color);
                 self.set_rgb(x, lightness, lightness, lightness);
             }
         }
@@ -119,6 +186,14 @@ impl GPU {
 
     fn draw_sprites(&mut self) {
 
+    }
+
+    fn read_ram0(&self, a: u16) -> u8 {
+        self.ram[a as usize - 0x8000]
+    }
+
+    fn read_ram1(&self, a: u16) -> u8 {
+        self.ram[a as usize - 0x6000]
     }
 
     pub fn read(&self, a: u16) -> u8 {
