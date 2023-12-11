@@ -6,7 +6,7 @@ use clap::Parser;
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, ModifiersState};
@@ -19,7 +19,11 @@ mod cpu;
 mod mmu;
 mod mode;
 mod registers;
-mod gpu;
+mod ppu;
+
+pub const CLOCK_FREQUENCY: u32 = 4_194_304;
+pub const STEP_TIME: u32 = 16;
+pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
 
 #[derive(Parser)]
 struct Args {
@@ -62,17 +66,30 @@ async fn main() -> Result<(), impl std::error::Error> {
         // Start CPU
         tokio::spawn(async move {
             let mut cpu = CPU::new(GBMode::Classic, buffer);
+            let mut step_cycles = 0;
+            let mut step_zero = Instant::now();
 
             loop {
-                let cycles = cpu.cycle();
-                let did_draw = cpu.mem.gpu.cycle(cycles);
-                // TODO: This is WAY too slow
-                if did_draw {
-                    let frame_buffer = cpu.mem.gpu.frame_buffer.clone();
-                    context.lock().unwrap().update(frame_buffer);
+                // https://github.com/mohanson/gameboy/blob/master/src/cpu.rs#L13
+                if step_cycles > STEP_CYCLES {
+                    step_cycles -= STEP_CYCLES;
+                    let now = Instant::now();
+                    let duration = now.duration_since(step_zero);
+                    let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
+                    // println!("[CPU] Sleeping {}ms", milliseconds);
+                    sleep(Duration::from_millis(milliseconds as u64)).await;
+                    step_zero = now;
                 }
 
-                sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
+                let cycles = cpu.cycle();
+                step_cycles += cycles;
+                let did_draw = cpu.mem.gpu.cycle(cycles);
+                if did_draw {
+                    let frame_buffer = cpu.mem.gpu.frame_buffer.clone();
+                    let mut context = context.lock().unwrap();
+                    context.update(frame_buffer);
+                    drop(context);
+                }
             }
         });
     }

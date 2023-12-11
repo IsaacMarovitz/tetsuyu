@@ -4,7 +4,7 @@ use crate::mode::GBMode;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
-pub struct GPU {
+pub struct PPU {
     mode: GBMode,
     ppu_mode: PPUMode,
     cycle_count: u32,
@@ -78,7 +78,7 @@ bitflags! {
         // PPU mode (Read-only): Indicates the PPU’s current status.
     }
 }
-impl GPU {
+impl PPU {
     pub fn new(mode: GBMode) -> Self {
         Self {
             mode,

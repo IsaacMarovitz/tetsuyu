@@ -1,10 +1,10 @@
 use bitflags::bitflags;
-use crate::gpu::GPU;
+use crate::ppu::PPU;
 use crate::mode::GBMode;
 
 pub struct MMU {
     rom: Vec<u8>,
-    pub gpu: GPU,
+    pub gpu: PPU,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,
@@ -26,7 +26,7 @@ impl MMU {
     pub fn new(mode: GBMode, rom: Vec<u8>) -> Self {
         Self {
             rom,
-            gpu: GPU::new(mode),
+            gpu: PPU::new(mode),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             intf: Interrupts::empty(),
@@ -61,6 +61,10 @@ impl MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFF40..=0xFF4F => self.gpu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
+            0xFF01 => {},
+            0xFF02 => {},
+            0xFF06 => {},
+            0xFF07 => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
             0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
             _ => panic!("Write to unsupported address ({:#06x})!", a),

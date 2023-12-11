@@ -1,7 +1,7 @@
 use bitflags::Flags;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
-use crate::gpu::{SCREEN_H, SCREEN_W};
+use crate::ppu::{SCREEN_H, SCREEN_W};
 
 // Code here is mostly derived from https://sotrh.github.io/learn-wgpu/beginner/tutorial1-window/
 
