@@ -15,6 +15,8 @@ pub struct GPU {
     lcdc: LCDC,
     lcds: LCDS,
     ram: [u8; 0x4000],
+    ram_bank: usize,
+    oam: [u8; 0xA0],
     pub frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
 }
 
@@ -67,6 +69,8 @@ impl GPU {
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             ram: [0; 0x4000],
+            ram_bank: 0,
+            oam: [0; 0xA0],
             frame_buffer: [[[0x00; 4]; SCREEN_W]; SCREEN_H]
         }
     }
@@ -113,6 +117,8 @@ impl GPU {
 
     pub fn read(&self, a: u16) -> u8 {
         match a {
+            0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000],
+            0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00],
             0xFF40 => self.lcdc.bits(),
             0xFF41 => self.lcds.bits(),
             0xFF42 => self.sy,
@@ -121,12 +127,15 @@ impl GPU {
             0xFF45 => self.lyc,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
+            0xFF4F => 0xFE | self.ram_bank as u8,
             _ => 0x00,
         }
     }
 
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
+            0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v,
+            0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00] = v,
             0xFF40 => self.lcdc = LCDC::from_bits(v).unwrap(),
             // TODO: Don't allow read-only bits to be set!
             0xFF41 => self.lcds = LCDS::from_bits(v).unwrap(),
@@ -136,6 +145,7 @@ impl GPU {
             0xFF45 => self.lyc = v,
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
+            0xFF4F => self.ram_bank = (v & 0x01) as usize,
             _ => {},
         }
     }
