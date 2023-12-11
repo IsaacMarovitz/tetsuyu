@@ -294,8 +294,6 @@ impl Context {
                 depth_or_array_layers: 1,
             },
         );
-
-        self.render();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {

@@ -68,7 +68,7 @@ async fn main() -> Result<(), impl std::error::Error> {
                 let did_draw = cpu.mem.gpu.cycle(cycles);
                 // TODO: This is WAY too slow
                 if did_draw {
-                    let frame_buffer = cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect();
+                    let frame_buffer = cpu.mem.gpu.frame_buffer.clone();
                     context.lock().unwrap().update(frame_buffer);
                 }
 
@@ -81,36 +81,43 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         let mut modifiers = ModifiersState::default();
         event_loop.run(move |event, elwt| {
-            if let Event::WindowEvent { event, window_id } = event {
-                let mut context = context.lock().unwrap();
-                let size = context.size;
-                match event {
-                    WindowEvent::RedrawRequested if window_id == context.window().id() => {
-                        match context.render() {
-                            Ok(_) => {}
-                            Err(SurfaceError::Lost) => context.resize(size),
-                            Err(SurfaceError::OutOfMemory) => elwt.exit(),
-                            Err(e) => println!("{:?}", e),
-                        }
-                    }
-                    WindowEvent::Resized(physical_size) => {
-                        context.resize(physical_size);
-                    }
-                    WindowEvent::ModifiersChanged(new) => {
-                        modifiers = new.state();
-                    }
-                    WindowEvent::KeyboardInput { event, .. } => {
-                        if event.state == ElementState::Pressed && !event.repeat {
-                            match event.key_without_modifiers().as_ref() {
-                                Key::Character("w") => {
-                                    println!("Got W Key!");
-                                }
-                                _ => (),
+            let mut context = context.lock().unwrap();
+
+            match event {
+                Event::AboutToWait => {
+                    context.render();
+                },
+                Event::WindowEvent { event, window_id } => {
+                    let size = context.size;
+                    match event {
+                        WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                            match context.render() {
+                                Ok(_) => {}
+                                Err(SurfaceError::Lost) => context.resize(size),
+                                Err(SurfaceError::OutOfMemory) => elwt.exit(),
+                                Err(e) => println!("{:?}", e),
                             }
                         }
+                        WindowEvent::Resized(physical_size) => {
+                            context.resize(physical_size);
+                        }
+                        WindowEvent::ModifiersChanged(new) => {
+                            modifiers = new.state();
+                        }
+                        WindowEvent::KeyboardInput { event, .. } => {
+                            if event.state == ElementState::Pressed && !event.repeat {
+                                match event.key_without_modifiers().as_ref() {
+                                    Key::Character("w") => {
+                                        println!("Got W Key!");
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                        _ => (),
                     }
-                    _ => (),
-                }
+                },
+                _ => ()
             }
         })
     }

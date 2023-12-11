@@ -22,7 +22,7 @@ pub struct GPU {
     ram: [u8; 0x4000],
     ram_bank: usize,
     oam: [u8; 0xA0],
-    pub frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
+    pub frame_buffer: Vec<u8>
 }
 
 enum PPUMode {
@@ -98,7 +98,7 @@ impl GPU {
             ram: [0; 0x4000],
             ram_bank: 0,
             oam: [0; 0xA0],
-            frame_buffer: [[[0x00; 4]; SCREEN_W]; SCREEN_H]
+            frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H]
         }
     }
 
@@ -114,7 +114,7 @@ impl GPU {
                 if self.cycle_count > 80 {
                     self.cycle_count -= 80;
                     self.ppu_mode = PPUMode::Draw;
-                    println!("[PPU] Switching to Draw!");
+                    // println!("[PPU] Switching to Draw!");
                 }
                 false
             },
@@ -123,7 +123,7 @@ impl GPU {
                 if self.cycle_count > 172 {
                     self.ppu_mode = PPUMode::HBlank;
                     self.draw_bg();
-                    println!("[PPU] Switching to HBlank!");
+                    // println!("[PPU] Switching to HBlank!");
                     true
                 } else {
                     false
@@ -136,10 +136,10 @@ impl GPU {
 
                     if self.ly > 143 {
                         self.ppu_mode = PPUMode::VBlank;
-                        println!("[PPU] Switching to VBlank!");
+                        // println!("[PPU] Switching to VBlank!");
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
-                        println!("[PPU] Switching to OAMScan!");
+                        // println!("[PPU] Switching to OAMScan!");
                     }
                 }
                 false
@@ -149,7 +149,7 @@ impl GPU {
                     self.cycle_count -= 4560;
                     self.ly = 0;
                     self.ppu_mode = PPUMode::OAMScan;
-                    println!("[PPU] Switching to OAMScan!");
+                    // println!("[PPU] Switching to OAMScan!");
                 }
                 false
             }
@@ -167,7 +167,16 @@ impl GPU {
 
     fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
         // TODO: Color mapping from CGB -> sRGB
-        self.frame_buffer[self.ly as usize][x] = [r, g, b, 0xFF];
+        let bytes_per_pixel = 4;
+        let bytes_per_row = bytes_per_pixel * SCREEN_W;
+        let vertical_offset = self.ly as usize * bytes_per_row;
+        let horizontal_offset = x * bytes_per_pixel;
+        let total_offset = vertical_offset + horizontal_offset;
+
+        self.frame_buffer[total_offset + 0] = r;
+        self.frame_buffer[total_offset + 1] = g;
+        self.frame_buffer[total_offset + 2] = b;
+        self.frame_buffer[total_offset + 3] = 0xFF;
     }
 
     fn draw_bg(&mut self) {
