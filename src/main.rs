@@ -65,7 +65,8 @@ async fn main() -> Result<(), impl std::error::Error> {
 
             loop {
                 let cycles = cpu.cycle();
-                cpu.mem.gpu.cycle();
+                cpu.mem.gpu.cycle(cycles);
+                // TODO: This is WAY too slow
                 let frame_buffer = cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect();
                 context.lock().unwrap().update(frame_buffer);
 

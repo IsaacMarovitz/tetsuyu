@@ -6,6 +6,8 @@ pub const SCREEN_H: usize = 144;
 
 pub struct GPU {
     mode: GBMode,
+    ppu_mode: PPUMode,
+    cycle_count: u32,
     sy: u8,
     sx: u8,
     ly: u8,
@@ -21,6 +23,13 @@ pub struct GPU {
     ram_bank: usize,
     oam: [u8; 0xA0],
     pub frame_buffer: [[[u8; 4]; SCREEN_W]; SCREEN_H]
+}
+
+enum PPUMode {
+    OAMScan,
+    Draw,
+    HBlank,
+    VBlank
 }
 
 bitflags! {
@@ -73,6 +82,8 @@ impl GPU {
     pub fn new(mode: GBMode) -> Self {
         Self {
             mode,
+            ppu_mode: PPUMode::OAMScan,
+            cycle_count: 0,
             sy: 0x00,
             sx: 0x00,
             ly: 0x00,
@@ -91,12 +102,52 @@ impl GPU {
         }
     }
 
-    pub fn cycle(&mut self) {
+    pub fn cycle(&mut self, cycles: u32) {
         if !self.lcdc.contains(LCDC::LCD_ENABLE) {
             return;
         }
 
-        self.draw_bg();
+        self.cycle_count += cycles;
+
+        match self.ppu_mode {
+            PPUMode::OAMScan => {
+                if self.cycle_count > 80 {
+                    self.cycle_count -= 80;
+                    self.ppu_mode = PPUMode::Draw;
+                    println!("[PPU] Switching to Draw!");
+                }
+            },
+            PPUMode::Draw => {
+                // TODO: Allow variable length Mode 3
+                if self.cycle_count > 172 {
+                    self.ppu_mode = PPUMode::HBlank;
+                    self.draw_bg();
+                    println!("[PPU] Switching to HBlank!");
+                }
+            },
+            PPUMode::HBlank => {
+                if self.cycle_count > 456 {
+                    self.ly += 1;
+                    self.cycle_count -= 456;
+
+                    if self.ly > 143 {
+                        self.ppu_mode = PPUMode::VBlank;
+                        println!("[PPU] Switching to VBlank!");
+                    } else {
+                        self.ppu_mode = PPUMode::OAMScan;
+                        println!("[PPU] Switching to OAMScan!");
+                    }
+                }
+            },
+            PPUMode::VBlank => {
+                if self.cycle_count > 4560 {
+                    self.cycle_count -= 4560;
+                    self.ly = 0;
+                    self.ppu_mode = PPUMode::OAMScan;
+                    println!("[PPU] Switching to OAMScan!");
+                }
+            }
+        }
     }
 
     fn grey_to_l(v: u8, i: usize) -> u8 {
