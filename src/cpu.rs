@@ -39,8 +39,8 @@ impl CPU {
             return 0;
         }
 
-        let intf = self.mem.read(0xFFFF);
-        let inte = self.mem.read(0xFF0F);
+        let intf = self.mem.read(0xFF0F);
+        let inte = self.mem.read(0xFFFF);
         let triggered = intf & inte;
         if triggered == 0 {
             return 0;

@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use crate::gpu::GPU;
 use crate::mode::GBMode;
 
@@ -6,8 +7,19 @@ pub struct MMU {
     pub gpu: GPU,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
-    interrupt: u8,
+    intf: Interrupts,
+    inte: Interrupts,
     wram_bank: usize,
+}
+
+bitflags! {
+    pub struct Interrupts: u8 {
+        const JOYPAD = 0b0001_0000;
+        const SERIAL = 0b0000_1000;
+        const TIMER = 0b0000_0100;
+        const LCD = 0b0000_0010;
+        const V_BLANK = 0b0000_0001;
+    }
 }
 
 impl MMU {
@@ -17,7 +29,8 @@ impl MMU {
             gpu: GPU::new(mode),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
-            interrupt: 0,
+            intf: Interrupts::empty(),
+            inte: Interrupts::empty(),
             wram_bank: 0x01
         }
     }
@@ -32,7 +45,8 @@ impl MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFF40..=0xFF4F => self.gpu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
-            0xFFFF => self.interrupt,
+            0xFF0F => self.intf.bits(),
+            0xFFFF => self.inte.bits(),
             _ => 0x00,
         }
     }
@@ -47,7 +61,8 @@ impl MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFF40..=0xFF4F => self.gpu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
-            0xFFFF => self.interrupt = v,
+            0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
+            0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
             _ => {},
         }
     }
