@@ -65,10 +65,12 @@ async fn main() -> Result<(), impl std::error::Error> {
 
             loop {
                 let cycles = cpu.cycle();
-                cpu.mem.gpu.cycle(cycles);
+                let did_draw = cpu.mem.gpu.cycle(cycles);
                 // TODO: This is WAY too slow
-                let frame_buffer = cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect();
-                context.lock().unwrap().update(frame_buffer);
+                if did_draw {
+                    let frame_buffer = cpu.mem.gpu.frame_buffer.into_iter().flatten().flatten().collect();
+                    context.lock().unwrap().update(frame_buffer);
+                }
 
                 sleep(Duration::from_millis((1000_f64 / 4_194_304_f64 * cycles as f64) as u64)).await;
             }

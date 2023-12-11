@@ -102,20 +102,21 @@ impl GPU {
         }
     }
 
-    pub fn cycle(&mut self, cycles: u32) {
+    pub fn cycle(&mut self, cycles: u32) -> bool {
         if !self.lcdc.contains(LCDC::LCD_ENABLE) {
-            return;
+            return false;
         }
 
         self.cycle_count += cycles;
 
-        match self.ppu_mode {
+        return match self.ppu_mode {
             PPUMode::OAMScan => {
                 if self.cycle_count > 80 {
                     self.cycle_count -= 80;
                     self.ppu_mode = PPUMode::Draw;
                     println!("[PPU] Switching to Draw!");
                 }
+                false
             },
             PPUMode::Draw => {
                 // TODO: Allow variable length Mode 3
@@ -123,6 +124,9 @@ impl GPU {
                     self.ppu_mode = PPUMode::HBlank;
                     self.draw_bg();
                     println!("[PPU] Switching to HBlank!");
+                    true
+                } else {
+                    false
                 }
             },
             PPUMode::HBlank => {
@@ -138,6 +142,7 @@ impl GPU {
                         println!("[PPU] Switching to OAMScan!");
                     }
                 }
+                false
             },
             PPUMode::VBlank => {
                 if self.cycle_count > 4560 {
@@ -146,6 +151,7 @@ impl GPU {
                     self.ppu_mode = PPUMode::OAMScan;
                     println!("[PPU] Switching to OAMScan!");
                 }
+                false
             }
         }
     }
