@@ -44,6 +44,7 @@ enum PPUMode {
 }
 
 bitflags! {
+    #[derive(PartialEq, Copy, Clone)]
     pub struct Attributes: u8 {
         const PRIORITY = 0b1000_0000;
         const Y_FLIP = 0b0100_0000;
@@ -54,6 +55,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(PartialEq, Copy, Clone)]
     pub struct LCDC: u8 {
         // LCD & PPU enable: 0 = Off; 1 = On
         const LCD_ENABLE = 0b1000_0000;
@@ -75,6 +77,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(PartialEq, Copy, Clone)]
     pub struct LCDS: u8 {
         // LYC int select (Read/Write): If set, selects the LYC == LY condition for the STAT interrupt.
         const LYC_SELECT = 0b0100_0000;
@@ -123,7 +126,6 @@ impl PPU {
         self.cycle_count += cycles;
 
         if self.ly == self.lc {
-            self.lcds |= LCDS::LYC_EQUALS;
             if self.lcds.contains(LCDS::LYC_SELECT) {
                 self.interrupts |= Interrupts::LCD;
             }
@@ -145,12 +147,10 @@ impl PPU {
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
                     }
-                    //if self.mode == GBMode::Color || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                    if true {
+                    if self.mode == GBMode::Color || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
                         self.draw_bg();
                     }
-                    // if self.lcdc.contains(LCDC::OBJ_ENABLE) {
-                    if true {
+                    if self.lcdc.contains(LCDC::OBJ_ENABLE) {
                         self.draw_sprites();
                     }
                     // println!("[PPU] Switching to HBlank!");
@@ -393,7 +393,13 @@ impl PPU {
             0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000],
             0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00],
             0xFF40 => self.lcdc.bits(),
-            0xFF41 => self.lcds.bits() | self.ppu_mode as u8,
+            0xFF41 => {
+                let mut lcds = self.lcds;
+                if self.ly == self.lc {
+                    lcds |= LCDS::LYC_EQUALS;
+                }
+                lcds.bits() | self.ppu_mode as u8
+            },
             0xFF42 => self.sy,
             0xFF43 => self.sx,
             0xFF44 => self.ly,
@@ -420,8 +426,10 @@ impl PPU {
                     self.frame_buffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
                 }
             },
-            // TODO: Don't allow read-only bits to be set!
-            0xFF41 => self.lcds = LCDS::from_bits(v).unwrap(),
+            0xFF41 => {
+                let sanitised = v & 0b1111_1100;
+                self.lcds = LCDS::from_bits(sanitised).unwrap()
+            },
             0xFF42 => self.sy = v,
             0xFF43 => self.sx = v,
             0xFF44 => print!("Attempted to write to LY!"),
