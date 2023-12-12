@@ -186,6 +186,9 @@ impl PPU {
                     self.cycle_count -= 4560;
                     self.ly = 0;
                     self.ppu_mode = PPUMode::OAMScan;
+                    if self.lcds.contains(LCDS::MODE_2_SELECT) {
+                        self.interrupts |= Interrupts::LCD;
+                    }
                     // println!("[PPU] Switching to OAMScan!");
                 }
                 false
