@@ -56,7 +56,7 @@ async fn main() -> Result<(), impl std::error::Error> {
 
     let window = WindowBuilder::new()
         .with_title(format!("gb-rs - {:}", game_name))
-        .with_inner_size(winit::dpi::LogicalSize::new(160, 144))
+        .with_inner_size(winit::dpi::LogicalSize::new(ppu::SCREEN_W as u32, ppu::SCREEN_H as u32))
         .build(&event_loop)
         .unwrap();
 
@@ -84,7 +84,7 @@ async fn main() -> Result<(), impl std::error::Error> {
 
                 let cycles = cpu.cycle();
                 step_cycles += cycles;
-                let did_draw = cpu.mem.gpu.cycle(cycles);
+                let did_draw = cpu.mem.cycle(cycles);
                 if did_draw {
                     let frame_buffer = cpu.mem.gpu.frame_buffer.clone();
                     let mut context = context.lock().unwrap();

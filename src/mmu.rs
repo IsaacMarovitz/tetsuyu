@@ -13,6 +13,7 @@ pub struct MMU {
 }
 
 bitflags! {
+    #[derive(Copy, Clone)]
     pub struct Interrupts: u8 {
         const JOYPAD = 0b0001_0000;
         const SERIAL = 0b0000_1000;
@@ -33,6 +34,13 @@ impl MMU {
             inte: Interrupts::empty(),
             wram_bank: 0x01
         }
+    }
+
+    pub fn cycle(&mut self, cycles: u32) -> bool {
+        let did_draw = self.gpu.cycle(cycles);
+        self.intf |= self.gpu.interrupts;
+        self.gpu.interrupts = Interrupts::empty();
+        did_draw
     }
 
     pub fn read(&self, a: u16) -> u8 {
@@ -66,6 +74,9 @@ impl MMU {
             0xFF06 => {},
             0xFF07 => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
+            0xFF24 => {},
+            0xFF25 => {},
+            0xFF26 => {},
             0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
