@@ -220,10 +220,22 @@ impl PPU {
     }
 
     fn draw_bg(&mut self) {
+        // Only show window if it's enabled and it intersects current scanline
         let show_window = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
-        let tile_base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) { 0x8000 } else { 0x8800 };
 
+        // If TILE_DATA_AREA = 1  TILE_DATA_AREA = 0
+        // 0-127   = $8000-$87FF;        $8800-$8FFF
+        // 128-255 = $8800-$8FFF;        $9000-$97FF
+        let tile_data_base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
+            0x8000
+        } else {
+            0x8800
+        };
+
+        // WX (Window Space) -> WX (Screen Space)
         let wx = self.wx.wrapping_sub(7);
+
+        // Pixel Y
         let py = if show_window {
             self.ly.wrapping_sub(self.wy)
         } else {
@@ -232,6 +244,9 @@ impl PPU {
         let tile_index_y = (py as u16 >> 3) & 31;
 
         for x in 0..SCREEN_W {
+            // Pixel X
+            // If we're in the window px = x - wx
+            // Otherwise px = sx + x
             let px = if show_window && x as u8 >= wx {
                 x as u8 - wx
             } else {
@@ -239,7 +254,8 @@ impl PPU {
             };
             let tile_index_x = (px as u16 >> 3) & 31;
 
-            let bg_base = if show_window && x as u8 >= wx {
+            // Tile Map Base Address
+            let tile_map_base = if show_window && x as u8 >= wx {
                 if self.lcdc.contains(LCDC::WINDOW_AREA) {
                     0x9C00
                 } else {
@@ -251,24 +267,29 @@ impl PPU {
                 0x9800
             };
 
-            let tile_address = bg_base + tile_index_y * 32 + tile_index_x;
-            let tile_number = self.read_ram0(tile_address);
+            let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
+            // TODO: This seems to be returning the wrong value
+            let tile_index = self.read_ram0(tile_address);
+
+            // If we're using the secondary address mode,
+            // we need to interpret this tile index as signed
             let tile_offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-                tile_number as i16
+                tile_index as i16
             } else {
-                tile_number as i8 as i16 + 128
+                (tile_index as i8) as i16 + 128
             } as u16 * 16;
-            let tile_location = tile_base + tile_offset;
+
+            let tile_data_location = tile_data_base + tile_offset;
             let tile_attributes = Attributes::from_bits(self.read_ram1(tile_address)).unwrap();
 
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
             let tile_y_data = if self.mode == GBMode::Color && tile_attributes.contains(Attributes::BANK) {
-                let a = self.read_ram1(tile_location + (tile_y * 2) as u16);
-                let b = self.read_ram1(tile_location + (tile_y * 2) as u16 + 1);
+                let a = self.read_ram1(tile_data_location + ((tile_y * 2) as u16));
+                let b = self.read_ram1(tile_data_location + ((tile_y * 2) as u16) + 1);
                 [a, b]
             } else {
-                let a = self.read_ram0(tile_location + (tile_y * 2) as u16);
-                let b = self.read_ram0(tile_location + (tile_y * 2) as u16 + 1);
+                let a = self.read_ram0(tile_data_location + ((tile_y * 2) as u16));
+                let b = self.read_ram0(tile_data_location + ((tile_y * 2) as u16) + 1);
                 [a, b]
             };
 
