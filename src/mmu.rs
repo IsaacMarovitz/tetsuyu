@@ -4,7 +4,7 @@ use crate::mode::GBMode;
 
 pub struct MMU {
     rom: Vec<u8>,
-    pub gpu: PPU,
+    pub ppu: PPU,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,
@@ -27,7 +27,7 @@ impl MMU {
     pub fn new(mode: GBMode, rom: Vec<u8>) -> Self {
         Self {
             rom,
-            gpu: PPU::new(mode),
+            ppu: PPU::new(mode),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             intf: Interrupts::empty(),
@@ -37,21 +37,21 @@ impl MMU {
     }
 
     pub fn cycle(&mut self, cycles: u32) -> bool {
-        let did_draw = self.gpu.cycle(cycles);
-        self.intf |= self.gpu.interrupts;
-        self.gpu.interrupts = Interrupts::empty();
+        let did_draw = self.ppu.cycle(cycles);
+        self.intf |= self.ppu.interrupts;
+        self.ppu.interrupts = Interrupts::empty();
         did_draw
     }
 
     pub fn read(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize],
-            0x8000..=0x9FFF => self.gpu.read(a),
+            0x8000..=0x9FFF => self.ppu.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
-            0xFF40..=0xFF4F => self.gpu.read(a),
+            0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFF0F => self.intf.bits(),
             0xFFFF => self.inte.bits(),
@@ -62,12 +62,12 @@ impl MMU {
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize] = v,
-            0x8000..=0x9FFF => self.gpu.write(a, v),
+            0x8000..=0x9FFF => self.ppu.write(a, v),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
-            0xFF40..=0xFF4F => self.gpu.write(a, v),
+            0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             0xFF01 => {},
             0xFF02 => {},

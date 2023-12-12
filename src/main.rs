@@ -86,7 +86,7 @@ async fn main() -> Result<(), impl std::error::Error> {
                 step_cycles += cycles;
                 let did_draw = cpu.mem.cycle(cycles);
                 if did_draw {
-                    let frame_buffer = cpu.mem.gpu.frame_buffer.clone();
+                    let frame_buffer = cpu.mem.ppu.frame_buffer.clone();
                     let mut context = context.lock().unwrap();
                     context.update(frame_buffer);
                     drop(context);
