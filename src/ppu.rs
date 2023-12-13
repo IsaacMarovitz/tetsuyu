@@ -220,9 +220,6 @@ impl PPU {
     }
 
     fn draw_bg(&mut self) {
-        // Only show window if it's enabled and it intersects current scanline
-        let show_window = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
-
         // If TILE_DATA_AREA = 1  TILE_DATA_AREA = 0
         // 0-127   = $8000-$87FF;        $8800-$8FFF
         // 128-255 = $8800-$8FFF;        $9000-$97FF
@@ -235,27 +232,28 @@ impl PPU {
         // WX (Window Space) -> WX (Screen Space)
         let wx = self.wx.wrapping_sub(7);
 
+        // Only show window if it's enabled and it intersects current scanline
+        let in_window_y = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
+
         // Pixel Y
-        let py = if show_window {
+        let py = if in_window_y {
             self.ly.wrapping_sub(self.wy)
         } else {
             self.sy.wrapping_add(self.ly)
         };
-        let tile_index_y = (py as u16 >> 3) & 31;
 
         for x in 0..SCREEN_W {
+            let in_window_x = x as u8 >= wx;
+
             // Pixel X
-            // If we're in the window px = x - wx
-            // Otherwise px = sx + x
-            let px = if show_window && x as u8 >= wx {
+            let px = if in_window_y && in_window_x {
                 x as u8 - wx
             } else {
                 self.sx.wrapping_add(x as u8)
             };
-            let tile_index_x = (px as u16 >> 3) & 31;
 
             // Tile Map Base Address
-            let tile_map_base = if show_window && x as u8 >= wx {
+            let tile_map_base = if in_window_y && in_window_x {
                 if self.lcdc.contains(LCDC::WINDOW_AREA) {
                     0x9C00
                 } else {
@@ -267,6 +265,10 @@ impl PPU {
                 0x9800
             };
 
+            let tile_index_y = (py as u16 >> 3) & 31;
+            let tile_index_x = (px as u16 >> 3) & 31;
+
+            // Location of Tile Attributes
             let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
             // TODO: This seems to be returning the wrong value
             let tile_index = self.read_ram0(tile_address);
@@ -283,6 +285,8 @@ impl PPU {
             let tile_attributes = Attributes::from_bits(self.read_ram1(tile_address)).unwrap();
 
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
+            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
+
             let tile_y_data = if self.mode == GBMode::Color && tile_attributes.contains(Attributes::BANK) {
                 let a = self.read_ram1(tile_data_location + ((tile_y * 2) as u16));
                 let b = self.read_ram1(tile_data_location + ((tile_y * 2) as u16) + 1);
@@ -293,11 +297,9 @@ impl PPU {
                 [a, b]
             };
 
-            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
-
-            let color_low = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
-            let color_high = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
-            let color = color_high | color_low;
+            let color_l = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
+            let color_h = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+            let color = color_h | color_l;
 
             self.bgprio[x] = if color == 0 {
                 Priority::Color0
