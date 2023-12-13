@@ -239,7 +239,7 @@ impl PPU {
         let py = if show_window {
             self.ly.wrapping_sub(self.wy)
         } else {
-            self.sy.wrapping_sub(self.ly)
+            self.sy.wrapping_add(self.ly)
         };
         let tile_index_y = (py as u16 >> 3) & 31;
 
