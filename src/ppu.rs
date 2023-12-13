@@ -1,4 +1,4 @@
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 use crate::mmu::Interrupts;
 use crate::mode::GBMode;
 

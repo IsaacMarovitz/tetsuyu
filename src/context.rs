@@ -1,4 +1,3 @@
-use bitflags::Flags;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 use crate::ppu::{SCREEN_H, SCREEN_W};

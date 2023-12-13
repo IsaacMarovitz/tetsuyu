@@ -1,7 +1,6 @@
 use crate::context::Context;
 use crate::cpu::CPU;
 use crate::mode::GBMode;
-use bitflags::Flags;
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
@@ -103,7 +102,8 @@ async fn main() -> Result<(), impl std::error::Error> {
 
             match event {
                 Event::AboutToWait => {
-                    context.render();
+                    // TODO: Handle errors
+                    let _ = context.render();
                 },
                 Event::WindowEvent { event, window_id } => {
                     let size = context.size;
