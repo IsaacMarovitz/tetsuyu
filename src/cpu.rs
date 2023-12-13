@@ -637,7 +637,7 @@ impl CPU {
             0xC2 => { self.reg.d = self.alu_set(self.reg.d, 0); 2 },
             0xC3 => { self.reg.e = self.alu_set(self.reg.e, 0); 2 },
             0xC4 => { self.reg.h = self.alu_set(self.reg.h, 0); 2 },
-            0xC5 => { self.reg.b = self.alu_set(self.reg.b, 0); 2 },
+            0xC5 => { self.reg.l = self.alu_set(self.reg.l, 0); 2 },
             0xC6 => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 0);
@@ -648,7 +648,7 @@ impl CPU {
             0xCA => { self.reg.d = self.alu_set(self.reg.d, 1); 2 },
             0xCB => { self.reg.e = self.alu_set(self.reg.e, 1); 2 },
             0xCC => { self.reg.h = self.alu_set(self.reg.h, 1); 2 },
-            0xCD => { self.reg.b = self.alu_set(self.reg.b, 1); 2 },
+            0xCD => { self.reg.l = self.alu_set(self.reg.l, 1); 2 },
             0xCE => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 1);
@@ -659,7 +659,7 @@ impl CPU {
             0xD2 => { self.reg.d = self.alu_set(self.reg.d, 2); 2 },
             0xD3 => { self.reg.e = self.alu_set(self.reg.e, 2); 2 },
             0xD4 => { self.reg.h = self.alu_set(self.reg.h, 2); 2 },
-            0xD5 => { self.reg.b = self.alu_set(self.reg.b, 2); 2 },
+            0xD5 => { self.reg.l = self.alu_set(self.reg.l, 2); 2 },
             0xD6 => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 2);
@@ -670,7 +670,7 @@ impl CPU {
             0xDA => { self.reg.d = self.alu_set(self.reg.d, 3); 2 },
             0xDB => { self.reg.e = self.alu_set(self.reg.e, 3); 2 },
             0xDC => { self.reg.h = self.alu_set(self.reg.h, 3); 2 },
-            0xDD => { self.reg.b = self.alu_set(self.reg.b, 3); 2 },
+            0xDD => { self.reg.l = self.alu_set(self.reg.l, 3); 2 },
             0xDE => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 3);
@@ -681,7 +681,7 @@ impl CPU {
             0xE2 => { self.reg.d = self.alu_set(self.reg.d, 4); 2 },
             0xE3 => { self.reg.e = self.alu_set(self.reg.e, 4); 2 },
             0xE4 => { self.reg.h = self.alu_set(self.reg.h, 4); 2 },
-            0xE5 => { self.reg.b = self.alu_set(self.reg.b, 4); 2 },
+            0xE5 => { self.reg.l = self.alu_set(self.reg.l, 4); 2 },
             0xE6 => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 4);
@@ -692,7 +692,7 @@ impl CPU {
             0xEA => { self.reg.d = self.alu_set(self.reg.d, 5); 2 },
             0xEB => { self.reg.e = self.alu_set(self.reg.e, 5); 2 },
             0xEC => { self.reg.h = self.alu_set(self.reg.h, 5); 2 },
-            0xED => { self.reg.b = self.alu_set(self.reg.b, 5); 2 },
+            0xED => { self.reg.l = self.alu_set(self.reg.l, 5); 2 },
             0xEE => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 5);
@@ -703,7 +703,7 @@ impl CPU {
             0xF2 => { self.reg.d = self.alu_set(self.reg.d, 6); 2 },
             0xF3 => { self.reg.e = self.alu_set(self.reg.e, 6); 2 },
             0xF4 => { self.reg.h = self.alu_set(self.reg.h, 6); 2 },
-            0xF5 => { self.reg.b = self.alu_set(self.reg.b, 6); 2 },
+            0xF5 => { self.reg.l = self.alu_set(self.reg.l, 6); 2 },
             0xF6 => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 6);
@@ -714,7 +714,7 @@ impl CPU {
             0xFA => { self.reg.d = self.alu_set(self.reg.d, 7); 2 },
             0xFB => { self.reg.e = self.alu_set(self.reg.e, 7); 2 },
             0xFC => { self.reg.h = self.alu_set(self.reg.h, 7); 2 },
-            0xFD => { self.reg.b = self.alu_set(self.reg.b, 7); 2 },
+            0xFD => { self.reg.l = self.alu_set(self.reg.l, 7); 2 },
             0xFE => { let a = self.reg.get_hl();
                       let mut v = self.mem.read(a);
                       v = self.alu_set(v, 7);
