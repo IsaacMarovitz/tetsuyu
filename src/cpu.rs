@@ -358,7 +358,7 @@ impl CPU {
             0xE0 => { let a = 0xFF00 | u16::from(self.read_byte());
                       self.mem.write(a, self.reg.a);                  3 },
             0xE1 => { let v = self.pop();
-                      self.reg.set_de(v);                             3 },
+                      self.reg.set_hl(v);                             3 },
             0xE2 => { let a = 0xFF00 | u16::from(self.reg.c);
                       self.mem.write(a, self.reg.a);                  2 },
             0xE5 => { self.push(self.reg.get_hl());                   4 },
