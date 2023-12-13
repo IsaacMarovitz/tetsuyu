@@ -54,6 +54,12 @@ async fn main() -> Result<(), impl std::error::Error> {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
+    let panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        panic(info);
+        std::process::exit(1);
+    }));
+
     let window = WindowBuilder::new()
         .with_title(format!("gb-rs - {:}", game_name))
         .with_inner_size(winit::dpi::LogicalSize::new(ppu::SCREEN_W as u32, ppu::SCREEN_H as u32))
