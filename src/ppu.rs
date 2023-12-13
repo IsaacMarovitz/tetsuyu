@@ -462,7 +462,11 @@ impl PPU {
             0xFF49 => self.op1 = v,
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
+            // TODO: Handle PPU speed switching
+            0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
+            // TODO: Handle CBG PAL
+            0xFF69 => {},
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }

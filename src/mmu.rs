@@ -54,11 +54,15 @@ impl MMU {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize],
             0x8000..=0x9FFF => self.ppu.read(a),
+            // TODO: MBC
+            0xA000..=0xBFFF => 0xFF,
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
+            0xFE00..=0xFE9F => self.ppu.read(a),
             0xFF40..=0xFF4F => self.ppu.read(a),
+            0xFF68..=0xFF6B => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF0F => self.intf.bits(),
@@ -71,21 +75,24 @@ impl MMU {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize] = v,
             0x8000..=0x9FFF => self.ppu.write(a, v),
+            // TODO: MBC
+            0xA000..=0xBFFF => {}
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
+            0xFE00..=0xFE9F => self.ppu.write(a, v),
             0xFF40..=0xFF4F => self.ppu.write(a, v),
+            0xFF68..=0xFF6B => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             // TODO: Joypad
             0xFF00 => {},
             0xFF01..=0xFF02 => self.serial.write(a, v),
             // TODO: Timer
             0xFF04..=0xFF07 => {},
+            // TODO: APU
+            0xFF10..=0xFF3F => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
-            0xFF24 => {},
-            0xFF25 => {},
-            0xFF26 => {},
             0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
