@@ -1,10 +1,12 @@
 use bitflags::bitflags;
 use crate::ppu::PPU;
 use crate::mode::GBMode;
+use crate::serial::Serial;
 
 pub struct MMU {
     rom: Vec<u8>,
     pub ppu: PPU,
+    serial: Serial,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,
@@ -28,6 +30,7 @@ impl MMU {
         Self {
             rom,
             ppu: PPU::new(mode),
+            serial: Serial::new(),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             intf: Interrupts::empty(),
@@ -40,6 +43,10 @@ impl MMU {
         let did_draw = self.ppu.cycle(cycles);
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
+
+        self.intf |= self.serial.interrupts;
+        self.serial.interrupts = Interrupts::empty();
+
         did_draw
     }
 
@@ -53,6 +60,7 @@ impl MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
+            0xFF01..=0xFF02 => self.serial.read(a),
             0xFF0F => self.intf.bits(),
             0xFFFF => self.inte.bits(),
             _ => panic!("Read to unsupported address ({:#06x})!", a),
@@ -69,10 +77,11 @@ impl MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
-            0xFF01 => {},
-            0xFF02 => {},
-            0xFF06 => {},
-            0xFF07 => {},
+            // TODO: Joypad
+            0xFF00 => {},
+            0xFF01..=0xFF02 => self.serial.write(a, v),
+            // TODO: Timer
+            0xFF04..=0xFF07 => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
             0xFF24 => {},
             0xFF25 => {},
