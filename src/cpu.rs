@@ -104,7 +104,7 @@ impl CPU {
             0x0D => { self.reg.c = self.alu_dec(self.reg.c);          1 },
             0x0E => { self.reg.c = self.read_byte();                  2 },
             0x0F => { self.reg.a = self.alu_rrc(self.reg.a);
-                      self.reg.set_flag(Flags::Z, false);             2 },
+                      self.reg.set_flag(Flags::Z, false);             1 },
             0x10 => { panic!("Stopped! {:}", self.reg)                  },
             0x11 => { let v = self.read_word();
                       self.reg.set_de(v);                             3 },
@@ -483,7 +483,7 @@ impl CPU {
             0x44 => { self.alu_bit(self.reg.h, 0);       2 },
             0x45 => { self.alu_bit(self.reg.l, 0);       2 },
             0x46 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 0); 4 },
+                      self.alu_bit(self.mem.read(a), 0); 3 },
             0x47 => { self.alu_bit(self.reg.a, 0);       2 },
             0x48 => { self.alu_bit(self.reg.b, 1);       2 },
             0x49 => { self.alu_bit(self.reg.c, 1);       2 },
@@ -492,7 +492,7 @@ impl CPU {
             0x4C => { self.alu_bit(self.reg.h, 1);       2 },
             0x4D => { self.alu_bit(self.reg.l, 1);       2 },
             0x4E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 1); 4 },
+                      self.alu_bit(self.mem.read(a), 1); 3 },
             0x4F => { self.alu_bit(self.reg.a, 1);       2 },
             0x50 => { self.alu_bit(self.reg.b, 2);       2 },
             0x51 => { self.alu_bit(self.reg.c, 2);       2 },
@@ -501,7 +501,7 @@ impl CPU {
             0x54 => { self.alu_bit(self.reg.h, 2);       2 },
             0x55 => { self.alu_bit(self.reg.l, 2);       2 },
             0x56 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 2); 4 },
+                      self.alu_bit(self.mem.read(a), 2); 3 },
             0x57 => { self.alu_bit(self.reg.a, 2);       2 },
             0x58 => { self.alu_bit(self.reg.b, 3);       2 },
             0x59 => { self.alu_bit(self.reg.c, 3);       2 },
@@ -510,7 +510,7 @@ impl CPU {
             0x5C => { self.alu_bit(self.reg.h, 3);       2 },
             0x5D => { self.alu_bit(self.reg.l, 3);       2 },
             0x5E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 3); 4 },
+                      self.alu_bit(self.mem.read(a), 3); 3 },
             0x5F => { self.alu_bit(self.reg.a, 3);       2 },
             0x60 => { self.alu_bit(self.reg.b, 4);       2 },
             0x61 => { self.alu_bit(self.reg.c, 4);       2 },
@@ -519,7 +519,7 @@ impl CPU {
             0x64 => { self.alu_bit(self.reg.h, 4);       2 },
             0x65 => { self.alu_bit(self.reg.l, 4);       2 },
             0x66 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 4); 4 },
+                      self.alu_bit(self.mem.read(a), 4); 3 },
             0x67 => { self.alu_bit(self.reg.a, 4);       2 },
             0x68 => { self.alu_bit(self.reg.b, 5);       2 },
             0x69 => { self.alu_bit(self.reg.c, 5);       2 },
@@ -528,7 +528,7 @@ impl CPU {
             0x6C => { self.alu_bit(self.reg.h, 5);       2 },
             0x6D => { self.alu_bit(self.reg.l, 5);       2 },
             0x6E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 5); 4 },
+                      self.alu_bit(self.mem.read(a), 5); 3 },
             0x6F => { self.alu_bit(self.reg.a, 5);       2 },
             0x70 => { self.alu_bit(self.reg.b, 6);       2 },
             0x71 => { self.alu_bit(self.reg.c, 6);       2 },
@@ -537,7 +537,7 @@ impl CPU {
             0x74 => { self.alu_bit(self.reg.h, 6);       2 },
             0x75 => { self.alu_bit(self.reg.l, 6);       2 },
             0x76 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 6); 4 },
+                      self.alu_bit(self.mem.read(a), 6); 3 },
             0x77 => { self.alu_bit(self.reg.a, 6);       2 },
             0x78 => { self.alu_bit(self.reg.b, 7);       2 },
             0x79 => { self.alu_bit(self.reg.c, 7);       2 },
@@ -546,7 +546,7 @@ impl CPU {
             0x7C => { self.alu_bit(self.reg.h, 7);       2 },
             0x7D => { self.alu_bit(self.reg.l, 7);       2 },
             0x7E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 7); 4 },
+                      self.alu_bit(self.mem.read(a), 7); 3 },
             0x7F => { self.alu_bit(self.reg.a, 7);       2 },
             0x80 => { self.reg.b = self.alu_res(self.reg.b, 0);       2 },
             0x81 => { self.reg.c = self.alu_res(self.reg.c, 0);       2 },

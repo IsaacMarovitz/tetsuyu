@@ -71,8 +71,12 @@ impl MMU {
             0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF68..=0xFF6B => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
+            // TODO: Joypad
+            0xFF00 => 0xFF,
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF04..=0xFF07 => self.timer.read(a),
+            // TODO: APU
+            0xFF10..=0xFF3F => 0x00,
             0xFF0F => self.intf.bits(),
             0xFF70 => self.wram_bank as u8,
             0xFFFF => self.inte.bits(),
