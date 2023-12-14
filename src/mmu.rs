@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;
+use crate::mbc::mbc1::MBC1;
 use crate::memory::Memory;
 use crate::ppu::PPU;
 use crate::timer::Timer;
@@ -32,13 +33,14 @@ bitflags! {
 
 impl MMU {
     pub fn new(mode: GBMode,  mbc_mode: MBCMode, rom: Vec<u8>) -> Self {
-        let mbc = match mbc_mode {
-            MBCMode::RomOnly => ROMOnly::new(rom),
+        let mbc: Box<dyn MBC> = match mbc_mode {
+            MBCMode::RomOnly => Box::new(ROMOnly::new(rom)),
+            MBCMode::MBC1 => Box::new(MBC1::new(rom)),
             v => panic!("Unsupported MBC type! {:}", v)
         };
 
         Self {
-            mbc: Box::new(mbc) as Box<dyn MBC>,
+            mbc: mbc,
             ppu: PPU::new(mode),
             serial: Serial::new(),
             timer: Timer::new(),
@@ -71,8 +73,7 @@ impl Memory for MMU {
         match a {
             0x0000..=0x7FFF => self.mbc.read(a),
             0x8000..=0x9FFF => self.ppu.read(a),
-            // TODO: MBC
-            0xA000..=0xBFFF => 0xFF,
+            0xA000..=0xBFFF => self.mbc.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
@@ -98,8 +99,7 @@ impl Memory for MMU {
         match a {
             0x0000..=0x7FFF => self.mbc.write(a, v),
             0x8000..=0x9FFF => self.ppu.write(a, v),
-            // TODO: MBC
-            0xA000..=0xBFFF => {}
+            0xA000..=0xBFFF => self.mbc.write(a, v),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
