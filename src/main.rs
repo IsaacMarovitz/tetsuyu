@@ -47,11 +47,12 @@ async fn main() -> Result<(), impl std::error::Error> {
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
 
     let cart_type: CartTypes = FromPrimitive::from_u8(buffer[0x0147]).expect("Failed to get Cart Type!");
-    let mbc_type = cart_type.get_mbc();
-
-    match mbc_type {
-        MBCMode::Unsupported => panic!("Unsupported Cart Type! {:?}", cart_type),
-        v => println!("MBC Type: {:?}", v)
+    let mbc_type = match cart_type.get_mbc() {
+        MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
+        v => {
+            println!("Cart Type: {:}, MBC Type: {:}", cart_type, v);
+            v
+        }
     };
 
     let mut booting = true;

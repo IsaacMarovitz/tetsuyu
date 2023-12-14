@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Formatter};
+
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum CartTypes {
     RomOnly = 0x00,
@@ -68,6 +71,41 @@ impl CartTypes {
     }
 }
 
+impl fmt::Display for CartTypes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            CartTypes::RomOnly => write!(f, "ROM ONLY"),
+            CartTypes::MBC1 => write!(f, "MBC1"),
+            CartTypes::MBC1Ram => write!(f, "MBC1+RAM"),
+            CartTypes::MBC1RamBat => write!(f, "MBC1+RAM+BATTERY"),
+            CartTypes::MBC2 => write!(f, "MBC2"),
+            CartTypes::MBC2Bat => write!(f, "MBC2+BATTERY"),
+            CartTypes::RomRam => write!(f, "ROM+RAM"),
+            CartTypes::RomRamBat => write!(f, "ROM+RAM+BATTERY"),
+            CartTypes::MMM01 => write!(f, "MMM01"),
+            CartTypes::MMM01Ram => write!(f, "MMM01+RAM"),
+            CartTypes::MMM01RamBat => write!(f, "MMM01+RAM+BATTERY"),
+            CartTypes::MBC3TimerBat => write!(f, "MBC3+TIMER+BATTERY"),
+            CartTypes::MBC3TimerRamBat => write!(f, "MBC3+TIMER+RAM+BATTERY"),
+            CartTypes::MBC3 => write!(f, "MBC3"),
+            CartTypes::MBC3Ram => write!(f, "MBC3+RAM"),
+            CartTypes::MBC3RamBat => write!(f, "MBC3+RAM+BATTERY"),
+            CartTypes::MBC5 => write!(f, "MBC5"),
+            CartTypes::MBC5Ram => write!(f, "MBC5+RAM"),
+            CartTypes::MBC5RamBat => write!(f, "MBC5+RAM+BATTERY"),
+            CartTypes::MBC5Rumble => write!(f, "MBC5+RUMBLE"),
+            CartTypes::MBC5RumbleRam => write!(f, "MBC5+RUMBLE+RAM"),
+            CartTypes::MBC5RumbleRamBat => write!(f, "MBC5+RUMBLE+RAM+BATTERY"),
+            CartTypes::MBC6 => write!(f, "MBC6"),
+            CartTypes::MBC7SensorRumbleRamBat => write!(f, "MBC7+SENSOR+RUMBLE+RAM+BATTERY"),
+            CartTypes::PocketCamera => write!(f, "POCKET CAMERA"),
+            CartTypes::BandaiTAMA5 => write!(f, "BANDAI TAMA5"),
+            CartTypes::HuC3 => write!(f, "HuC3"),
+            CartTypes::HuC1RamBat => write!(f, "HuC1+RAM+BATTERY"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MBCMode {
     RomOnly,
@@ -76,4 +114,17 @@ pub enum MBCMode {
     MBC3,
     MBC5,
     Unsupported
+}
+
+impl fmt::Display for MBCMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            MBCMode::RomOnly => write!(f, "ROM Only"),
+            MBCMode::MBC1 => write!(f, "MBC1"),
+            MBCMode::MBC2 => write!(f, "MBC2"),
+            MBCMode::MBC3 => write!(f, "MBC3"),
+            MBCMode::MBC5 => write!(f, "MBC5"),
+            MBCMode::Unsupported => write!(f, "Unsupported"),
+        }
+    }
 }
