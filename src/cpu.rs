@@ -116,7 +116,7 @@ impl CPU {
             0x16 => { self.reg.d = self.read_byte();                  2 },
             0x17 => { self.reg.a = self.alu_rl(self.reg.a);
                       self.reg.set_flag(Flags::Z, false);             1 },
-            0x18 => { self.reg.pc += self.read_byte() as u16;         3 },
+            0x18 => { self.jr(true);                                  3 },
             0x19 => { self.alu_add_16(self.reg.get_de());             2 },
             0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
             0x1B => { let de = self.reg.get_de();
