@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate num_derive;
+
 use crate::context::Context;
 use crate::cpu::CPU;
 use crate::mode::GBMode;
@@ -21,6 +24,7 @@ mod registers;
 mod ppu;
 mod serial;
 mod timer;
+mod mbc;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
