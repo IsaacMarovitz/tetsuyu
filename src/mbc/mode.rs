@@ -60,7 +60,7 @@ impl CartTypes {
             CartTypes::MBC5Rumble => MBCMode::MBC5,
             CartTypes::MBC5RumbleRam => MBCMode::MBC5,
             CartTypes::MBC5RumbleRamBat => MBCMode::MBC5,
-            // All further type unimplemented
+            // All further types unimplemented
             CartTypes::MBC6 => MBCMode::Unsupported,
             CartTypes::MBC7SensorRumbleRamBat => MBCMode::Unsupported,
             CartTypes::PocketCamera => MBCMode::Unsupported,

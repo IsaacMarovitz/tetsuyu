@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use crate::memory::Memory;
 use crate::ppu::PPU;
 use crate::timer::Timer;
 use crate::mode::GBMode;
@@ -56,8 +57,10 @@ impl MMU {
 
         did_draw
     }
+}
 
-    pub fn read(&self, a: u16) -> u8 {
+impl Memory for MMU {
+    fn read(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x7FFF => self.rom[a as usize],
             0x8000..=0x9FFF => self.ppu.read(a),
@@ -84,7 +87,7 @@ impl MMU {
         }
     }
 
-    pub fn write(&mut self, a: u16, v: u8) {
+    fn write(&mut self, a: u16, v: u8) {
         match a {
             // TODO: MBC
             0x0000..=0x7FFF => {}
@@ -111,14 +114,5 @@ impl MMU {
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
-    }
-
-    pub fn read_word(&self, a: u16) -> u16 {
-        (self.read(a) as u16) | ((self.read(a + 1) as u16) << 8)
-    }
-
-    pub fn write_word(&mut self, a: u16, v: u16) {
-        self.write(a, (v & 0xFF) as u8);
-        self.write(a + 1, (v >> 8) as u8);
     }
 }

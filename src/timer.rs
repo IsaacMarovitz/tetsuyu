@@ -1,3 +1,4 @@
+use crate::memory::Memory;
 use crate::mmu::Interrupts;
 
 pub struct Timer {
@@ -45,8 +46,10 @@ impl Timer {
             }
         }
     }
+}
 
-    pub fn read(&self, a: u16) -> u8 {
+impl Memory for Timer {
+    fn read(&self, a: u16) -> u8 {
         match a {
             0xFF04 => self.div,
             0xFF05 => self.tima,
@@ -67,7 +70,7 @@ impl Timer {
         }
     }
 
-    pub fn write(&mut self, a: u16, v: u8) {
+    fn write(&mut self, a: u16, v: u8) {
         match a {
             0xFF04 => self.div = 0x00,
             0xFF05 => self.tima = v,

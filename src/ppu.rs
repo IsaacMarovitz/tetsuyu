@@ -1,4 +1,5 @@
-use bitflags::bitflags;
+use bitflags::{bitflags, Flags};
+use crate::memory::Memory;
 use crate::mmu::Interrupts;
 use crate::mode::GBMode;
 
@@ -411,8 +412,10 @@ impl PPU {
     fn read_ram1(&self, a: u16) -> u8 {
         self.ram[a as usize - 0x6000]
     }
+}
 
-    pub fn read(&self, a: u16) -> u8 {
+impl Memory for PPU {
+    fn read(&self, a: u16) -> u8 {
         match a {
             0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000],
             0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00],
@@ -439,7 +442,7 @@ impl PPU {
         }
     }
 
-    pub fn write(&mut self, a: u16, v: u8) {
+    fn write(&mut self, a: u16, v: u8) {
         match a {
             0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v,
             0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00] = v,

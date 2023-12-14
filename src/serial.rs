@@ -1,4 +1,5 @@
 use std::io::Write;
+use crate::memory::Memory;
 use crate::mmu::Interrupts;
 
 // TODO: Handle serial properly
@@ -16,8 +17,10 @@ impl Serial {
             sc: 0
         }
     }
+}
 
-    pub fn read(&self, a: u16) -> u8 {
+impl Memory for Serial {
+    fn read(&self, a: u16) -> u8 {
         match a {
             0xFF01 => self.sb,
             0xFF02 => self.sc,
@@ -25,12 +28,12 @@ impl Serial {
         }
     }
 
-    pub fn write(&mut self, a: u16, v: u8) {
+    fn write(&mut self, a: u16, v: u8) {
         match a {
             0xFF01 => {
                 self.sb = v;
                 print!("{}", std::str::from_utf8(&[v]).unwrap());
-                std::io::stdout().flush();
+                let _ = std::io::stdout().flush();
             },
             0xFF02 => self.sc = v,
             _ => panic!("Write to unsupported Serial address ({:#06x})!", a),

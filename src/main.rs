@@ -27,6 +27,7 @@ mod ppu;
 mod serial;
 mod timer;
 mod mbc;
+mod memory;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;

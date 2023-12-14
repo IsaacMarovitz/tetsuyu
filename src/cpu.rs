@@ -1,6 +1,7 @@
 use crate::mmu::MMU;
 use crate::mode::GBMode;
 use crate::registers::{Registers, Flags};
+use crate::memory::Memory;
 
 pub struct CPU {
     reg: Registers,
