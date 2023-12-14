@@ -589,6 +589,7 @@ impl CPU {
                       self.mem.write(a, v);                           4 },
             0x9F => { self.reg.a = self.alu_res(self.reg.a, 3);       2 },
             0xA0 => { self.reg.b = self.alu_res(self.reg.b, 4);       2 },
+            0xA1 => { self.reg.c = self.alu_res(self.reg.c, 4);       2 },
             0xA2 => { self.reg.d = self.alu_res(self.reg.d, 4);       2 },
             0xA3 => { self.reg.e = self.alu_res(self.reg.e, 4);       2 },
             0xA4 => { self.reg.h = self.alu_res(self.reg.h, 4);       2 },
