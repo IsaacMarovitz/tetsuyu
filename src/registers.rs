@@ -1,6 +1,9 @@
 use bitflags::bitflags;
 use crate::mode::GBMode;
+use std::fmt;
+use std::fmt::Formatter;
 
+#[derive(Debug)]
 pub struct Registers {
     pub a: u8,
     f: u8,
@@ -109,5 +112,11 @@ impl Registers {
                 }
             }
         }
+    }
+}
+
+impl fmt::Display for Registers {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "[A: {:#02x}, F: {:#02x}, B: {:#02x}, C: {:#02x}, D: {:#02x}, E: {:#02x}, H: {:#02x}, L: {:#02x}, PC: {:#04x}, SP: {:#04x}]", self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l, self.pc, self.sp)
     }
 }

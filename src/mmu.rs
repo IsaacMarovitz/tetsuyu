@@ -95,7 +95,7 @@ impl MMU {
             0xFF10..=0xFF3F => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
             0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
-            0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
+            0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
     }
