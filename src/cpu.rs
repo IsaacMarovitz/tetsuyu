@@ -1,3 +1,4 @@
+use crate::mbc::mode::MBCMode;
 use crate::mmu::MMU;
 use crate::mode::GBMode;
 use crate::registers::{Registers, Flags};
@@ -12,10 +13,10 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode, rom: Vec<u8>, booting: bool) -> Self {
+    pub fn new(mode: GBMode, mbc_mode: MBCMode, rom: Vec<u8>, booting: bool) -> Self {
         Self {
             reg: Registers::new(mode, booting),
-            mem: MMU::new(mode, rom),
+            mem: MMU::new(mode, mbc_mode, rom),
             halted: false,
             ime: false
         }

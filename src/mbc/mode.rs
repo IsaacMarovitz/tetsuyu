@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::{Formatter};
+use crate::memory::Memory;
 
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum CartTypes {
@@ -128,3 +129,5 @@ impl fmt::Display for MBCMode {
         }
     }
 }
+
+pub trait MBC : Memory + Send { }

@@ -1,4 +1,6 @@
 use bitflags::bitflags;
+use crate::mbc::mode::{MBC, MBCMode};
+use crate::mbc::rom_only::ROMOnly;
 use crate::memory::Memory;
 use crate::ppu::PPU;
 use crate::timer::Timer;
@@ -6,7 +8,7 @@ use crate::mode::GBMode;
 use crate::serial::Serial;
 
 pub struct MMU {
-    rom: Vec<u8>,
+    mbc: Box<dyn MBC+'static>,
     pub ppu: PPU,
     serial: Serial,
     timer: Timer,
@@ -29,9 +31,14 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(mode: GBMode, rom: Vec<u8>) -> Self {
+    pub fn new(mode: GBMode,  mbc_mode: MBCMode, rom: Vec<u8>) -> Self {
+        let mbc = match mbc_mode {
+            MBCMode::RomOnly => ROMOnly::new(rom),
+            v => panic!("Unsupported MBC type! {:}", v)
+        };
+
         Self {
-            rom,
+            mbc: Box::new(mbc) as Box<dyn MBC>,
             ppu: PPU::new(mode),
             serial: Serial::new(),
             timer: Timer::new(),
@@ -62,7 +69,7 @@ impl MMU {
 impl Memory for MMU {
     fn read(&self, a: u16) -> u8 {
         match a {
-            0x0000..=0x7FFF => self.rom[a as usize],
+            0x0000..=0x7FFF => self.mbc.read(a),
             0x8000..=0x9FFF => self.ppu.read(a),
             // TODO: MBC
             0xA000..=0xBFFF => 0xFF,
@@ -89,8 +96,7 @@ impl Memory for MMU {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
-            // TODO: MBC
-            0x0000..=0x7FFF => {}
+            0x0000..=0x7FFF => self.mbc.write(a, v),
             0x8000..=0x9FFF => self.ppu.write(a, v),
             // TODO: MBC
             0xA000..=0xBFFF => {}

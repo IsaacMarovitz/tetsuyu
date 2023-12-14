@@ -48,7 +48,7 @@ async fn main() -> Result<(), impl std::error::Error> {
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
 
     let cart_type: CartTypes = FromPrimitive::from_u8(buffer[0x0147]).expect("Failed to get Cart Type!");
-    let mbc_type = match cart_type.get_mbc() {
+    let mbc_mode = match cart_type.get_mbc() {
         MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
         v => {
             println!("Cart Type: {:}, MBC Type: {:}", cart_type, v);
@@ -97,7 +97,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, buffer, booting);
+            let mut cpu = CPU::new(GBMode::Classic, mbc_mode, buffer, booting);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 
