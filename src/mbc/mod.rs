@@ -1,1 +1,1 @@
-mod mode;
+pub mod mode;

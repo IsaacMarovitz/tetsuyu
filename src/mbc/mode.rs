@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, PartialEq, FromPrimitive)]
+#[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum CartTypes {
     RomOnly = 0x00,
     MBC1 = 0x01,
@@ -68,7 +68,7 @@ impl CartTypes {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MBCMode {
     RomOnly,
     MBC1,

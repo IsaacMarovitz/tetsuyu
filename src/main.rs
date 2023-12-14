@@ -4,6 +4,7 @@ extern crate num_derive;
 use crate::context::Context;
 use crate::cpu::CPU;
 use crate::mode::GBMode;
+use crate::mbc::mode::{CartTypes, MBCMode};
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
@@ -15,6 +16,7 @@ use winit::keyboard::{Key, ModifiersState};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use winit::event_loop::ControlFlow;
+use num_traits::FromPrimitive;
 
 mod context;
 mod cpu;
@@ -42,9 +44,17 @@ async fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
     let mut file = File::open(args.rom_path).expect("No ROM found!");
     let mut buffer = Vec::new();
-    let mut booting = true;
-
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
+
+    let cart_type: CartTypes = FromPrimitive::from_u8(buffer[0x0147]).expect("Failed to get Cart Type!");
+    let mbc_type = cart_type.get_mbc();
+
+    match mbc_type {
+        MBCMode::Unsupported => panic!("Unsupported Cart Type! {:?}", cart_type),
+        v => println!("MBC Type: {:?}", v)
+    };
+
+    let mut booting = true;
 
     match args.boot_rom {
         Some(path) => {
