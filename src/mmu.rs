@@ -74,7 +74,8 @@ impl MMU {
 
     pub fn write(&mut self, a: u16, v: u8) {
         match a {
-            0x0000..=0x7FFF => self.rom[a as usize] = v,
+            // TODO: MBC
+            0x0000..=0x7FFF => {}
             0x8000..=0x9FFF => self.ppu.write(a, v),
             // TODO: MBC
             0xA000..=0xBFFF => {}
@@ -94,6 +95,7 @@ impl MMU {
             // TODO: APU
             0xFF10..=0xFF3F => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
+            0xFF50 => {},
             0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),

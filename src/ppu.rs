@@ -434,6 +434,7 @@ impl PPU {
             0xFF49 => self.op1,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
+            0xFF4D => 0x00,
             0xFF4F => 0xFE | self.ram_bank as u8,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }

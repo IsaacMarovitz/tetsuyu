@@ -29,21 +29,22 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 #[derive(Parser)]
 struct Args {
     rom_path: String,
+    boot_rom: String
 }
 
 #[tokio::main]
 async fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
     let mut file = File::open(args.rom_path).expect("No ROM found!");
+    let mut boot = File::open(args.boot_rom).expect("No Boot ROM found!");
     let mut buffer = Vec::new();
+    let mut boot_rom = Vec::new();
 
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
-
-    let nintendo_logo = &buffer[0x0104..=0x0133];
+    boot.read_to_end(&mut boot_rom).expect("Failed to read Boot ROM!");
 
     // Display Nintendo Logo
-
-    // Run checksum
+    buffer[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
 
     // Get game name
     let name_data = &buffer[0x0134..=0x0143];
