@@ -90,6 +90,7 @@ impl Memory for MMU {
             0xFF10..=0xFF3F => 0x00,
             0xFF0F => self.intf.bits(),
             0xFF70 => self.wram_bank as u8,
+            0xFEA0..=0xFEFF => 0xFF,
             0xFFFF => self.inte.bits(),
             _ => panic!("Read to unsupported address ({:#06x})!", a),
         }
@@ -117,6 +118,8 @@ impl Memory for MMU {
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
             0xFF50 => {},
             0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
+            0xFEA0..=0xFEFF => {},
+            0xFF7F => {},
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }

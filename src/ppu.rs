@@ -10,6 +10,7 @@ pub struct PPU {
     mode: GBMode,
     ppu_mode: PPUMode,
     cycle_count: u32,
+    vblanked_lines: u32,
     sy: u8,
     sx: u8,
     ly: u8,
@@ -99,6 +100,7 @@ impl PPU {
             mode,
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
+            vblanked_lines: 0,
             sy: 0x00,
             sx: 0x00,
             ly: 0x00,
@@ -185,14 +187,21 @@ impl PPU {
                 false
             },
             PPUMode::VBlank => {
-                if self.cycle_count > 4560 {
-                    self.cycle_count -= 4560;
-                    self.ly = 0;
-                    self.ppu_mode = PPUMode::OAMScan;
-                    if self.lcds.contains(LCDS::MODE_2_SELECT) {
-                        self.interrupts |= Interrupts::LCD;
+                if self.cycle_count > 456 {
+                    self.cycle_count -= 456;
+                    self.vblanked_lines += 1;
+
+                    if self.vblanked_lines >= 10 {
+                        self.vblanked_lines = 0;
+                        self.ly = 0;
+                        self.ppu_mode = PPUMode::OAMScan;
+                        if self.lcds.contains(LCDS::MODE_2_SELECT) {
+                            self.interrupts |= Interrupts::LCD;
+                        }
+                        // println!("[PPU] Switching to OAMScan!");
+                    } else {
+                        self.ly += 1;
                     }
-                    // println!("[PPU] Switching to OAMScan!");
                 }
                 false
             }
@@ -462,6 +471,7 @@ impl Memory for PPU {
             0xFF43 => self.sx = v,
             0xFF44 => print!("Attempted to write to LY!"),
             0xFF45 => self.lc = v,
+            0xFF46 => {},
             0xFF47 => self.bgp = v,
             0xFF48 => self.op0 = v,
             0xFF49 => self.op1 = v,
