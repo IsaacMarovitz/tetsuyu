@@ -66,6 +66,7 @@ impl MMU {
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF0F => self.intf.bits(),
+            0xFF70 => self.wram_bank as u8,
             0xFFFF => self.inte.bits(),
             _ => panic!("Read to unsupported address ({:#06x})!", a),
         }
@@ -93,6 +94,7 @@ impl MMU {
             // TODO: APU
             0xFF10..=0xFF3F => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
+            0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
             0xFFFF => self.inte = Interrupts::from_bits(v).unwrap(),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }
