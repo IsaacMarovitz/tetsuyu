@@ -362,8 +362,7 @@ impl CPU {
             0xE6 => { let b = self.read_byte();
                       self.alu_and(b);                                2 },
             0xE7 => { self.rst(0x20)                                    },
-            0xE8 => { let v = self.read_byte();
-                      self.alu_add_sp(v);                             4 },
+            0xE8 => { self.reg.sp = self.alu_add_16_imm(self.reg.sp); 4 },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
             0xEA => { let a = self.read_word();
                       self.mem.write(a, self.reg.a);                  4 },
@@ -381,8 +380,8 @@ impl CPU {
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
             0xF7 => { self.rst(0x30)                                    },
-            0xF8 => { let b = self.read_byte();
-                      self.alu_ld_sp(b);                              3 },
+            0xF8 => { let v = self.alu_add_16_imm(self.reg.sp);
+                      self.reg.set_hl(v);                             3 },
             0xF9 => { self.reg.sp = self.reg.get_hl();                2 },
             0xFA => { let a = self.read_word();
                       self.reg.a = self.mem.read(a);                  4 },
@@ -796,26 +795,13 @@ impl CPU {
         self.reg.set_hl(r);
     }
 
-    fn alu_add_sp(&mut self, x: u8) {
-        let a = self.reg.sp;
-        // rboy and gameboy go u8 -> i8 -> i16 -> u16
-        // this doesn't seem necessary but check later
-        let v = x as u16;
-        self.reg.set_flag(Flags::C, u32::from(a) + u32::from(v) > u32::from(u16::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
+    fn alu_add_16_imm(&mut self, a: u16) -> u16 {
+        let b = self.read_byte() as i8 as i16 as u16;
+        self.reg.set_flag(Flags::C, (a & 0x00FF) + (b & 0x00FF) > 0x00FF);
+        self.reg.set_flag(Flags::H, (a & 0x000F) + (b & 0x000F) > 0x000F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, false);
-        self.reg.sp = a.wrapping_add(v);
-    }
-
-    fn alu_ld_sp(&mut self, x: u8) {
-        let a = self.reg.sp;
-        let v = x as u16;
-        self.reg.set_flag(Flags::C, u32::from(a) + u32::from(v) > u32::from(u16::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
-        self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, false);
-        self.reg.set_hl(a.wrapping_add(v));
+        a.wrapping_add(b)
     }
 
     fn alu_sub(&mut self, x: u8) {
