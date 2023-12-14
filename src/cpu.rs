@@ -35,10 +35,6 @@ impl CPU {
     }
 
     fn interrupt(&mut self) -> u32 {
-        if !self.ei && !self.halted {
-            return 0;
-        }
-
         let intf = self.mem.read(0xFF0F);
         let inte = self.mem.read(0xFFFF);
         let triggered = intf & inte;
