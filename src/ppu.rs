@@ -272,7 +272,6 @@ impl PPU {
 
             // Location of Tile Attributes
             let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
-            // TODO: This seems to be returning the wrong value
             let tile_index = self.read_ram0(tile_address);
 
             // If we're using the secondary address mode,

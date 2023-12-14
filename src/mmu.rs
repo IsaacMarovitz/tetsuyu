@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use crate::ppu::PPU;
+use crate::timer::Timer;
 use crate::mode::GBMode;
 use crate::serial::Serial;
 
@@ -7,6 +8,7 @@ pub struct MMU {
     rom: Vec<u8>,
     pub ppu: PPU,
     serial: Serial,
+    timer: Timer,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,
@@ -31,6 +33,7 @@ impl MMU {
             rom,
             ppu: PPU::new(mode),
             serial: Serial::new(),
+            timer: Timer::new(),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
             intf: Interrupts::empty(),
@@ -40,6 +43,10 @@ impl MMU {
     }
 
     pub fn cycle(&mut self, cycles: u32) -> bool {
+        self.timer.cycle(cycles);
+        self.intf |= self.timer.interrupts;
+        self.timer.interrupts = Interrupts::empty();
+
         let did_draw = self.ppu.cycle(cycles);
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
@@ -65,6 +72,7 @@ impl MMU {
             0xFF68..=0xFF6B => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
             0xFF01..=0xFF02 => self.serial.read(a),
+            0xFF04..=0xFF07 => self.timer.read(a),
             0xFF0F => self.intf.bits(),
             0xFF70 => self.wram_bank as u8,
             0xFFFF => self.inte.bits(),
@@ -90,8 +98,7 @@ impl MMU {
             // TODO: Joypad
             0xFF00 => {},
             0xFF01..=0xFF02 => self.serial.write(a, v),
-            // TODO: Timer
-            0xFF04..=0xFF07 => {},
+            0xFF04..=0xFF07 => self.timer.write(a, v),
             // TODO: APU
             0xFF10..=0xFF3F => {},
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
