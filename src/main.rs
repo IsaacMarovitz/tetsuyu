@@ -29,22 +29,29 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 #[derive(Parser)]
 struct Args {
     rom_path: String,
-    boot_rom: String
+    boot_rom: Option<String>
 }
 
 #[tokio::main]
 async fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
     let mut file = File::open(args.rom_path).expect("No ROM found!");
-    let mut boot = File::open(args.boot_rom).expect("No Boot ROM found!");
     let mut buffer = Vec::new();
-    let mut boot_rom = Vec::new();
+    let mut booting = true;
 
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
-    boot.read_to_end(&mut boot_rom).expect("Failed to read Boot ROM!");
 
-    // Display Nintendo Logo
-    buffer[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+    match args.boot_rom {
+        Some(path) => {
+            let mut boot_rom = Vec::new();
+            let mut boot = File::open(path).expect("No Boot ROM found!");
+            boot.read_to_end(&mut boot_rom).expect("Failed to read Boot ROM!");
+
+            // Display Nintendo Logo
+            buffer[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+        },
+        None => booting = false
+    }
 
     // Get game name
     let name_data = &buffer[0x0134..=0x0143];
@@ -73,7 +80,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, buffer);
+            let mut cpu = CPU::new(GBMode::Classic, buffer, booting);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 
