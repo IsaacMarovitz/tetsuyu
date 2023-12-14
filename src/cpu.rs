@@ -7,7 +7,7 @@ pub struct CPU {
     pub mem: MMU,
     halted: bool,
     // Enabled Interrupts
-    ei: bool
+    ime: bool
 }
 
 impl CPU {
@@ -16,7 +16,7 @@ impl CPU {
             reg: Registers::new(mode),
             mem: MMU::new(mode, rom),
             halted: false,
-            ei: true
+            ime: false
         }
     }
 
@@ -43,10 +43,10 @@ impl CPU {
         }
 
         self.halted = false;
-        if !self.ei {
+        if !self.ime {
             return 0;
         }
-        self.ei = false;
+        self.ime = false;
 
         let n = triggered.trailing_zeros();
         let remaining = intf & !(1 << n);
@@ -346,7 +346,7 @@ impl CPU {
             0xD7 => { self.rst(0x10)                                    },
             0xD8 => { self.ret(self.reg.get_flag(Flags::C))             },
             0xD9 => { self.reg.pc = self.pop();
-                      self.ei = true;                                 4 },
+                      self.ime = true;                                4 },
             0xDA => { self.jp(self.reg.get_flag(Flags::C))              },
             0xDC => { self.call(self.reg.get_flag(Flags::C))            },
             0xDE => { let v = self.read_byte();
@@ -376,7 +376,7 @@ impl CPU {
                       self.reg.set_af(v);                             3 },
             0xF2 => { let a = 0xFF00 | u16::from(self.reg.c);
                       self.reg.a = self.mem.read(a);                  2 },
-            0xF3 => { self.ei = false;                                1 },
+            0xF3 => { self.ime = false;                               1 },
             0xF5 => { self.push(self.reg.get_af());                   4 },
             0xF6 => { let b = self.read_byte();
                       self.alu_or(b);                                 2 },
@@ -386,7 +386,7 @@ impl CPU {
             0xF9 => { self.reg.sp = self.reg.get_hl();                2 },
             0xFA => { let a = self.read_word();
                       self.reg.a = self.mem.read(a);                  4 },
-            0xFB => { self.ei = true;                                 1 },
+            0xFB => { self.ime = true;                                1 },
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
             0xFF => { self.rst(0x38)                                    },
