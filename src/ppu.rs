@@ -154,7 +154,7 @@ impl PPU {
                         self.draw_sprites();
                     }
                     // println!("[PPU] Switching to HBlank!");
-                    true
+                    false
                 } else {
                     false
                 }
@@ -164,18 +164,20 @@ impl PPU {
                     self.ly += 1;
                     self.cycle_count -= 456;
 
-                    if self.ly > 143 {
+                    return if self.ly > 143 {
                         self.ppu_mode = PPUMode::VBlank;
                         self.interrupts |= Interrupts::V_BLANK;
                         if self.lcds.contains(LCDS::MODE_1_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
+                        true
                         // println!("[PPU] Switching to VBlank!");
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
+                        false
                         // println!("[PPU] Switching to OAMScan!");
                     }
                 }
