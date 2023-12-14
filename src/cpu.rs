@@ -770,7 +770,7 @@ impl CPU {
         let a = self.reg.a;
         let r = a.wrapping_add(x);
         self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) > u16::from(u8::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F) > 0x0F);
+        self.reg.set_flag(Flags::H, (a & 0x0F) + (x & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
@@ -781,7 +781,7 @@ impl CPU {
         let c = u8::from(self.reg.get_flag(Flags::C));
         let r = a.wrapping_add(x).wrapping_add(c);
         self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) + u16::from(c) > u16::from(u8::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0F) + (a & 0x0F)  + (c & 0x0F) > 0x0F);
+        self.reg.set_flag(Flags::H, (a & 0x0F) + (x & 0x0F)  + (c & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
@@ -872,7 +872,7 @@ impl CPU {
 
     fn alu_dec(&mut self, x: u8) -> u8 {
         let r = x.wrapping_sub(1);
-        self.reg.set_flag(Flags::H, (x & 0b0000_1111) == 0b0000_1111);
+        self.reg.set_flag(Flags::H, x.trailing_zeros() >= 4);
         self.reg.set_flag(Flags::N, true);
         self.reg.set_flag(Flags::Z, r == 0);
         r
@@ -907,7 +907,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
@@ -917,7 +917,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
@@ -927,7 +927,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
@@ -937,7 +937,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
@@ -952,7 +952,7 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
@@ -962,22 +962,18 @@ impl CPU {
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
     fn alu_rl(&mut self, a: u8) -> u8 {
-        let c = a & 0b1000_0000 == 0b1000_0000;
-        let mut r = a << 1;
-
-        if self.reg.get_flag(Flags::C) {
-            r = r | 0b0000_0001;
-        }
+        let c = (a & 0x80) >> 7 == 0x01;
+        let r = (a << 1) + self.reg.get_flag(Flags::C) as u8;
 
         self.reg.set_flag(Flags::C, c);
         self.reg.set_flag(Flags::H, false);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::Z, a == 0);
+        self.reg.set_flag(Flags::Z, r == 0);
         r
     }
 
