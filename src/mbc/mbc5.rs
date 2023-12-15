@@ -49,7 +49,7 @@ impl MBC5 {
     pub fn new(rom: Vec<u8>) -> Self {
         Self {
             rom,
-            ram: vec![0x00; 131072],
+            ram: vec![0x00; 131_072],
             ram_enabled: false,
             rom_bank: 0,
             ram_bank: 0

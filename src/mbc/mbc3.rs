@@ -67,7 +67,7 @@ impl MBC3 {
     pub fn new(rom: Vec<u8>) -> Self {
         Self {
             rom,
-            ram: vec![0x00; 32768],
+            ram: vec![0x00; 32_768],
             rtc: RTC::new(),
             ram_enabled: false,
             rom_bank: 1,
