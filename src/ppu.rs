@@ -342,7 +342,7 @@ impl PPU {
             let py = self.read(sprite_address).wrapping_sub(16);
             let px = self.read(sprite_address + 1).wrapping_sub(8);
             let tile_number = self.read(sprite_address + 2) & if self.lcdc.contains(LCDC::OBJ_SIZE) { 0xFE } else { 0xFF };
-            let tile_attributes = Attributes::from_bits(self.read(sprite_address + 3)).unwrap();
+            let tile_attributes = Attributes::from_bits_truncate(self.read(sprite_address + 3));
 
             if py <= 0xFF - sprite_size + 1 {
                 if self.ly < py || self.ly > py + sprite_size - 1 {
