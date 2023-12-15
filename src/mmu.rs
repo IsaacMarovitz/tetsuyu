@@ -3,6 +3,7 @@ use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;
 use crate::mbc::mbc1::MBC1;
 use crate::mbc::mbc3::MBC3;
+use crate::mbc::mbc5::MBC5;
 use crate::memory::Memory;
 use crate::ppu::PPU;
 use crate::timer::Timer;
@@ -38,6 +39,7 @@ impl MMU {
             MBCMode::RomOnly => Box::new(ROMOnly::new(rom)),
             MBCMode::MBC1 => Box::new(MBC1::new(rom)),
             MBCMode::MBC3 => Box::new(MBC3::new(rom)),
+            MBCMode::MBC5 => Box::new(MBC5::new(rom)),
             v => panic!("Unsupported MBC type! {:}", v)
         };
 
