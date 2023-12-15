@@ -7,22 +7,19 @@ pub struct MBC3 {
     ram: Vec<u8>,
     rtc: RTC,
     ram_enabled: bool,
-    rom_bank: u8,
-    ram_bank: u8
+    rom_bank: usize,
+    ram_bank: usize
 }
 
 impl Memory for MBC3 {
     fn read(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x3FFF => self.rom[a as usize],
-            0x4000..=0x7FFF => {
-                let rom_bank = if self.rom_bank == 0x00 { 0x01 } else { self.rom_bank };
-                self.rom[a as usize + (rom_bank - 1) as usize * 0x4000]
-            },
+            0x4000..=0x7FFF => self.rom[a as usize + self.rom_bank * 0x4000 - 0x4000],
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     if self.ram_bank <= 0x03 {
-                        self.ram[a as usize + self.ram_bank as usize * 0x2000 - 0xA000]
+                        self.ram[a as usize + self.ram_bank * 0x2000 - 0xA000]
                     } else {
                         self.rtc.read(self.ram_bank as u16)
                     }
@@ -37,8 +34,14 @@ impl Memory for MBC3 {
     fn write(&mut self, a: u16, v: u8) {
         match a {
             0x0000..=0x1FFF => self.ram_enabled = v & 0x0F == 0x0A,
-            0x2000..=0x3FFF => self.rom_bank = v,
-            0x4000..=0x5FFF => self.ram_bank = (v & 0x0F),
+            0x2000..=0x3FFF => {
+                let n = match v & 0x7F {
+                    0x00 => 0x01,
+                    n => n,
+                };
+                self.rom_bank = n as usize;
+            },
+            0x4000..=0x5FFF => self.ram_bank = (v & 0x0F) as usize,
             0x6000..=0x7FFF => {
                 if v & 0x01 != 0 {
                     self.rtc.tick();
@@ -47,7 +50,7 @@ impl Memory for MBC3 {
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     if self.ram_bank <= 0x03 {
-                        self.ram[a as usize + self.ram_bank as usize * 0x2000 - 0xA000] = v;
+                        self.ram[a as usize + self.ram_bank * 0x2000 - 0xA000] = v;
                     } else {
                         self.rtc.write(self.ram_bank as u16, v);
                     }
@@ -67,8 +70,8 @@ impl MBC3 {
             ram: vec![0x00; 32768],
             rtc: RTC::new(),
             ram_enabled: false,
-            rom_bank: 0x00,
-            ram_bank: 0x00
+            rom_bank: 1,
+            ram_bank: 0
         }
     }
 }
@@ -124,7 +127,7 @@ impl Memory for RTC {
             0x0A => self.h,
             0x0B => self.dl,
             0x0C => self.dh,
-            _ => panic!("No entry"),
+            _ => panic!("Read to unsupported RTC address ({:#06x})!", a),
         }
     }
 
@@ -135,7 +138,7 @@ impl Memory for RTC {
             0x0A => self.h = v,
             0x0B => self.dl = v,
             0x0C => self.dh = v,
-            _ => panic!("No entry"),
+            _ => panic!("Write to unsupported RTC address ({:#06x})!", a),
         }
     }
 }
