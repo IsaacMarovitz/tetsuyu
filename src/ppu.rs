@@ -339,8 +339,8 @@ impl PPU {
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;
-            let py = self.read(sprite_address).wrapping_add(16);
-            let px = self.read(sprite_address + 1).wrapping_add(8);
+            let py = self.read(sprite_address).wrapping_sub(16);
+            let px = self.read(sprite_address + 1).wrapping_sub(8);
             let tile_number = self.read(sprite_address + 2) & if self.lcdc.contains(LCDC::OBJ_SIZE) { 0xFE } else { 0xFF };
             let tile_attributes = Attributes::from_bits(self.read(sprite_address + 3)).unwrap();
 
@@ -387,17 +387,17 @@ impl PPU {
                     continue;
                 }
 
-                // let prio = self.bgprio[px.wrapping_add(x) as usize];
-                // let skip = if self.mode == GBMode::Color && !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                //     prio == Priority::Priority
-                // } else if prio == Priority::Priority {
-                //     prio != Priority::Priority
-                // } else {
-                //     tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
-                // };
-                // if skip {
-                //     continue;
-                // }
+                let prio = self.bgprio[px.wrapping_add(x) as usize];
+                let skip = if self.mode == GBMode::Color && !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                    prio == Priority::Priority
+                } else if prio == Priority::Priority {
+                    prio != Priority::Color0
+                } else {
+                    tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
+                };
+                if skip {
+                    continue;
+                }
 
                 if self.mode == GBMode::Color {
 
@@ -471,7 +471,6 @@ impl Memory for PPU {
             0xFF43 => self.sx = v,
             0xFF44 => print!("Attempted to write to LY!"),
             0xFF45 => self.lc = v,
-            0xFF46 => {},
             0xFF47 => self.bgp = v,
             0xFF48 => self.op0 = v,
             0xFF49 => self.op1 = v,

@@ -72,6 +72,14 @@ impl MMU {
 
         did_draw
     }
+
+    fn oamdma(&mut self, value: u8) {
+        let base = (value as u16) << 8;
+        for i in 0 .. 0xA0 {
+            let b = self.read_word(base + i);
+            self.write_word(0xFE00 + i, b);
+        }
+    }
 }
 
 impl Memory for MMU {
@@ -112,6 +120,7 @@ impl Memory for MMU {
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFE00..=0xFE9F => self.ppu.write(a, v),
+            0xFF46 => self.oamdma(v),
             0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF68..=0xFF6B => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
