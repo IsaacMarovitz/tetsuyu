@@ -37,7 +37,9 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 #[derive(Parser)]
 struct Args {
     rom_path: String,
-    boot_rom: Option<String>
+    boot_rom: Option<String>,
+    #[arg(short, long)]
+    print_serial: bool
 }
 
 #[tokio::main]
@@ -97,7 +99,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, mbc_mode, buffer, booting);
+            let mut cpu = CPU::new(GBMode::Classic, mbc_mode, args.print_serial, buffer, booting);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 

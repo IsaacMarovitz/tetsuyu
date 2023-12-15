@@ -32,7 +32,7 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(mode: GBMode,  mbc_mode: MBCMode, rom: Vec<u8>) -> Self {
+    pub fn new(mode: GBMode,  mbc_mode: MBCMode, print_serial: bool, rom: Vec<u8>) -> Self {
         let mbc: Box<dyn MBC> = match mbc_mode {
             MBCMode::RomOnly => Box::new(ROMOnly::new(rom)),
             MBCMode::MBC1 => Box::new(MBC1::new(rom)),
@@ -42,7 +42,7 @@ impl MMU {
         Self {
             mbc: mbc,
             ppu: PPU::new(mode),
-            serial: Serial::new(),
+            serial: Serial::new(print_serial),
             timer: Timer::new(),
             wram: [0; 0x8000],
             hram: [0; 0x7f],

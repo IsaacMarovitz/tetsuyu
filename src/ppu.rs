@@ -208,12 +208,12 @@ impl PPU {
         }
     }
 
-    fn grey_to_l(v: u8, i: usize) -> u8 {
+    fn grey_to_l(v: u8, i: usize) -> (u8, u8, u8) {
         match v >> (2 * i) & 0x03 {
-            0x00 => 0xFF,
-            0x01 => 0xFC,
-            0x02 => 0x60,
-            _ => 0x00
+            0x00 => (175, 203, 70),
+            0x01 => (121, 170, 109),
+            0x02 => (34, 111, 95),
+            _ => (8, 41, 85)
         }
     }
 
@@ -328,8 +328,8 @@ impl PPU {
                 let b = 0;
                 self.set_rgb(x, r, g, b);
             } else {
-                let lightness = Self::grey_to_l(self.bgp, color);
-                self.set_rgb(x, lightness, lightness, lightness);
+                let (r, g, b) = Self::grey_to_l(self.bgp, color);
+                self.set_rgb(x, r, g, b);
             }
         }
     }
@@ -402,13 +402,13 @@ impl PPU {
                 if self.mode == GBMode::Color {
 
                 } else {
-                    let color = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
+                    let (r, g, b) = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
                         Self::grey_to_l(self.op1, color)
                     } else {
                         Self::grey_to_l(self.op0, color)
                     };
 
-                    self.set_rgb(px.wrapping_add(x) as usize, color, color, color);
+                    self.set_rgb(px.wrapping_add(x) as usize, r, g, b);
                 }
             }
         }

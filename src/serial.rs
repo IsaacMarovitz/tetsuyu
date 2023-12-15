@@ -6,15 +6,17 @@ use crate::mmu::Interrupts;
 pub struct Serial {
     pub interrupts: Interrupts,
     sb: u8,
-    sc: u8
+    sc: u8,
+    print: bool
 }
 
 impl Serial {
-    pub fn new() -> Self {
+    pub fn new(print: bool) -> Self {
         Self {
             interrupts: Interrupts::empty(),
             sb: 0,
-            sc: 0
+            sc: 0,
+            print
         }
     }
 }
@@ -32,8 +34,10 @@ impl Memory for Serial {
         match a {
             0xFF01 => {
                 self.sb = v;
-                print!("{}", std::str::from_utf8(&[v]).unwrap());
-                let _ = std::io::stdout().flush();
+                if self.print {
+                    print!("{}", std::str::from_utf8(&[v]).unwrap());
+                    let _ = std::io::stdout().flush();
+                }
             },
             0xFF02 => self.sc = v,
             _ => panic!("Write to unsupported Serial address ({:#06x})!", a),
