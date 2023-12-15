@@ -78,8 +78,7 @@ struct RTC {
     m: u8,
     h: u8,
     dl: u8,
-    dh: u8,
-    zero: u64
+    dh: u8
 }
 
 impl RTC {
@@ -89,8 +88,7 @@ impl RTC {
             m: 0,
             h: 0,
             dl: 0,
-            dh: 0,
-            zero: 0
+            dh: 0
         }
     }
 
@@ -98,8 +96,7 @@ impl RTC {
         let d = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs()
-            - self.zero;
+            .as_secs();
 
         self.s = (d % 60) as u8;
         self.m = (d / 60 % 60) as u8;
