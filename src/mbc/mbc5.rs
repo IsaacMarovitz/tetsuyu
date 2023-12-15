@@ -51,8 +51,8 @@ impl MBC5 {
             rom,
             ram: vec![0x00; 131072],
             ram_enabled: false,
-            rom_bank: 0x00,
-            ram_bank: 0x00
+            rom_bank: 0,
+            ram_bank: 0
         }
     }
 }
