@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use crate::joypad::Joypad;
 use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;
 use crate::mbc::mbc1::MBC1;
@@ -16,6 +17,7 @@ pub struct MMU {
     pub ppu: PPU,
     serial: Serial,
     timer: Timer,
+    joypad: Joypad,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,
@@ -49,6 +51,7 @@ impl MMU {
             mbc: mbc,
             ppu: PPU::new(mode),
             serial: Serial::new(print_serial),
+            joypad: Joypad::new(),
             timer: Timer::new(),
             wram: [0; 0x8000],
             hram: [0; 0x7f],
@@ -62,6 +65,9 @@ impl MMU {
         self.timer.cycle(cycles);
         self.intf |= self.timer.interrupts;
         self.timer.interrupts = Interrupts::empty();
+
+        self.intf |= self.joypad.interrupts;
+        self.joypad.interrupts = Interrupts::empty();
 
         let did_draw = self.ppu.cycle(cycles);
         self.intf |= self.ppu.interrupts;
@@ -96,8 +102,7 @@ impl Memory for MMU {
             0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF68..=0xFF6B => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
-            // TODO: Joypad
-            0xFF00 => 0xFF,
+            0xFF00 => self.joypad.read(a),
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF04..=0xFF07 => self.timer.read(a),
             // TODO: APU
@@ -124,8 +129,7 @@ impl Memory for MMU {
             0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF68..=0xFF6B => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
-            // TODO: Joypad
-            0xFF00 => {},
+            0xFF00 => self.joypad.write(a, v),
             0xFF01..=0xFF02 => self.serial.write(a, v),
             0xFF04..=0xFF07 => self.timer.write(a, v),
             // TODO: APU
