@@ -5,6 +5,7 @@ A GameBoy emulator, written in Rust.
 ### Features
 - Supports MBC1/MBC2/MBC3/MBC5 DMG Titles
 - Sprite & BG Rendering
+- Input
 - Cycle-Accurate CPU
 - Cross-Platform
 - Cross-Graphics API (Metal, Vulkan, OpenGL, D3D12, WebGPU)
@@ -12,7 +13,6 @@ A GameBoy emulator, written in Rust.
 ### Not Complete
 - CGB Support
 - Sound
-- Input
 - UI/Config Settings
 
 <img width="400" alt="cpu_instrs Test" src="https://github.com/IsaacMarovitz/gb-rs/assets/42140194/a1b62888-0efa-4132-93fe-7ee812f7c73e">
