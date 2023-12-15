@@ -17,7 +17,7 @@ pub struct MMU {
     pub ppu: PPU,
     serial: Serial,
     timer: Timer,
-    joypad: Joypad,
+    pub joypad: Joypad,
     wram: [u8; 0x8000],
     hram: [u8; 0x7F],
     intf: Interrupts,

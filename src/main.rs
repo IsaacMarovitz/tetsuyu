@@ -9,6 +9,7 @@ use clap::Parser;
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration, Instant};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
@@ -17,6 +18,8 @@ use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use winit::event_loop::ControlFlow;
 use num_traits::FromPrimitive;
+use tokio::sync::mpsc::error::TryRecvError;
+use crate::joypad::JoypadButton;
 
 mod context;
 mod cpu;
@@ -95,6 +98,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         .unwrap();
 
     let context = Arc::new(Mutex::new(Context::new(window).await));
+    let (input_tx, mut input_rx) = mpsc::unbounded_channel::<(JoypadButton, bool)>();
 
     {
         let context = Arc::clone(&context);
@@ -114,6 +118,17 @@ async fn main() -> Result<(), impl std::error::Error> {
                     // println!("[CPU] Sleeping {}ms", milliseconds);
                     sleep(Duration::from_millis(milliseconds as u64)).await;
                     step_zero = now;
+                }
+
+                match input_rx.try_recv() {
+                    Ok(v) => {
+                        if v.1 {
+                            cpu.mem.joypad.down(v.0);
+                        } else {
+                            cpu.mem.joypad.up(v.0);
+                        }
+                    }
+                    Err(_) => {}
                 }
 
                 let cycles = cpu.cycle();
@@ -158,12 +173,31 @@ async fn main() -> Result<(), impl std::error::Error> {
                             modifiers = new.state();
                         }
                         WindowEvent::KeyboardInput { event, .. } => {
-                            if event.state == ElementState::Pressed && !event.repeat {
-                                match event.key_without_modifiers().as_ref() {
-                                    Key::Character("w") => {
-                                        println!("Got W Key!");
+                            if !event.repeat {
+                                if event.state == ElementState::Pressed {
+                                    match event.key_without_modifiers().as_ref() {
+                                        Key::Character("w") => input_tx.send((JoypadButton::UP, true)).unwrap(),
+                                        Key::Character("a") => input_tx.send((JoypadButton::LEFT, true)).unwrap(),
+                                        Key::Character("s") => input_tx.send((JoypadButton::DOWN, true)).unwrap(),
+                                        Key::Character("d") => input_tx.send((JoypadButton::RIGHT, true)).unwrap(),
+                                        Key::Character("z") => input_tx.send((JoypadButton::A, true)).unwrap(),
+                                        Key::Character("x") => input_tx.send((JoypadButton::B, true)).unwrap(),
+                                        Key::Character("c") => input_tx.send((JoypadButton::SELECT, true)).unwrap(),
+                                        Key::Character("v") => input_tx.send((JoypadButton::START, true)).unwrap(),
+                                        _ => (),
                                     }
-                                    _ => (),
+                                } else if event.state == ElementState::Released {
+                                    match event.key_without_modifiers().as_ref() {
+                                        Key::Character("w") => input_tx.send((JoypadButton::UP, false)).unwrap(),
+                                        Key::Character("a") => input_tx.send((JoypadButton::LEFT, false)).unwrap(),
+                                        Key::Character("s") => input_tx.send((JoypadButton::DOWN, false)).unwrap(),
+                                        Key::Character("d") => input_tx.send((JoypadButton::RIGHT, false)).unwrap(),
+                                        Key::Character("z") => input_tx.send((JoypadButton::A, false)).unwrap(),
+                                        Key::Character("x") => input_tx.send((JoypadButton::B, false)).unwrap(),
+                                        Key::Character("c") => input_tx.send((JoypadButton::SELECT, false)).unwrap(),
+                                        Key::Character("v") => input_tx.send((JoypadButton::START, false)).unwrap(),
+                                        _ => (),
+                                    }
                                 }
                             }
                         }
