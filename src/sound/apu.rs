@@ -2,6 +2,7 @@ use bitflags::bitflags;
 use crate::memory::Memory;
 use crate::sound::sc1::SC1;
 use crate::sound::sc2::SC2;
+use crate::sound::sc3::SC3;
 
 pub struct APU {
     audio_enabled: bool,
@@ -11,7 +12,8 @@ pub struct APU {
     is_ch_1_on: bool,
     panning: Panning,
     sc1: SC1,
-    sc2: SC2
+    sc2: SC2,
+    sc3: SC3
 }
 
 bitflags! {
@@ -38,7 +40,8 @@ impl APU {
             is_ch_1_on: false,
             panning: Panning::empty(),
             sc1: SC1::new(),
-            sc2: SC2::new()
+            sc2: SC2::new(),
+            sc3: SC3::new()
         }
     }
 }
@@ -56,6 +59,7 @@ impl Memory for APU {
             0xFF24 => 0x00,
             0xFF10..=0xFF14 => self.sc1.read(a),
             0xFF16..=0xFF19 => self.sc2.read(a),
+            0xFF1A..=0xFF1E => self.sc3.read(a),
             _ => 0x00
             // _ => panic!("Read to unsupported APU address ({:#06x})!", a),
         }
@@ -69,6 +73,7 @@ impl Memory for APU {
             0xFF24 => {},
             0xFF10..=0xFF14 => self.sc1.write(a, v),
             0xFF16..=0xFF19 => self.sc2.write(a, v),
+            0xFF1A..=0xFF1E => self.sc3.write(a, v),
             _ => ()
             // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
