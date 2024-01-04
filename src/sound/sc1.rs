@@ -68,7 +68,7 @@ impl Memory for SC1 {
                 self.step = v & 0b0000_0111;
             },
             0xFF11 => {
-                self.duty_cycle = DutyCycle::from_bits_truncate(v);
+                self.duty_cycle = DutyCycle::from_bits_truncate(v >> 6);
                 self.duty_length_timer = v & 0b0011_1111;
             },
             0xFF12 => {
