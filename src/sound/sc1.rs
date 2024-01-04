@@ -8,7 +8,7 @@ pub struct SC1 {
     step: u8,
     duty_cycle: DutyCycle,
     pub duty_length_timer: u8,
-    volume: u8,
+    pub volume: u8,
     positive_envelope: bool,
     sweep_pace: u8,
     pub period: u16,

@@ -5,15 +5,22 @@ use fundsp::hacker::*;
 use assert_no_alloc::*;
 
 pub struct Synth {
-    pub square_one: Shared<f64>,
-    pub square_two: Shared<f64>
+    pub s1_freq: Shared<f64>,
+    pub s1_vol: Shared<f64>,
+
+    pub s2_freq: Shared<f64>,
+    pub s2_vol: Shared<f64>
 }
 
 impl Synth {
     pub fn new() -> Self {
         let host = cpal::default_host();
-        let square_one = shared(0.0);
-        let square_two = shared(0.0);
+
+        let s1_freq = shared(0.0);
+        let s1_vol = shared(0.0);
+
+        let s2_freq = shared(0.0);
+        let s2_vol = shared(0.0);
 
         let device = host
             .default_output_device()
@@ -21,24 +28,58 @@ impl Synth {
         let config = device.default_output_config().unwrap();
 
         match config.sample_format() {
-            cpal::SampleFormat::F32 => Synth::run_audio::<f32>(square_one.clone(), square_two.clone(), device, config.into()),
-            cpal::SampleFormat::I16 => Synth::run_audio::<i16>(square_one.clone(), square_two.clone(), device, config.into()),
-            cpal::SampleFormat::U16 => Synth::run_audio::<u16>(square_one.clone(), square_two.clone(), device, config.into()),
+            cpal::SampleFormat::F32 => {
+                Synth::run_audio::<f32>(s1_freq.clone(),
+                                        s1_vol.clone(),
+                                        s2_freq.clone(),
+                                        s2_vol.clone(),
+                                        device,
+                                        config.into())
+            },
+            cpal::SampleFormat::I16 => {
+                Synth::run_audio::<i16>(s1_freq.clone(),
+                                        s1_vol.clone(),
+                                        s2_freq.clone(),
+                                        s2_vol.clone(),
+                                        device,
+                                        config.into())
+            },
+            cpal::SampleFormat::U16 => {
+                Synth::run_audio::<u16>(s1_freq.clone(),
+                                        s1_vol.clone(),
+                                        s2_freq.clone(),
+                                        s2_vol.clone(),
+                                        device,
+                                        config.into())
+            },
             _ => panic!("Unsupported format"),
         }
 
         Self {
-            square_one,
-            square_two
+            s1_freq,
+            s1_vol,
+
+            s2_freq,
+            s2_vol
         }
     }
 
-    fn run_audio<T>(square_one: Shared<f64>, square_two: Shared<f64>, device: Device, config: StreamConfig) where T: SizedSample + FromSample<f64>, {
+    fn run_audio<T>(
+        s1_freq: Shared<f64>,
+        s1_vol: Shared<f64>,
+        s2_freq: Shared<f64>,
+        s2_vol: Shared<f64>,
+        device: Device,
+        config: StreamConfig
+    ) where T: SizedSample + FromSample<f64>, {
         tokio::spawn(async move {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
-            let mut c = (var(&square_one) >> saw()) + (var(&square_two) >> saw());
+            let sc1 = (var(&s1_freq) >> square()) * var(&s1_vol);
+            let sc2 = (var(&s2_freq) >> square()) * var(&s2_vol);
+
+            let mut c = sc1 + sc2;
 
             c.set_sample_rate(sample_rate);
             c.allocate();

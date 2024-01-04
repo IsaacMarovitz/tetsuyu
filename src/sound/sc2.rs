@@ -5,7 +5,7 @@ pub struct SC2 {
     pub dac_enabled: bool,
     duty_cycle: DutyCycle,
     duty_length_timer: u8,
-    volume: u8,
+    pub volume: u8,
     positive_envelope: bool,
     sweep_pace: u8,
     pub period: u16,

@@ -54,12 +54,32 @@ impl APU {
     }
 
     pub fn cycle(&mut self, cycles: u32) {
-        self.synth.square_one.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
-        self.synth.square_two.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
         // self.sc1.cycle(cycles);
         self.sc2.cycle(cycles);
         self.sc3.cycle(cycles);
         self.sc4.cycle(cycles);
+
+        let s1_vol = {
+            if self.is_ch_1_on {
+                self.sc1.volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
+        let s2_vol = {
+            if self.is_ch_2_on {
+                self.sc2.volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
+        self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
+        self.synth.s1_vol.set_value(s1_vol);
+
+        self.synth.s2_freq.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
+        self.synth.s2_vol.set_value(s2_vol);
     }
 }
 
