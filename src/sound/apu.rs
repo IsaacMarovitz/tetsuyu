@@ -63,6 +63,7 @@ impl Memory for APU {
             0xFF10..=0xFF14 => self.sc1.read(a),
             0xFF15..=0xFF19 => self.sc2.read(a),
             0xFF1A..=0xFF1E => self.sc3.read(a),
+            0xFF30..=0xFF3F => self.sc3.read(a),
             0xFF20..=0xFF24 => self.sc4.read(a),
             _ => 0xFF
         }
@@ -98,6 +99,7 @@ impl Memory for APU {
                     self.sc3.write(a, v)
                 }
             },
+            0xFF30..=0xFF3F => self.sc3.write(a, v),
             0xFF20..=0xFF24 => {
                 if self.audio_enabled {
                     self.sc4.write(a, v)

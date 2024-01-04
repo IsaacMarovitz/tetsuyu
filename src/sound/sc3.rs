@@ -7,7 +7,8 @@ pub struct SC3 {
     output_level: OutputLevel,
     period: u16,
     pub trigger: bool,
-    length_enabled: bool
+    length_enabled: bool,
+    wave_ram: [u8; 16]
 }
 
 bitflags! {
@@ -29,6 +30,7 @@ impl SC3 {
             period: 0,
             trigger: false,
             length_enabled: false,
+            wave_ram: [0; 16]
         }
     }
 
@@ -55,6 +57,7 @@ impl Memory for SC3 {
             0xFF1D => 0xFF,
             // NR34: Period High & Control
             0xFF1E => (self.length_enabled as u8) << 6 | 0xBF,
+            0xFF30..=0xFF3F => self.wave_ram[a as usize - 0xFF30],
             _ => 0xFF,
         }
     }
@@ -79,6 +82,7 @@ impl Memory for SC3 {
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;
             },
+            0xFF30..=0xFF3F => self.wave_ram[a as usize - 0xFF30] = v,
             _ => panic!("Write to unsupported SC3 address ({:#06x})!", a),
         }
     }
