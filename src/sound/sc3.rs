@@ -57,7 +57,13 @@ impl Memory for SC3 {
             0xFF1D => 0xFF,
             // NR34: Period High & Control
             0xFF1E => (self.length_enabled as u8) << 6 | 0xBF,
-            0xFF30..=0xFF3F => self.wave_ram[a as usize - 0xFF30],
+            0xFF30..=0xFF3F => {
+                if !self.dac_enabled {
+                    self.wave_ram[a as usize - 0xFF30]
+                } else {
+                    0xFF
+                }
+            },
             _ => 0xFF,
         }
     }
