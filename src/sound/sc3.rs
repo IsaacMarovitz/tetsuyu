@@ -88,7 +88,11 @@ impl Memory for SC3 {
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;
             },
-            0xFF30..=0xFF3F => self.wave_ram[a as usize - 0xFF30] = v,
+            0xFF30..=0xFF3F => {
+                if !self.dac_enabled {
+                    self.wave_ram[a as usize - 0xFF30] = v;
+                }
+            },
             _ => panic!("Write to unsupported SC3 address ({:#06x})!", a),
         }
     }
