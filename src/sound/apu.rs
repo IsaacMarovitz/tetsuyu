@@ -35,7 +35,7 @@ bitflags! {
 impl APU {
     pub fn new() -> Self {
         Self {
-            audio_enabled: false,
+            audio_enabled: true,
             is_ch_4_on: false,
             is_ch_3_on: false,
             is_ch_2_on: false,
