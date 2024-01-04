@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use crate::apu::APU;
+use crate::sound::apu::APU;
 use crate::joypad::Joypad;
 use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;

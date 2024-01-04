@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant, sleep};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, ModifiersState};
@@ -18,7 +18,6 @@ use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 use winit::event_loop::ControlFlow;
 use num_traits::FromPrimitive;
-use tokio::sync::mpsc::error::TryRecvError;
 use crate::joypad::JoypadButton;
 
 mod context;
@@ -32,7 +31,7 @@ mod timer;
 mod mbc;
 mod memory;
 mod joypad;
-mod apu;
+mod sound;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;

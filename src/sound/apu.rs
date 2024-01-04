@@ -46,6 +46,8 @@ impl Memory for APU {
                       ((self.is_ch_2_on as u8) << 1) |
                       ((self.is_ch_1_on as u8) << 0),
             0xFF25 => self.panning.bits(),
+            // TODO: VIN
+            0xFF24 => 0x00,
             _ => 0x00
             // _ => panic!("Read to unsupported APU address ({:#06x})!", a),
         }
@@ -55,6 +57,8 @@ impl Memory for APU {
         match a {
             0xFF26 => self.audio_enabled = (v >> 7) == 0x01,
             0xFF25 => self.panning = Panning::from_bits_truncate(v),
+            // TODO: VIN
+            0xFF24 => {},
             _ => ()
             // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
