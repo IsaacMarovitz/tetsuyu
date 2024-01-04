@@ -426,8 +426,20 @@ impl PPU {
 impl Memory for PPU {
     fn read(&self, a: u16) -> u8 {
         match a {
-            0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000],
-            0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00],
+            0x8000..=0x9FFF => {
+                if self.ppu_mode != PPUMode::Draw {
+                    self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000]
+                } else {
+                    0xFF
+                }
+            },
+            0xFE00..=0xFE9F => {
+                if self.ppu_mode != PPUMode::Draw && self.ppu_mode != PPUMode::OAMScan {
+                    self.oam[a as usize - 0xFE00]
+                } else {
+                    0xFF
+                }
+            },
             0xFF40 => self.lcdc.bits(),
             0xFF41 => {
                 let mut lcds = self.lcds;
@@ -454,8 +466,16 @@ impl Memory for PPU {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
-            0x8000..=0x9FFF => self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v,
-            0xFE00..=0xFE9F => self.oam[a as usize - 0xFE00] = v,
+            0x8000..=0x9FFF => {
+                if self.ppu_mode != PPUMode::Draw {
+                    self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v
+                }
+            },
+            0xFE00..=0xFE9F => {
+                if self.ppu_mode != PPUMode::Draw && self.ppu_mode != PPUMode::OAMScan {
+                    self.oam[a as usize - 0xFE00] = v
+                }
+            },
             0xFF40 => {
                 self.lcdc = LCDC::from_bits(v).unwrap();
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
