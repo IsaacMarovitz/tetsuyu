@@ -8,7 +8,7 @@ pub struct SC2 {
     positive_envelope: bool,
     sweep_pace: u8,
     period: u16,
-    trigger: bool,
+    pub trigger: bool,
     length_enabled: bool
 }
 
@@ -41,14 +41,14 @@ impl Memory for SC2 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR21: Length Timer & Duty Cycle
-            0xFF16 => (self.duty_cycle.bits()) << 6,
+            0xFF16 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR22: Volume & Envelope
             0xFF17 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.sweep_pace & 0b0000_0111),
             // NR23: Period Low
-            0xFF18 => 0x00,
+            0xFF18 => 0xFF,
             // NR24: Period High & Control
-            0xFF19 => (self.length_enabled as u8) << 6,
-            _ => panic!("Read to unsupported SC2 address ({:#06x})!", a),
+            0xFF19 => (self.length_enabled as u8) << 6 | 0xBF,
+            _ => 0xFF,
         }
     }
 

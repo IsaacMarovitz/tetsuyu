@@ -6,7 +6,7 @@ pub struct SC3 {
     length_timer: u8,
     output_level: OutputLevel,
     period: u16,
-    trigger: bool,
+    pub trigger: bool,
     length_enabled: bool
 }
 
@@ -37,16 +37,16 @@ impl Memory for SC3 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR30: DAC Enable
-            0xFF1A => (self.dac_enabled as u8) << 7,
+            0xFF1A => (self.dac_enabled as u8) << 7 | 0x7F,
             // NR31: Length Timer
-            0xFF1B => 0x00,
+            0xFF1B => 0xFF,
             // NR32: Output Level
-            0xFF1C => self.output_level.bits(),
+            0xFF1C => self.output_level.bits() | 0x9F,
             // NR33: Period Low
-            0xFF1D => 0x00,
+            0xFF1D => 0xFF,
             // NR34: Period High & Control
-            0xFF1E => (self.length_enabled as u8) << 6,
-            _ => panic!("Read to unsupported SC3 address ({:#06x})!", a),
+            0xFF1E => (self.length_enabled as u8) << 6 | 0xBF,
+            _ => 0xFF,
         }
     }
 

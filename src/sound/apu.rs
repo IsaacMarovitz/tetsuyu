@@ -3,6 +3,7 @@ use crate::memory::Memory;
 use crate::sound::sc1::SC1;
 use crate::sound::sc2::SC2;
 use crate::sound::sc3::SC3;
+use crate::sound::sc4::SC4;
 
 pub struct APU {
     audio_enabled: bool,
@@ -13,7 +14,8 @@ pub struct APU {
     panning: Panning,
     sc1: SC1,
     sc2: SC2,
-    sc3: SC3
+    sc3: SC3,
+    sc4: SC4
 }
 
 bitflags! {
@@ -41,7 +43,8 @@ impl APU {
             panning: Panning::empty(),
             sc1: SC1::new(),
             sc2: SC2::new(),
-            sc3: SC3::new()
+            sc3: SC3::new(),
+            sc4: SC4::new()
         }
     }
 }
@@ -53,29 +56,72 @@ impl Memory for APU {
                       ((self.is_ch_4_on as u8) << 3) |
                       ((self.is_ch_3_on as u8) << 2) |
                       ((self.is_ch_2_on as u8) << 1) |
-                      ((self.is_ch_1_on as u8) << 0),
+                      ((self.is_ch_1_on as u8) << 0) | 0x70,
             0xFF25 => self.panning.bits(),
             // TODO: VIN
             0xFF24 => 0x00,
             0xFF10..=0xFF14 => self.sc1.read(a),
-            0xFF16..=0xFF19 => self.sc2.read(a),
+            0xFF15..=0xFF19 => self.sc2.read(a),
             0xFF1A..=0xFF1E => self.sc3.read(a),
-            _ => 0x00
-            // _ => panic!("Read to unsupported APU address ({:#06x})!", a),
+            0xFF20..=0xFF24 => self.sc4.read(a),
+            _ => 0xFF
         }
     }
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
             0xFF26 => self.audio_enabled = (v >> 7) == 0x01,
-            0xFF25 => self.panning = Panning::from_bits_truncate(v),
+            0xFF25 => {
+                if self.audio_enabled {
+                    self.panning = Panning::from_bits_truncate(v)
+                }
+            },
             // TODO: VIN
             0xFF24 => {},
-            0xFF10..=0xFF14 => self.sc1.write(a, v),
-            0xFF16..=0xFF19 => self.sc2.write(a, v),
-            0xFF1A..=0xFF1E => self.sc3.write(a, v),
+            0xFF10..=0xFF14 => {
+                if self.audio_enabled {
+                    self.sc1.write(a, v)
+                }
+            },
+            0xFF16..=0xFF19 => {
+                if self.audio_enabled {
+                    self.sc2.write(a, v)
+                }
+            },
+            0xFF1A..=0xFF1E => {
+                if self.audio_enabled {
+                    self.sc3.write(a, v)
+                }
+            },
+            0xFF20..=0xFF24 => {
+                if self.audio_enabled {
+                    self.sc4.write(a, v)
+                }
+            },
             _ => ()
             // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
+        }
+
+        if self.sc1.trigger {
+            self.sc1.trigger = false;
+            self.is_ch_1_on = true;
+        }
+
+        if self.sc2.trigger {
+            self.sc2.trigger = false;
+            self.is_ch_2_on = true;
+        }
+
+        if self.sc3.trigger {
+            self.sc3.trigger = false;
+            self.is_ch_3_on = true;
+        }
+
+        if !self.audio_enabled {
+            self.is_ch_1_on = false;
+            self.is_ch_2_on = false;
+            self.is_ch_3_on = false;
+            self.is_ch_4_on = false;
         }
     }
 }

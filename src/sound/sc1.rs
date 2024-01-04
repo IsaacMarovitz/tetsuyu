@@ -11,7 +11,7 @@ pub struct SC1 {
     positive_envelope: bool,
     sweep_pace: u8,
     period: u16,
-    trigger: bool,
+    pub trigger: bool,
     length_enabled: bool
 }
 
@@ -47,16 +47,16 @@ impl Memory for SC1 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR10: Sweep
-            0xFF10 => (self.pace & 0b0000_0111) << 4 | (self.negative_direction as u8) << 3 | (self.step & 0b0000_0111),
+            0xFF10 => (self.pace & 0b0000_0111) << 4 | (self.negative_direction as u8) << 3 | (self.step & 0b0000_0111) | 0x80,
             // NR11: Length Timer & Duty Cycle
-            0xFF11 => (self.duty_cycle.bits()) << 6,
+            0xFF11 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR12: Volume & Envelope
             0xFF12 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.sweep_pace & 0b0000_0111),
             // NR13: Period Low
-            0xFF13 => 0x00,
+            0xFF13 => 0xFF,
             // NR14: Period High & Control
-            0xFF14 => (self.length_enabled as u8) << 6,
-            _ => panic!("Read to unsupported SC1 address ({:#06x})!", a),
+            0xFF14 => (self.length_enabled as u8) << 6 | 0xBF,
+            _ => 0xFF,
         }
     }
 
