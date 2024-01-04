@@ -69,8 +69,13 @@ impl Memory for APU {
     }
 
     fn write(&mut self, a: u16, v: u8) {
+        let mut set_apu_control = false;
+
         match a {
-            0xFF26 => self.audio_enabled = (v >> 7) == 0x01,
+            0xFF26 => {
+                set_apu_control = true;
+                self.audio_enabled = (v >> 7) == 0x01;
+            },
             0xFF25 => {
                 if self.audio_enabled {
                     self.panning = Panning::from_bits_truncate(v)
@@ -104,24 +109,41 @@ impl Memory for APU {
 
         if self.sc1.trigger {
             self.sc1.trigger = false;
-            self.is_ch_1_on = true;
+            if self.sc1.dac_enabled {
+                self.is_ch_1_on = true;
+            }
         }
 
         if self.sc2.trigger {
             self.sc2.trigger = false;
-            self.is_ch_2_on = true;
+            if self.sc2.dac_enabled {
+                self.is_ch_2_on = true;
+            }
         }
 
         if self.sc3.trigger {
             self.sc3.trigger = false;
-            self.is_ch_3_on = true;
+            if self.sc3.dac_enabled {
+                self.is_ch_3_on = true;
+            }
         }
 
-        if !self.audio_enabled {
-            self.is_ch_1_on = false;
-            self.is_ch_2_on = false;
-            self.is_ch_3_on = false;
-            self.is_ch_4_on = false;
+        if self.sc4.trigger {
+            self.sc4.trigger = false;
+            if self.sc4.dac_enabled {
+                self.is_ch_4_on = true;
+            }
+        }
+
+        if set_apu_control {
+            if !self.audio_enabled {
+                self.panning = Panning::empty();
+
+                self.sc1.clear();
+                self.sc2.clear();
+                self.sc3.clear();
+                self.sc4.clear();
+            }
         }
     }
 }

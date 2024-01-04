@@ -1,6 +1,7 @@
 use crate::memory::Memory;
 
 pub struct SC4 {
+    pub dac_enabled: bool,
     length_timer: u8,
     volume: u8,
     positive_envelope: bool,
@@ -16,6 +17,7 @@ pub struct SC4 {
 impl SC4 {
     pub fn new() -> Self {
         Self {
+            dac_enabled: false,
             length_timer: 0,
             volume: 0,
             positive_envelope: false,
@@ -26,6 +28,18 @@ impl SC4 {
             trigger: false,
             length_enabled: false,
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.length_timer = 0;
+        self.volume = 0;
+        self.positive_envelope = false;
+        self.sweep_pace = 0;
+        self.clock = 0;
+        self.lfsr_width = false;
+        self.clock_divider = 0;
+        self.trigger = false;
+        self.length_enabled = false;
     }
 }
 
@@ -46,17 +60,25 @@ impl Memory for SC4 {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
+            // NR41: Length Timer
             0xFF20 => self.length_timer = v & 0b0011_1111,
+            // NR42: Volume & Envelope
             0xFF21 => {
                 self.volume = (v & 0b1111_0000) >> 4;
                 self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
                 self.sweep_pace = v & 0b0000_0111;
+
+                if self.read(0xFF21) & 0xF8 != 0 {
+                    self.dac_enabled = true;
+                }
             },
+            // NR43: Frequency & Randomness
             0xFF22 => {
                 self.clock = (v & 0b1111_0000) >> 4;
                 self.lfsr_width = ((v & 0b0000_1000) >> 3) != 0;
                 self.clock_divider = v & 0b0000_0111;
             },
+            // NR44: Control
             0xFF23 => {
                 self.trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;

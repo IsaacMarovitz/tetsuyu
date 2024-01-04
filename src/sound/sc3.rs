@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use crate::memory::Memory;
 
 pub struct SC3 {
-    dac_enabled: bool,
+    pub dac_enabled: bool,
     length_timer: u8,
     output_level: OutputLevel,
     period: u16,
@@ -31,6 +31,15 @@ impl SC3 {
             length_enabled: false,
         }
     }
+
+    pub fn clear(&mut self) {
+        self.dac_enabled = false;
+        self.length_timer = 0;
+        self.output_level = OutputLevel::MUTE;
+        self.period = 0;
+        self.trigger = false;
+        self.length_enabled = false;
+    }
 }
 
 impl Memory for SC3 {
@@ -52,13 +61,18 @@ impl Memory for SC3 {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
+            // NR30: DAC Enable
             0xFF1A => self.dac_enabled = ((v & 0b1000_0000) >> 7) != 0,
+            // NR31: Length Timer
             0xFF1B => self.length_timer = v,
+            // NR32: Output Level
             0xFF1C => self.output_level = OutputLevel::from_bits_truncate(v),
+            // NR33: Period Low
             0xFF1D => {
                 self.period &= !0xFF;
                 self.period |= v as u16;
             },
+            // NR34: Period High & Control
             0xFF1E => {
                 self.trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
