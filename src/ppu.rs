@@ -447,6 +447,7 @@ impl Memory for PPU {
             0xFF4B => self.wx,
             0xFF4D => 0x00,
             0xFF4F => 0xFE | self.ram_bank as u8,
+            0xFF60..=0xFF6F => 0x00,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
     }
@@ -480,7 +481,7 @@ impl Memory for PPU {
             0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
             // TODO: Handle CBG PAL
-            0xFF69 => {},
+            0xFF60..=0xFF6F => {},
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }

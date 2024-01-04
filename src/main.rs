@@ -32,6 +32,7 @@ mod timer;
 mod mbc;
 mod memory;
 mod joypad;
+mod apu;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;

@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use crate::apu::APU;
 use crate::joypad::Joypad;
 use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;
@@ -15,6 +16,7 @@ use crate::serial::Serial;
 pub struct MMU {
     mbc: Box<dyn MBC+'static>,
     pub ppu: PPU,
+    apu: APU,
     serial: Serial,
     timer: Timer,
     pub joypad: Joypad,
@@ -49,6 +51,7 @@ impl MMU {
 
         Self {
             mbc: mbc,
+            apu: APU::new(),
             ppu: PPU::new(mode),
             serial: Serial::new(print_serial),
             joypad: Joypad::new(),
@@ -105,8 +108,7 @@ impl Memory for MMU {
             0xFF00 => self.joypad.read(a),
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF04..=0xFF07 => self.timer.read(a),
-            // TODO: APU
-            0xFF10..=0xFF3F => 0x00,
+            0xFF10..=0xFF3F => self.apu.read(a),
             0xFF0F => self.intf.bits(),
             0xFF70 => self.wram_bank as u8,
             0xFEA0..=0xFEFF => 0xFF,
@@ -132,10 +134,9 @@ impl Memory for MMU {
             0xFF00 => self.joypad.write(a, v),
             0xFF01..=0xFF02 => self.serial.write(a, v),
             0xFF04..=0xFF07 => self.timer.write(a, v),
-            // TODO: APU
-            0xFF10..=0xFF3F => {},
+            0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
-            0xFF50 => {},
+            0xFF50..=0xFF5F => {},
             0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
             0xFEA0..=0xFEFF => {},
             0xFF7F => {},
