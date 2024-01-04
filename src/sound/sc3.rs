@@ -42,6 +42,10 @@ impl SC3 {
         self.trigger = false;
         self.length_enabled = false;
     }
+
+    pub fn cycle(&mut self, cycles: u32) {
+
+    }
 }
 
 impl Memory for SC3 {

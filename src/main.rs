@@ -93,7 +93,7 @@ async fn main() -> Result<(), impl std::error::Error> {
 
     let window = WindowBuilder::new()
         .with_title(format!("gb-rs - {:}", game_name))
-        .with_inner_size(winit::dpi::LogicalSize::new(ppu::SCREEN_W as u32, ppu::SCREEN_H as u32))
+        .with_inner_size(winit::dpi::LogicalSize::new((ppu::SCREEN_W as u32) * 2, (ppu::SCREEN_H as u32) * 2))
         .build(&event_loop)
         .unwrap();
 

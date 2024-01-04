@@ -11,7 +11,7 @@ pub struct SC1 {
     volume: u8,
     positive_envelope: bool,
     sweep_pace: u8,
-    period: u16,
+    pub period: u16,
     pub trigger: bool,
     length_enabled: bool
 }
@@ -57,6 +57,22 @@ impl SC1 {
         self.period = 0;
         self.trigger = false;
         self.length_enabled = false;
+    }
+
+    pub fn cycle(&mut self, cycles: u32) {
+        let step = self.period / (2 ^ (self.step as u16));
+        if self.negative_direction {
+            self.period -= step;
+        } else {
+            let (value, overflow) = self.period.overflowing_add(step);
+
+            if value > 0x7FF || overflow {
+                // TODO: Disable channel
+                self.clear();
+            } else {
+                self.period = value;
+            }
+        }
     }
 }
 

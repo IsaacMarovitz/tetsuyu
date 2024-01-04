@@ -4,6 +4,7 @@ use crate::sound::sc1::SC1;
 use crate::sound::sc2::SC2;
 use crate::sound::sc3::SC3;
 use crate::sound::sc4::SC4;
+use crate::sound::synth::Synth;
 
 pub struct APU {
     audio_enabled: bool,
@@ -15,7 +16,8 @@ pub struct APU {
     sc1: SC1,
     sc2: SC2,
     sc3: SC3,
-    sc4: SC4
+    sc4: SC4,
+    synth: Synth
 }
 
 bitflags! {
@@ -34,6 +36,8 @@ bitflags! {
 
 impl APU {
     pub fn new() -> Self {
+        let synth = Synth::new();
+
         Self {
             audio_enabled: true,
             is_ch_4_on: false,
@@ -44,8 +48,18 @@ impl APU {
             sc1: SC1::new(),
             sc2: SC2::new(),
             sc3: SC3::new(),
-            sc4: SC4::new()
+            sc4: SC4::new(),
+            synth
         }
+    }
+
+    pub fn cycle(&mut self, cycles: u32) {
+        self.synth.square_one.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
+        self.synth.square_two.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
+        // self.sc1.cycle(cycles);
+        self.sc2.cycle(cycles);
+        self.sc3.cycle(cycles);
+        self.sc4.cycle(cycles);
     }
 }
 

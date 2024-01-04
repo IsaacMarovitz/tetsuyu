@@ -76,6 +76,8 @@ impl MMU {
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
 
+        self.apu.cycle(cycles);
+
         self.intf |= self.serial.interrupts;
         self.serial.interrupts = Interrupts::empty();
 

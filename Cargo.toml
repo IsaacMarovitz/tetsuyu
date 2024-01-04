@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 winit = { version = "0.29.8", features = ["rwh_05"] }
+assert_no_alloc = "1.1.2"
+cpal = "0.15.2"
 fundsp = "0.16.0"
 clap = { version = "4.4.12", features = ["derive"] }
 bitflags = "2.4.1"
