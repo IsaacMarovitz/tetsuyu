@@ -63,7 +63,7 @@ impl Memory for SC1 {
     fn write(&mut self, a: u16, v: u8) {
         match a {
             0xFF10 => {
-                self.pace = (v & 0b0111_0000) >> 3;
+                self.pace = (v & 0b0111_0000) >> 4;
                 self.negative_direction = ((v & 0b0000_1000) >> 3) != 0;
                 self.step = v & 0b0000_0111;
             },
