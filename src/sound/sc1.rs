@@ -62,6 +62,30 @@ impl Memory for SC1 {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
+            0xFF10 => {
+                self.pace = (v & 0b0111_0000) >> 3;
+                self.negative_direction = ((v & 0b0000_1000) >> 3) != 0;
+                self.step = v & 0b0000_0111;
+            },
+            0xFF11 => {
+                self.duty_cycle = DutyCycle::from_bits_truncate(v);
+                self.duty_length_timer = v & 0b0011_1111;
+            },
+            0xFF12 => {
+                self.volume = (v & 0b1111_0000) >> 4;
+                self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
+                self.sweep_pace = v & 0b0000_0111;
+            },
+            0xFF13 => {
+                self.period &= !0xFF;
+                self.period |= v as u16;
+            },
+            0xFF14 => {
+                self.trigger = ((v & 0b1000_0000) >> 7) != 0;
+                self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
+                self.period &= 0b0000_0000_1111_1111;
+                self.period |= ((v & 0b0000_0111) as u16) << 8;
+            },
             _ => panic!("Write to unsupported SC1 address ({:#06x})!", a),
         }
     }
