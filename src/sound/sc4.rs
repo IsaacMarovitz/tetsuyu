@@ -31,6 +31,7 @@ impl SC4 {
     }
 
     pub fn clear(&mut self) {
+        self.dac_enabled = false;
         self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;

@@ -45,6 +45,7 @@ impl SC1 {
     }
 
     pub fn clear(&mut self) {
+        self.dac_enabled = false;
         self.pace = 0;
         self.negative_direction = false;
         self.step = 0;

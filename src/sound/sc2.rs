@@ -39,6 +39,7 @@ impl SC2 {
     }
 
     pub fn clear(&mut self) {
+        self.dac_enabled = false;
         self.duty_cycle = DutyCycle::QUARTER;
         self.duty_length_timer = 0;
         self.volume = 0;

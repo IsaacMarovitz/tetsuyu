@@ -137,6 +137,11 @@ impl Memory for APU {
 
         if set_apu_control {
             if !self.audio_enabled {
+                self.is_ch_1_on = false;
+                self.is_ch_2_on = false;
+                self.is_ch_3_on = false;
+                self.is_ch_4_on = false;
+
                 self.panning = Panning::empty();
 
                 self.sc1.clear();
