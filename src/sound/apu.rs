@@ -67,6 +67,16 @@ impl APU {
             }
         };
 
+        let s1_duty = {
+            match self.sc1.duty_cycle {
+                DutyCycle::EIGHTH => 0.125,
+                DutyCycle::QUARTER => 0.25,
+                DutyCycle::HALF => 0.5,
+                DutyCycle::THREE_QUARTERS => 0.75,
+                _ => 0.0
+            }
+        };
+
         let s2_vol = {
             if self.is_ch_2_on {
                 self.sc2.volume as f64 / 0xF as f64
@@ -75,11 +85,23 @@ impl APU {
             }
         };
 
+        let s2_duty = {
+            match self.sc2.duty_cycle {
+                DutyCycle::EIGHTH => 0.125,
+                DutyCycle::QUARTER => 0.25,
+                DutyCycle::HALF => 0.5,
+                DutyCycle::THREE_QUARTERS => 0.75,
+                _ => 0.0
+            }
+        };
+
         self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
         self.synth.s1_vol.set_value(s1_vol);
+        self.synth.s1_duty.set_value(s1_duty);
 
         self.synth.s2_freq.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
         self.synth.s2_vol.set_value(s2_vol);
+        self.synth.s2_duty.set_value(s2_duty);
     }
 }
 
@@ -189,3 +211,12 @@ impl Memory for APU {
     }
 }
 
+bitflags! {
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    pub struct DutyCycle: u8 {
+        const EIGHTH = 0b0000_0000;
+        const QUARTER = 0b0000_0001;
+        const HALF = 0b0000_00010;
+        const THREE_QUARTERS = 0b0000_0011;
+    }
+}

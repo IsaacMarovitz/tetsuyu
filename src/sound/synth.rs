@@ -7,9 +7,11 @@ use assert_no_alloc::*;
 pub struct Synth {
     pub s1_freq: Shared<f64>,
     pub s1_vol: Shared<f64>,
+    pub s1_duty: Shared<f64>,
 
     pub s2_freq: Shared<f64>,
-    pub s2_vol: Shared<f64>
+    pub s2_vol: Shared<f64>,
+    pub s2_duty: Shared<f64>,
 }
 
 impl Synth {
@@ -18,9 +20,11 @@ impl Synth {
 
         let s1_freq = shared(0.0);
         let s1_vol = shared(0.0);
+        let s1_duty = shared(0.0);
 
         let s2_freq = shared(0.0);
         let s2_vol = shared(0.0);
+        let s2_duty = shared(0.0);
 
         let device = host
             .default_output_device()
@@ -31,24 +35,30 @@ impl Synth {
             cpal::SampleFormat::F32 => {
                 Synth::run_audio::<f32>(s1_freq.clone(),
                                         s1_vol.clone(),
+                                        s1_duty.clone(),
                                         s2_freq.clone(),
                                         s2_vol.clone(),
+                                        s2_duty.clone(),
                                         device,
                                         config.into())
             },
             cpal::SampleFormat::I16 => {
                 Synth::run_audio::<i16>(s1_freq.clone(),
                                         s1_vol.clone(),
+                                        s1_duty.clone(),
                                         s2_freq.clone(),
                                         s2_vol.clone(),
+                                        s2_duty.clone(),
                                         device,
                                         config.into())
             },
             cpal::SampleFormat::U16 => {
                 Synth::run_audio::<u16>(s1_freq.clone(),
                                         s1_vol.clone(),
+                                        s2_duty.clone(),
                                         s2_freq.clone(),
                                         s2_vol.clone(),
+                                        s2_duty.clone(),
                                         device,
                                         config.into())
             },
@@ -58,26 +68,32 @@ impl Synth {
         Self {
             s1_freq,
             s1_vol,
+            s1_duty,
 
             s2_freq,
-            s2_vol
+            s2_vol,
+            s2_duty
         }
     }
 
     fn run_audio<T>(
         s1_freq: Shared<f64>,
         s1_vol: Shared<f64>,
+        s1_duty: Shared<f64>,
         s2_freq: Shared<f64>,
         s2_vol: Shared<f64>,
+        s2_duty: Shared<f64>,
         device: Device,
         config: StreamConfig
     ) where T: SizedSample + FromSample<f64>, {
+
+
         tokio::spawn(async move {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
-            let sc1 = (var(&s1_freq) >> square()) * var(&s1_vol);
-            let sc2 = (var(&s2_freq) >> square()) * var(&s2_vol);
+            let sc1 = (lfo(move |_| (var(&s1_freq).0.value(), var(&s1_duty).0.value())) >> pulse()) * var(&s1_vol);
+            let sc2 = (lfo(move |_| (var(&s2_freq).0.value(), var(&s2_duty).0.value())) >> pulse()) * var(&s2_vol);
 
             let mut c = sc1 + sc2;
 

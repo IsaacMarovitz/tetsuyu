@@ -1,12 +1,13 @@
 use bitflags::bitflags;
 use crate::memory::Memory;
+use crate::sound::apu::DutyCycle;
 
 pub struct SC1 {
     pub dac_enabled: bool,
     pace: u8,
     negative_direction: bool,
     step: u8,
-    duty_cycle: DutyCycle,
+    pub duty_cycle: DutyCycle,
     pub duty_length_timer: u8,
     pub volume: u8,
     positive_envelope: bool,
@@ -14,16 +15,6 @@ pub struct SC1 {
     pub period: u16,
     pub trigger: bool,
     length_enabled: bool
-}
-
-bitflags! {
-    #[derive(Copy, Clone)]
-    pub struct DutyCycle: u8 {
-        const EIGHTH = 0b0000_0000;
-        const QUARTER = 0b0000_0001;
-        const HALF = 0b0000_00010;
-        const THREE_QUARTERS = 0b0000_0011;
-    }
 }
 
 impl SC1 {
