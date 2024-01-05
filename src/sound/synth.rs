@@ -12,6 +12,9 @@ pub struct Synth {
     pub s2_freq: Shared<f64>,
     pub s2_vol: Shared<f64>,
     pub s2_duty: Shared<f64>,
+
+    pub s3_freq: Shared<f64>,
+    pub s3_vol: Shared<f64>
 }
 
 impl Synth {
@@ -26,6 +29,9 @@ impl Synth {
         let s2_vol = shared(0.0);
         let s2_duty = shared(0.0);
 
+        let s3_freq = shared(0.0);
+        let s3_vol = shared(0.0);
+
         let device = host
             .default_output_device()
             .expect("Failed to find a default output device");
@@ -39,6 +45,8 @@ impl Synth {
                                         s2_freq.clone(),
                                         s2_vol.clone(),
                                         s2_duty.clone(),
+                                        s3_freq.clone(),
+                                        s3_vol.clone(),
                                         device,
                                         config.into())
             },
@@ -49,6 +57,8 @@ impl Synth {
                                         s2_freq.clone(),
                                         s2_vol.clone(),
                                         s2_duty.clone(),
+                                        s3_freq.clone(),
+                                        s3_vol.clone(),
                                         device,
                                         config.into())
             },
@@ -59,6 +69,8 @@ impl Synth {
                                         s2_freq.clone(),
                                         s2_vol.clone(),
                                         s2_duty.clone(),
+                                        s3_freq.clone(),
+                                        s3_vol.clone(),
                                         device,
                                         config.into())
             },
@@ -72,7 +84,10 @@ impl Synth {
 
             s2_freq,
             s2_vol,
-            s2_duty
+            s2_duty,
+
+            s3_freq,
+            s3_vol
         }
     }
 
@@ -83,6 +98,8 @@ impl Synth {
         s2_freq: Shared<f64>,
         s2_vol: Shared<f64>,
         s2_duty: Shared<f64>,
+        s3_freq: Shared<f64>,
+        s3_vol: Shared<f64>,
         device: Device,
         config: StreamConfig
     ) where T: SizedSample + FromSample<f64>, {
@@ -94,8 +111,9 @@ impl Synth {
 
             let sc1 = (lfo(move |_| (var(&s1_freq).0.value(), var(&s1_duty).0.value())) >> pulse()) * var(&s1_vol);
             let sc2 = (lfo(move |_| (var(&s2_freq).0.value(), var(&s2_duty).0.value())) >> pulse()) * var(&s2_vol);
+            let sc3 = sine_hz(var(&s3_freq).0.value()) * var(&s3_vol);
 
-            let mut c = sc1 + sc2;
+            let mut c = sc1 + sc2 + sc3;
 
             c.set_sample_rate(sample_rate);
             c.allocate();

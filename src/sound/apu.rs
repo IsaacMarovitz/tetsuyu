@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use crate::memory::Memory;
 use crate::sound::sc1::SC1;
 use crate::sound::sc2::SC2;
-use crate::sound::sc3::SC3;
+use crate::sound::sc3::{OutputLevel, SC3};
 use crate::sound::sc4::SC4;
 use crate::sound::synth::Synth;
 
@@ -95,6 +95,20 @@ impl APU {
             }
         };
 
+        let s3_vol = {
+            if self.is_ch_3_on {
+                match self.sc3.output_level {
+                    OutputLevel::MUTE => 0.0,
+                    OutputLevel::QUARTER => 0.25,
+                    OutputLevel::HALF => 0.5,
+                    OutputLevel::MAX => 1.0,
+                    _ => 0.0
+                }
+            } else {
+                0.0
+            }
+        };
+
         self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
         self.synth.s1_vol.set_value(s1_vol);
         self.synth.s1_duty.set_value(s1_duty);
@@ -102,6 +116,9 @@ impl APU {
         self.synth.s2_freq.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
         self.synth.s2_vol.set_value(s2_vol);
         self.synth.s2_duty.set_value(s2_duty);
+
+        self.synth.s3_freq.set_value(65536.0 / (2048.0 - self.sc3.period as f64));
+        self.synth.s3_vol.set_value(s3_vol);
     }
 }
 

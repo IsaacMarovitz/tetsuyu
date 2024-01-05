@@ -4,15 +4,15 @@ use crate::memory::Memory;
 pub struct SC3 {
     pub dac_enabled: bool,
     length_timer: u8,
-    output_level: OutputLevel,
-    period: u16,
+    pub output_level: OutputLevel,
+    pub period: u16,
     pub trigger: bool,
     length_enabled: bool,
     wave_ram: [u8; 16]
 }
 
 bitflags! {
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, PartialEq, Eq)]
     pub struct OutputLevel: u8 {
         const MUTE = 0b0000_0000;
         const MAX = 0b0010_0000;
