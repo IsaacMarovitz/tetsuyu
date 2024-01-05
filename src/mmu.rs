@@ -137,7 +137,7 @@ impl Memory for MMU {
             0xFF01..=0xFF02 => self.serial.write(a, v),
             0xFF04..=0xFF07 => self.timer.write(a, v),
             0xFF10..=0xFF3F => self.apu.write(a, v),
-            0xFF0F => self.intf = Interrupts::from_bits(v).unwrap(),
+            0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
             0xFF50..=0xFF5F => {},
             0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
             0xFEA0..=0xFEFF => {},
