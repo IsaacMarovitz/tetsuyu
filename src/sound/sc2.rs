@@ -1,17 +1,17 @@
-use bitflags::bitflags;
 use crate::memory::Memory;
 use crate::sound::apu::DutyCycle;
 
 pub struct SC2 {
     pub dac_enabled: bool,
     pub duty_cycle: DutyCycle,
-    duty_length_timer: u8,
+    length_timer: u8,
     pub volume: u8,
     positive_envelope: bool,
-    sweep_pace: u8,
+    envelope_pace: u8,
     pub period: u16,
     pub trigger: bool,
-    length_enabled: bool
+    length_enabled: bool,
+    length_cycle_count: u32
 }
 
 impl SC2 {
@@ -19,23 +19,24 @@ impl SC2 {
         Self {
             dac_enabled: false,
             duty_cycle: DutyCycle::QUARTER,
-            duty_length_timer: 0,
+            length_timer: 0,
             volume: 0,
             positive_envelope: false,
-            sweep_pace: 0,
+            envelope_pace: 0,
             period: 0,
             trigger: false,
             length_enabled: false,
+            length_cycle_count: 0
         }
     }
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
         self.duty_cycle = DutyCycle::QUARTER;
-        self.duty_length_timer = 0;
+        self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;
-        self.sweep_pace = 0;
+        self.envelope_pace = 0;
         self.period = 0;
         self.trigger = false;
         self.length_enabled = false;
@@ -52,7 +53,7 @@ impl Memory for SC2 {
             // NR21: Length Timer & Duty Cycle
             0xFF16 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR22: Volume & Envelope
-            0xFF17 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.sweep_pace & 0b0000_0111),
+            0xFF17 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.envelope_pace & 0b0000_0111),
             // NR23: Period Low
             0xFF18 => 0xFF,
             // NR24: Period High & Control
@@ -66,13 +67,13 @@ impl Memory for SC2 {
             // NR21: Length Timer & Duty Cycle
             0xFF16 => {
                 self.duty_cycle = DutyCycle::from_bits_truncate(v >> 6);
-                self.duty_length_timer = v & 0b0011_1111;
+                self.length_timer = v & 0b0011_1111;
             },
             // NR22: Volume & Envelope
             0xFF17 => {
                 self.volume = (v & 0b1111_0000) >> 4;
                 self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
-                self.sweep_pace = v & 0b0000_0111;
+                self.envelope_pace = v & 0b0000_0111;
 
                 if self.read(0xFF17) & 0xF8 != 0 {
                     self.dac_enabled = true;

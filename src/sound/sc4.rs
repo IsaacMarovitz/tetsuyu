@@ -5,7 +5,7 @@ pub struct SC4 {
     length_timer: u8,
     pub volume: u8,
     positive_envelope: bool,
-    sweep_pace: u8,
+    envelope_pace: u8,
     clock: u8,
     // False = 15-bit, True = 7-bit
     lfsr_width: bool,
@@ -21,7 +21,7 @@ impl SC4 {
             length_timer: 0,
             volume: 0,
             positive_envelope: false,
-            sweep_pace: 0,
+            envelope_pace: 0,
             clock: 0,
             lfsr_width: false,
             clock_divider: 0,
@@ -35,7 +35,7 @@ impl SC4 {
         self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;
-        self.sweep_pace = 0;
+        self.envelope_pace = 0;
         self.clock = 0;
         self.lfsr_width = false;
         self.clock_divider = 0;
@@ -54,7 +54,7 @@ impl Memory for SC4 {
             // NR41: Length Timer
             0xFF20 => 0xFF,
             // NR42: Volume & Envelope
-            0xFF21 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.sweep_pace & 0b0000_0111),
+            0xFF21 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.envelope_pace & 0b0000_0111),
             // NR43: Frequency & Randomness
             0xFF22 => (self.clock & 0b0000_1111 << 4) | (self.lfsr_width as u8) << 3 | (self.clock_divider & 0b0000_0111),
             // NR44: Control
@@ -71,7 +71,7 @@ impl Memory for SC4 {
             0xFF21 => {
                 self.volume = (v & 0b1111_0000) >> 4;
                 self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
-                self.sweep_pace = v & 0b0000_0111;
+                self.envelope_pace = v & 0b0000_0111;
 
                 if self.read(0xFF21) & 0xF8 != 0 {
                     self.dac_enabled = true;
