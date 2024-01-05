@@ -12,6 +12,8 @@ pub struct APU {
     is_ch_3_on: bool,
     is_ch_2_on: bool,
     is_ch_1_on: bool,
+    left_volume: u8,
+    right_volume: u8,
     panning: Panning,
     sc1: SC1,
     sc2: SC2,
@@ -44,6 +46,8 @@ impl APU {
             is_ch_3_on: false,
             is_ch_2_on: false,
             is_ch_1_on: false,
+            left_volume: 0,
+            right_volume: 0,
             panning: Panning::empty(),
             sc1: SC1::new(),
             sc2: SC2::new(),
@@ -54,13 +58,13 @@ impl APU {
     }
 
     pub fn cycle(&mut self, cycles: u32) {
-        // self.sc1.cycle(cycles);
+        self.sc1.cycle(cycles);
         self.sc2.cycle(cycles);
         self.sc3.cycle(cycles);
         self.sc4.cycle(cycles);
 
         let s1_vol = {
-            if self.is_ch_1_on {
+            if self.sc1.dac_enabled {
                 self.sc1.volume as f64 / 0xF as f64
             } else {
                 0.0
@@ -78,7 +82,7 @@ impl APU {
         };
 
         let s2_vol = {
-            if self.is_ch_2_on {
+            if self.sc2.dac_enabled {
                 self.sc2.volume as f64 / 0xF as f64
             } else {
                 0.0
@@ -96,7 +100,7 @@ impl APU {
         };
 
         let s3_vol = {
-            if self.is_ch_3_on {
+            if self.sc3.dac_enabled {
                 match self.sc3.output_level {
                     OutputLevel::MUTE => 0.0,
                     OutputLevel::QUARTER => 0.25,
@@ -104,6 +108,14 @@ impl APU {
                     OutputLevel::MAX => 1.0,
                     _ => 0.0
                 }
+            } else {
+                0.0
+            }
+        };
+
+        let s4_vol = {
+            if self.sc4.dac_enabled {
+                self.sc4.volume as f64 / 0xF as f64
             } else {
                 0.0
             }
@@ -119,20 +131,25 @@ impl APU {
 
         self.synth.s3_freq.set_value(65536.0 / (2048.0 - self.sc3.period as f64));
         self.synth.s3_vol.set_value(s3_vol);
+
+        self.synth.s4_vol.set_value(s4_vol);
     }
 }
 
 impl Memory for APU {
     fn read(&self, a: u16) -> u8 {
         match a {
+            // NR52: Audio Master Control
             0xFF26 => ((self.audio_enabled as u8) << 7) |
                       ((self.is_ch_4_on as u8) << 3) |
                       ((self.is_ch_3_on as u8) << 2) |
                       ((self.is_ch_2_on as u8) << 1) |
                       ((self.is_ch_1_on as u8) << 0) | 0x70,
+            // NR51: Sound Panning
             0xFF25 => self.panning.bits(),
-            // TODO: VIN
-            0xFF24 => 0x00,
+            // NR50: Master Volume & VIN
+            0xFF24 => (self.left_volume & 0b0000_0111) << 4 |
+                      (self.right_volume & 0b0000_0111),
             0xFF10..=0xFF14 => self.sc1.read(a),
             0xFF15..=0xFF19 => self.sc2.read(a),
             0xFF1A..=0xFF1E => self.sc3.read(a),
@@ -146,17 +163,24 @@ impl Memory for APU {
         let mut set_apu_control = false;
 
         match a {
+            // NR52: Audio Master Control
             0xFF26 => {
                 set_apu_control = true;
                 self.audio_enabled = (v >> 7) == 0x01;
             },
+            // NR51: Sound Panning
             0xFF25 => {
                 if self.audio_enabled {
                     self.panning = Panning::from_bits_truncate(v)
                 }
             },
-            // TODO: VIN
-            0xFF24 => {},
+            // NR50: Master Volume & VIN
+            0xFF24 => {
+                if self.audio_enabled {
+                    self.left_volume = v >> 4;
+                    self.right_volume = v & 0b0000_0111;
+                }
+            },
             0xFF10..=0xFF14 => {
                 if self.audio_enabled {
                     self.sc1.write(a, v)
@@ -216,6 +240,8 @@ impl Memory for APU {
                 self.is_ch_2_on = false;
                 self.is_ch_3_on = false;
                 self.is_ch_4_on = false;
+                self.left_volume = 0;
+                self.right_volume = 0;
 
                 self.panning = Panning::empty();
 

@@ -3,7 +3,7 @@ use crate::memory::Memory;
 pub struct SC4 {
     pub dac_enabled: bool,
     length_timer: u8,
-    volume: u8,
+    pub volume: u8,
     positive_envelope: bool,
     sweep_pace: u8,
     clock: u8,
