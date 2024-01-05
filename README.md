@@ -10,9 +10,24 @@ A GameBoy emulator, written in Rust.
 - Cross-Platform
 - Cross-Graphics API (Metal, Vulkan, OpenGL, D3D12, WebGPU)
 
+### Partially Complete
+- [ ] Channel 1
+  - [x] Period
+  - [x] Duty Cycle
+  - [ ] Sweep
+  - [ ] Envelope
+- [ ] Channel 2
+  - [x] Period
+  - [x] Duty Cycle
+  - [ ] Envelope
+- [ ] Channel 3
+  - [ ] Wave
+  - [ ] Period
+- [ ] Channel 4
+  - [ ] LFSR
+        
 ### Not Complete
 - CGB Support
-- Sound
 - UI/Config Settings
 - Custom Palettes
 
