@@ -124,7 +124,7 @@ impl Synth {
             let sc3 = sine_hz(var(&s3_freq).0.value()) * var(&s3_vol) * constant(0.25);
             let sc4 = noise() * var(&s4_vol) * constant(0.25);
 
-            let mut c = sc1 + sc2 + sc3 + sc4;
+            let mut c = sc1 + sc2 + sc3; //+ sc4;
 
             c.set_sample_rate(sample_rate);
             c.allocate();
