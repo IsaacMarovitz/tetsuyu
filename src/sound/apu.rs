@@ -32,7 +32,7 @@ bitflags! {
         const CH4_RIGHT = 0b0000_1000;
         const CH3_RIGHT = 0b0000_0100;
         const CH2_RIGHT = 0b0000_0010;
-        const CH1_RIGHT = 0b0000_0000;
+        const CH1_RIGHT = 0b0000_0001;
     }
 }
 
@@ -124,15 +124,23 @@ impl APU {
         self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
         self.synth.s1_vol.set_value(s1_vol);
         self.synth.s1_duty.set_value(s1_duty);
+        self.synth.s1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
+        self.synth.s1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
 
         self.synth.s2_freq.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
         self.synth.s2_vol.set_value(s2_vol);
         self.synth.s2_duty.set_value(s2_duty);
+        self.synth.s2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
+        self.synth.s2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
 
         self.synth.s3_freq.set_value(65536.0 / (2048.0 - self.sc3.period as f64));
         self.synth.s3_vol.set_value(s3_vol);
+        self.synth.s3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
+        self.synth.s3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 
         self.synth.s4_vol.set_value(s4_vol);
+        self.synth.s4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
+        self.synth.s4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
     }
 }
 
