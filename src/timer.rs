@@ -58,9 +58,10 @@ impl Memory for Timer {
                 let mut v = 0xF8;
                 v |= if self.enabled { 0b0000_0100 } else { 0x00 };
                 v |= match self.step {
-                    1024 => 1,
-                    16 => 2,
-                    64 => 3,
+                    1024 => 0,
+                    16 => 1,
+                    64 => 2,
+                    256 => 3,
                     _ => panic!("Unknown timer step ({})!", self.step)
                 };
 
