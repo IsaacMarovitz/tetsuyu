@@ -115,7 +115,7 @@ impl APU {
 
         let s4_vol = {
             if self.sc4.dac_enabled {
-                self.sc4.volume as f64 / 0xF as f64
+                self.sc4.final_volume as f64 / 0xF as f64
             } else {
                 0.0
             }
@@ -155,12 +155,18 @@ impl APU {
         self.synth.s3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
         self.synth.s3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 
+        self.synth.s4_freq.set_value(self.sc4.frequency as f64);
         self.synth.s4_vol.set_value(s4_vol);
         self.synth.s4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
         self.synth.s4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
 
         self.synth.global_l.set_value(global_l);
         self.synth.global_r.set_value(global_r);
+    }
+
+    pub fn hz_to_cycles(hz: u32) -> u32 {
+        let gameboy_freq = 4 * 1024 * 1024;
+        return gameboy_freq / hz;
     }
 }
 
@@ -257,6 +263,7 @@ impl Memory for APU {
 
         if self.sc4.trigger {
             self.sc4.trigger = false;
+            self.sc4.lfsr = 0;
             if self.sc4.dac_enabled {
                 self.is_ch_4_on = true;
             }

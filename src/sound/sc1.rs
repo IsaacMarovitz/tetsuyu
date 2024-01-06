@@ -1,5 +1,5 @@
 use crate::memory::Memory;
-use crate::sound::apu::DutyCycle;
+use crate::sound::apu::{APU, DutyCycle};
 
 pub struct SC1 {
     pub dac_enabled: bool,
@@ -57,43 +57,43 @@ impl SC1 {
         if self.length_enabled {
             self.length_cycle_count += cycles;
 
-            if self.length_cycle_count >= 4096 {
+            if self.length_cycle_count >= APU::hz_to_cycles(256) {
                 self.length_cycle_count = 0;
 
-                if self.dac_enabled {
-                    if self.length_timer >= 64 {
-                        self.dac_enabled = false;
-                    } else {
-                        self.length_timer += 1;
-                    }
+                if self.length_timer >= 64 {
+                    println!("NOTE OVER");
+                    self.dac_enabled = false;
+                    self.length_enabled = false;
+                } else {
+                    self.length_timer += 1;
                 }
             }
         }
 
-        if self.sweep_pace != 0 {
-            self.sweep_cycle_count += cycles;
-
-            if self.sweep_cycle_count >= (8192 * self.sweep_pace as u32) {
-                self.sweep_cycle_count = 0;
-
-                let divisor = 2 ^ (self.sweep_step as u16);
-                if divisor != 0 {
-                    let step = self.period / divisor;
-                    if self.negative_direction {
-                        self.period -= step;
-                    } else {
-                        let (value, overflow) = self.period.overflowing_add(step);
-
-                        if value > 0x7FF || overflow {
-                            self.dac_enabled = false;
-                            self.clear();
-                        } else {
-                            self.period = value;
-                        }
-                    }
-                }
-            }
-        }
+        // if self.sweep_pace != 0 {
+        //     self.sweep_cycle_count += cycles;
+        //
+        //     if self.sweep_cycle_count >= (APU::hz_to_cycles(128) * self.sweep_pace as u32) {
+        //         self.sweep_cycle_count = 0;
+        //
+        //         let divisor = 2 ^ (self.sweep_step as u16);
+        //         if divisor != 0 {
+        //             let step = self.period / divisor;
+        //             if self.negative_direction {
+        //                 self.period -= step;
+        //             } else {
+        //                 let (value, overflow) = self.period.overflowing_add(step);
+        //
+        //                 if value > 0x7FF || overflow {
+        //                     self.dac_enabled = false;
+        //                     self.clear();
+        //                 } else {
+        //                     self.period = value;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
     }
 }
 

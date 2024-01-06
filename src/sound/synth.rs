@@ -22,6 +22,7 @@ pub struct Synth {
     pub s3_l: Shared<f64>,
     pub s3_r: Shared<f64>,
 
+    pub s4_freq: Shared<f64>,
     pub s4_vol: Shared<f64>,
     pub s4_l: Shared<f64>,
     pub s4_r: Shared<f64>,
@@ -51,6 +52,7 @@ impl Synth {
         let s3_l = shared(0.0);
         let s3_r = shared(0.0);
 
+        let s4_freq = shared(0.0);
         let s4_vol = shared(0.0);
         let s4_l = shared(0.0);
         let s4_r = shared(0.0);
@@ -79,6 +81,7 @@ impl Synth {
                                         s3_vol.clone(),
                                         s3_l.clone(),
                                         s3_r.clone(),
+                                        s4_freq.clone(),
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
@@ -102,6 +105,7 @@ impl Synth {
                                         s3_vol.clone(),
                                         s3_l.clone(),
                                         s3_r.clone(),
+                                        s4_freq.clone(),
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
@@ -125,6 +129,7 @@ impl Synth {
                                         s3_vol.clone(),
                                         s3_l.clone(),
                                         s3_r.clone(),
+                                        s4_freq.clone(),
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
@@ -154,6 +159,7 @@ impl Synth {
             s3_l,
             s3_r,
 
+            s4_freq,
             s4_vol,
             s4_l,
             s4_r,
@@ -178,6 +184,7 @@ impl Synth {
         s3_vol: Shared<f64>,
         s3_l: Shared<f64>,
         s3_r: Shared<f64>,
+        s4_freq: Shared<f64>,
         s4_vol: Shared<f64>,
         s4_l: Shared<f64>,
         s4_r: Shared<f64>,
@@ -195,14 +202,14 @@ impl Synth {
             let sc1_mono = (lfo(move |_| (var(&s1_freq).0.value(), var(&s1_duty).0.value())) >> pulse()) * var(&s1_vol) * constant(0.25);
             let sc2_mono = (lfo(move |_| (var(&s2_freq).0.value(), var(&s2_duty).0.value())) >> pulse()) * var(&s2_vol) * constant(0.25);
             let sc3_mono = var(&s3_freq) >> sine() * var(&s3_vol) * constant(0.25);
-            let sc4_mono = noise() * var(&s4_vol) * constant(0.25);
+            let sc4_mono = var(&s4_freq) >> square() * var(&s4_vol) * constant(0.25);
 
             let sc1_stereo = sc1_mono >> ((pass() * var(&s1_l)) ^ (pass() * var(&s1_r)));
             let sc2_stereo = sc2_mono >> ((pass() * var(&s2_l)) ^ (pass() * var(&s2_r)));
             let sc3_stereo = sc3_mono >> ((pass() * var(&s3_l)) ^ (pass() * var(&s3_r)));
             let sc4_stereo = sc4_mono >> ((pass() * var(&s4_l)) ^ (pass() * var(&s4_r)));
 
-            let total_stereo = sc1_stereo + sc2_stereo; //+ sc3_stereo; //+ sc4_stereo;
+            let total_stereo = sc1_stereo + sc2_stereo; // +*/ sc4_stereo; //+ sc3_stereo; //+ sc4_stereo;
 
             let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
 

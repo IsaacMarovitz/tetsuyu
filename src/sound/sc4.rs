@@ -1,9 +1,10 @@
 use crate::memory::Memory;
+use crate::sound::apu::APU;
 
 pub struct SC4 {
     pub dac_enabled: bool,
     length_timer: u8,
-    pub volume: u8,
+    volume: u8,
     positive_envelope: bool,
     envelope_pace: u8,
     clock: u8,
@@ -11,7 +12,12 @@ pub struct SC4 {
     lfsr_width: bool,
     clock_divider: u8,
     pub trigger: bool,
-    length_enabled: bool
+    length_enabled: bool,
+    pub frequency: u32,
+    pub lfsr: u16,
+    pub final_volume: u8,
+    lfsr_cycle_count: u32,
+    length_cycle_count: u32
 }
 
 impl SC4 {
@@ -27,6 +33,11 @@ impl SC4 {
             clock_divider: 0,
             trigger: false,
             length_enabled: false,
+            frequency: 0,
+            lfsr: 0,
+            final_volume: 0,
+            lfsr_cycle_count: 0,
+            length_cycle_count: 0
         }
     }
 
@@ -41,10 +52,67 @@ impl SC4 {
         self.clock_divider = 0;
         self.trigger = false;
         self.length_enabled = false;
+        self.frequency = 0;
+        self.lfsr = 0;
+        self.final_volume = 0;
+        self.lfsr_cycle_count = 0;
+        self.length_cycle_count = 0;
     }
 
     pub fn cycle(&mut self, cycles: u32) {
+        if self.length_enabled {
+            self.length_cycle_count += cycles;
 
+            if self.length_cycle_count >= APU::hz_to_cycles(256) {
+                self.length_cycle_count = 0;
+
+                if self.dac_enabled {
+                    if self.length_timer >= 64 {
+                        self.dac_enabled = false;
+                    } else {
+                        self.length_timer += 1;
+                    }
+                }
+            }
+        }
+
+        self.lfsr_cycle_count += cycles;
+        let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
+        let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
+
+        if divisor != 0 {
+            // Frequency in Hz
+            self.frequency = 262144 / divisor;
+
+            if self.lfsr_cycle_count >= APU::hz_to_cycles(self.frequency) {
+                self.lfsr_cycle_count = 0;
+
+                let bit = {
+                    let bit_0 = (self.lfsr & 0b0000_0000_0000_0001) >> 0;
+                    let bit_1 = (self.lfsr & 0b0000_0000_0000_0010) >> 1;
+                    if bit_0 == bit_1 {
+                        1
+                    } else {
+                        0
+                    }
+                };
+
+                self.lfsr |= bit << 15;
+
+                if self.lfsr_width {
+                    self.lfsr &= 0b1111_1111_1011_1111;
+                    self.lfsr |= bit << 7;
+                }
+
+                self.lfsr >>= 1;
+
+                if self.lfsr & 0b0000_0000_0000_0001 == 0 {
+                    self.final_volume = 0;
+                } else {
+                    self.final_volume = self.volume;
+                }
+            }
+        }
     }
 }
 
