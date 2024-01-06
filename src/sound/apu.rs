@@ -121,6 +121,23 @@ impl APU {
             }
         };
 
+        // TODO: Amplifier on original hardware NEVER completely mutes non-silent input
+        let global_l = {
+            if self.audio_enabled {
+                self.left_volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
+        let global_r = {
+            if self.audio_enabled {
+                self.right_volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
         self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
         self.synth.s1_vol.set_value(s1_vol);
         self.synth.s1_duty.set_value(s1_duty);
@@ -141,6 +158,9 @@ impl APU {
         self.synth.s4_vol.set_value(s4_vol);
         self.synth.s4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
         self.synth.s4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
+
+        self.synth.global_l.set_value(global_l);
+        self.synth.global_r.set_value(global_r);
     }
 }
 

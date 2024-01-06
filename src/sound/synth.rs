@@ -25,6 +25,9 @@ pub struct Synth {
     pub s4_vol: Shared<f64>,
     pub s4_l: Shared<f64>,
     pub s4_r: Shared<f64>,
+
+    pub global_l: Shared<f64>,
+    pub global_r: Shared<f64>
 }
 
 impl Synth {
@@ -52,6 +55,9 @@ impl Synth {
         let s4_l = shared(0.0);
         let s4_r = shared(0.0);
 
+        let global_l = shared(0.0);
+        let global_r = shared(0.0);
+
         let device = host
             .default_output_device()
             .expect("Failed to find a default output device");
@@ -76,6 +82,8 @@ impl Synth {
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
+                                        global_l.clone(),
+                                        global_r.clone(),
                                         device,
                                         config.into())
             },
@@ -97,6 +105,8 @@ impl Synth {
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
+                                        global_l.clone(),
+                                        global_r.clone(),
                                         device,
                                         config.into())
             },
@@ -118,6 +128,8 @@ impl Synth {
                                         s4_vol.clone(),
                                         s4_l.clone(),
                                         s4_r.clone(),
+                                        global_l.clone(),
+                                        global_r.clone(),
                                         device,
                                         config.into())
             },
@@ -145,6 +157,9 @@ impl Synth {
             s4_vol,
             s4_l,
             s4_r,
+
+            global_l,
+            global_r,
         }
     }
 
@@ -166,6 +181,8 @@ impl Synth {
         s4_vol: Shared<f64>,
         s4_l: Shared<f64>,
         s4_r: Shared<f64>,
+        global_l: Shared<f64>,
+        global_r: Shared<f64>,
         device: Device,
         config: StreamConfig
     ) where T: SizedSample + FromSample<f64>, {
@@ -185,7 +202,9 @@ impl Synth {
             let sc3_stereo = sc3_mono >> ((pass() * var(&s3_l)) ^ (pass() * var(&s3_r)));
             let sc4_stereo = sc4_mono >> ((pass() * var(&s4_l)) ^ (pass() * var(&s4_r)));
 
-            let mut c = sc1_stereo; //+ sc2_stereo + sc3_stereo; //+ sc4_stereo;
+            let total_stereo = sc1_stereo + sc2_stereo; //+ sc3_stereo; //+ sc4_stereo;
+
+            let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
 
             c.set_sample_rate(sample_rate);
             c.allocate();
