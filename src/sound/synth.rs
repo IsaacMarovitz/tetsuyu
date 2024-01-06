@@ -183,7 +183,7 @@ impl Synth {
             let sc1_stereo = sc1_mono >> ((pass() * var(&s1_l)) ^ (pass() * var(&s1_r)));
             let sc2_stereo = sc2_mono >> ((pass() * var(&s2_l)) ^ (pass() * var(&s2_r)));
             let sc3_stereo = sc3_mono >> ((pass() * var(&s3_l)) ^ (pass() * var(&s3_r)));
-            let sc4_stereo = sc4_mono >> ((pass() * var(&s3_l)) ^ (pass() * var(&s4_r)));
+            let sc4_stereo = sc4_mono >> ((pass() * var(&s4_l)) ^ (pass() * var(&s4_r)));
 
             let mut c = sc1_stereo; //+ sc2_stereo + sc3_stereo; //+ sc4_stereo;
 
