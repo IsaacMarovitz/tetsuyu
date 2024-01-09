@@ -66,12 +66,11 @@ impl CH4 {
             if self.length_cycle_count >= 2 {
                 self.length_cycle_count = 0;
 
-                if self.dac_enabled {
-                    if self.length_timer >= 64 {
-                        self.dac_enabled = false;
-                    } else {
-                        self.length_timer += 1;
-                    }
+                if self.length_timer >= 64 {
+                    self.dac_enabled = false;
+                    self.length_enabled = false;
+                } else {
+                    self.length_timer += 1;
                 }
             }
         }

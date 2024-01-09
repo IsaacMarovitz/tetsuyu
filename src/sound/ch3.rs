@@ -8,7 +8,8 @@ pub struct CH3 {
     pub period: u16,
     pub trigger: bool,
     length_enabled: bool,
-    wave_ram: [u8; 16]
+    wave_ram: [u8; 16],
+    length_cycle_count: u32
 }
 
 bitflags! {
@@ -30,7 +31,8 @@ impl CH3 {
             period: 0,
             trigger: false,
             length_enabled: false,
-            wave_ram: [0; 16]
+            wave_ram: [0; 16],
+            length_cycle_count: 0
         }
     }
 
@@ -44,7 +46,20 @@ impl CH3 {
     }
 
     pub fn cycle(&mut self) {
+        if self.length_enabled {
+            self.length_cycle_count += 1;
 
+            if self.length_cycle_count >= 2 {
+                self.length_cycle_count = 0;
+
+                if self.length_timer >= 64 {
+                    self.dac_enabled = false;
+                    self.length_enabled = false;
+                } else {
+                    self.length_timer += 1;
+                }
+            }
+        }
     }
 }
 
