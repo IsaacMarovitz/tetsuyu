@@ -46,7 +46,7 @@ impl APU {
             is_ch_4_on: false,
             is_ch_3_on: false,
             is_ch_2_on: false,
-            is_ch_1_on: false,
+            is_ch_1_on: true,
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),

@@ -57,15 +57,19 @@ impl Memory for Joypad {
     fn read(&self, a: u16) -> u8 {
         match a {
             0xFF00 => {
+                let mut return_value = 0x0F;
+
                 // D-Pad
                 if (self.select & 0b0001_0000) == 0x00 {
-                    return self.select | (self.matrix >> 4);
+                    return_value &= self.matrix >> 4;
                 }
                 // Buttons
                 if (self.select & 0b0010_0000) == 0x00 {
-                    return self.select | (self.matrix & 0x0F);
+                    return_value &= self.matrix & 0x0F;
                 }
-                self.select
+
+                return_value |= self.select | 0xC0;
+                return_value
             }
             _ => panic!("Read to unsupported Joypad address ({:#06x})!", a),
         }
