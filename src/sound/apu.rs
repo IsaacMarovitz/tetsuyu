@@ -1,9 +1,10 @@
 use bitflags::bitflags;
+use crate::CLOCK_FREQUENCY;
 use crate::memory::Memory;
-use crate::sound::sc1::SC1;
-use crate::sound::sc2::SC2;
-use crate::sound::sc3::{OutputLevel, SC3};
-use crate::sound::sc4::SC4;
+use crate::sound::ch1::CH1;
+use crate::sound::ch2::CH2;
+use crate::sound::ch3::{OutputLevel, CH3};
+use crate::sound::ch4::CH4;
 use crate::sound::synth::Synth;
 
 pub struct APU {
@@ -15,11 +16,13 @@ pub struct APU {
     left_volume: u8,
     right_volume: u8,
     panning: Panning,
-    sc1: SC1,
-    sc2: SC2,
-    sc3: SC3,
-    sc4: SC4,
-    synth: Synth
+    ch1: CH1,
+    ch2: CH2,
+    ch3: CH3,
+    ch4: CH4,
+    synth: Synth,
+    div_one: bool,
+    div_counter: u32
 }
 
 bitflags! {
@@ -49,30 +52,47 @@ impl APU {
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),
-            sc1: SC1::new(),
-            sc2: SC2::new(),
-            sc3: SC3::new(),
-            sc4: SC4::new(),
-            synth
+            ch1: CH1::new(),
+            ch2: CH2::new(),
+            ch3: CH3::new(),
+            ch4: CH4::new(),
+            synth,
+            div_one: false,
+            div_counter: 0
         }
     }
 
-    pub fn cycle(&mut self, cycles: u32) {
-        self.sc1.cycle(cycles);
-        self.sc2.cycle(cycles);
-        self.sc3.cycle(cycles);
-        self.sc4.cycle(cycles);
+    pub fn cycle(&mut self, cycles: u32, div: u8) {
+        println!("{div}");
+        if self.div_one {
+            // TODO: Double-speed mode
+            if div & (0b000_1000) == 0 {
+                // Bit moved from 1 -> 0
+                self.div_counter += 1;
+                self.div_one = false;
+                println!("DIV COUNTER INCR!");
+            }
+        } else {
+            if div & (0b000_1000) == 1 {
+                self.div_one = true;
+            }
+        }
 
-        let s1_vol = {
-            if self.sc1.dac_enabled {
-                self.sc1.volume as f64 / 0xF as f64
+        self.ch1.cycle(cycles);
+        self.ch2.cycle(cycles);
+        self.ch3.cycle(cycles);
+        self.ch4.cycle(cycles);
+
+        let ch1_vol = {
+            if self.ch1.dac_enabled {
+                self.ch1.volume as f64 / 0xF as f64
             } else {
                 0.0
             }
         };
 
-        let s1_duty = {
-            match self.sc1.duty_cycle {
+        let ch1_duty = {
+            match self.ch1.duty_cycle {
                 DutyCycle::EIGHTH => 0.125,
                 DutyCycle::QUARTER => 0.25,
                 DutyCycle::HALF => 0.5,
@@ -81,16 +101,16 @@ impl APU {
             }
         };
 
-        let s2_vol = {
-            if self.sc2.dac_enabled {
-                self.sc2.volume as f64 / 0xF as f64
+        let ch2_vol = {
+            if self.ch2.dac_enabled {
+                self.ch2.volume as f64 / 0xF as f64
             } else {
                 0.0
             }
         };
 
-        let s2_duty = {
-            match self.sc2.duty_cycle {
+        let ch2_duty = {
+            match self.ch2.duty_cycle {
                 DutyCycle::EIGHTH => 0.125,
                 DutyCycle::QUARTER => 0.25,
                 DutyCycle::HALF => 0.5,
@@ -99,9 +119,9 @@ impl APU {
             }
         };
 
-        let s3_vol = {
-            if self.sc3.dac_enabled {
-                match self.sc3.output_level {
+        let ch3_vol = {
+            if self.ch3.dac_enabled {
+                match self.ch3.output_level {
                     OutputLevel::MUTE => 0.0,
                     OutputLevel::QUARTER => 0.25,
                     OutputLevel::HALF => 0.5,
@@ -113,9 +133,9 @@ impl APU {
             }
         };
 
-        let s4_vol = {
-            if self.sc4.dac_enabled {
-                self.sc4.final_volume as f64 / 0xF as f64
+        let ch4_vol = {
+            if self.ch4.dac_enabled {
+                self.ch4.final_volume as f64 / 0xF as f64
             } else {
                 0.0
             }
@@ -138,35 +158,34 @@ impl APU {
             }
         };
 
-        self.synth.s1_freq.set_value(131072.0 / (2048.0 - self.sc1.period as f64));
-        self.synth.s1_vol.set_value(s1_vol);
-        self.synth.s1_duty.set_value(s1_duty);
-        self.synth.s1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
-        self.synth.s1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
+        self.synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
+        self.synth.ch1_vol.set_value(ch1_vol);
+        self.synth.ch1_duty.set_value(ch1_duty);
+        self.synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
 
-        self.synth.s2_freq.set_value(131072.0 / (2048.0 - self.sc2.period as f64));
-        self.synth.s2_vol.set_value(s2_vol);
-        self.synth.s2_duty.set_value(s2_duty);
-        self.synth.s2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
-        self.synth.s2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
+        self.synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
+        self.synth.ch2_vol.set_value(ch2_vol);
+        self.synth.ch2_duty.set_value(ch2_duty);
+        self.synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
 
-        self.synth.s3_freq.set_value(65536.0 / (2048.0 - self.sc3.period as f64));
-        self.synth.s3_vol.set_value(s3_vol);
-        self.synth.s3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
-        self.synth.s3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
+        self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
+        self.synth.ch3_vol.set_value(ch3_vol);
+        self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 
-        self.synth.s4_freq.set_value(self.sc4.frequency as f64);
-        self.synth.s4_vol.set_value(s4_vol);
-        self.synth.s4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
-        self.synth.s4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
+        self.synth.ch4_freq.set_value(self.ch4.frequency as f64);
+        self.synth.ch4_vol.set_value(ch4_vol);
+        self.synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
 
         self.synth.global_l.set_value(global_l);
         self.synth.global_r.set_value(global_r);
     }
 
-    pub fn hz_to_cycles(hz: u32) -> u32 {
-        let gameboy_freq = 4 * 1024 * 1024;
-        return gameboy_freq / hz;
+    pub fn hz_to_cycles(hz: u32) -> u64 {
+        return CLOCK_FREQUENCY as u64 / hz as u64;
     }
 }
 
@@ -184,11 +203,11 @@ impl Memory for APU {
             // NR50: Master Volume & VIN
             0xFF24 => (self.left_volume & 0b0000_0111) << 4 |
                       (self.right_volume & 0b0000_0111),
-            0xFF10..=0xFF14 => self.sc1.read(a),
-            0xFF15..=0xFF19 => self.sc2.read(a),
-            0xFF1A..=0xFF1E => self.sc3.read(a),
-            0xFF30..=0xFF3F => self.sc3.read(a),
-            0xFF20..=0xFF24 => self.sc4.read(a),
+            0xFF10..=0xFF14 => self.ch1.read(a),
+            0xFF15..=0xFF19 => self.ch2.read(a),
+            0xFF1A..=0xFF1E => self.ch3.read(a),
+            0xFF30..=0xFF3F => self.ch3.read(a),
+            0xFF20..=0xFF24 => self.ch4.read(a),
             _ => 0xFF
         }
     }
@@ -217,54 +236,54 @@ impl Memory for APU {
             },
             0xFF10..=0xFF14 => {
                 if self.audio_enabled {
-                    self.sc1.write(a, v)
+                    self.ch1.write(a, v)
                 }
             },
             0xFF16..=0xFF19 => {
                 if self.audio_enabled {
-                    self.sc2.write(a, v)
+                    self.ch2.write(a, v)
                 }
             },
             0xFF1A..=0xFF1E => {
                 if self.audio_enabled {
-                    self.sc3.write(a, v)
+                    self.ch3.write(a, v)
                 }
             },
-            0xFF30..=0xFF3F => self.sc3.write(a, v),
+            0xFF30..=0xFF3F => self.ch3.write(a, v),
             0xFF20..=0xFF24 => {
                 if self.audio_enabled {
-                    self.sc4.write(a, v)
+                    self.ch4.write(a, v)
                 }
             },
             _ => ()
             // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
 
-        if self.sc1.trigger {
-            self.sc1.trigger = false;
-            if self.sc1.dac_enabled {
+        if self.ch1.trigger {
+            self.ch1.trigger = false;
+            if self.ch1.dac_enabled {
                 self.is_ch_1_on = true;
             }
         }
 
-        if self.sc2.trigger {
-            self.sc2.trigger = false;
-            if self.sc2.dac_enabled {
+        if self.ch2.trigger {
+            self.ch2.trigger = false;
+            if self.ch2.dac_enabled {
                 self.is_ch_2_on = true;
             }
         }
 
-        if self.sc3.trigger {
-            self.sc3.trigger = false;
-            if self.sc3.dac_enabled {
+        if self.ch3.trigger {
+            self.ch3.trigger = false;
+            if self.ch3.dac_enabled {
                 self.is_ch_3_on = true;
             }
         }
 
-        if self.sc4.trigger {
-            self.sc4.trigger = false;
-            self.sc4.lfsr = 0;
-            if self.sc4.dac_enabled {
+        if self.ch4.trigger {
+            self.ch4.trigger = false;
+            self.ch4.lfsr = 0;
+            if self.ch4.dac_enabled {
                 self.is_ch_4_on = true;
             }
         }
@@ -280,10 +299,10 @@ impl Memory for APU {
 
                 self.panning = Panning::empty();
 
-                self.sc1.clear();
-                self.sc2.clear();
-                self.sc3.clear();
-                self.sc4.clear();
+                self.ch1.clear();
+                self.ch2.clear();
+                self.ch3.clear();
+                self.ch4.clear();
             }
         }
     }

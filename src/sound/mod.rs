@@ -1,6 +1,6 @@
 pub mod apu;
-mod sc1;
-mod sc2;
-mod sc3;
-mod sc4;
+mod ch1;
+mod ch2;
+mod ch3;
+mod ch4;
 mod synth;

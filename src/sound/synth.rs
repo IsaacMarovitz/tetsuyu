@@ -5,27 +5,27 @@ use fundsp::hacker::*;
 use assert_no_alloc::*;
 
 pub struct Synth {
-    pub s1_freq: Shared<f64>,
-    pub s1_vol: Shared<f64>,
-    pub s1_duty: Shared<f64>,
-    pub s1_l: Shared<f64>,
-    pub s1_r: Shared<f64>,
+    pub ch1_freq: Shared<f64>,
+    pub ch1_vol: Shared<f64>,
+    pub ch1_duty: Shared<f64>,
+    pub ch1_l: Shared<f64>,
+    pub ch1_r: Shared<f64>,
 
-    pub s2_freq: Shared<f64>,
-    pub s2_vol: Shared<f64>,
-    pub s2_duty: Shared<f64>,
-    pub s2_l: Shared<f64>,
-    pub s2_r: Shared<f64>,
+    pub ch2_freq: Shared<f64>,
+    pub ch2_vol: Shared<f64>,
+    pub ch2_duty: Shared<f64>,
+    pub ch2_l: Shared<f64>,
+    pub ch2_r: Shared<f64>,
 
-    pub s3_freq: Shared<f64>,
-    pub s3_vol: Shared<f64>,
-    pub s3_l: Shared<f64>,
-    pub s3_r: Shared<f64>,
+    pub ch3_freq: Shared<f64>,
+    pub ch3_vol: Shared<f64>,
+    pub ch3_l: Shared<f64>,
+    pub ch3_r: Shared<f64>,
 
-    pub s4_freq: Shared<f64>,
-    pub s4_vol: Shared<f64>,
-    pub s4_l: Shared<f64>,
-    pub s4_r: Shared<f64>,
+    pub ch4_freq: Shared<f64>,
+    pub ch4_vol: Shared<f64>,
+    pub ch4_l: Shared<f64>,
+    pub ch4_r: Shared<f64>,
 
     pub global_l: Shared<f64>,
     pub global_r: Shared<f64>
@@ -35,27 +35,27 @@ impl Synth {
     pub fn new() -> Self {
         let host = cpal::default_host();
 
-        let s1_freq = shared(0.0);
-        let s1_vol = shared(0.0);
-        let s1_duty = shared(0.0);
-        let s1_l = shared(0.0);
-        let s1_r = shared(0.0);
+        let ch1_freq = shared(0.0);
+        let ch1_vol = shared(0.0);
+        let ch1_duty = shared(0.0);
+        let ch1_l = shared(0.0);
+        let ch1_r = shared(0.0);
 
-        let s2_freq = shared(0.0);
-        let s2_vol = shared(0.0);
-        let s2_duty = shared(0.0);
-        let s2_l = shared(0.0);
-        let s2_r = shared(0.0);
+        let ch2_freq = shared(0.0);
+        let ch2_vol = shared(0.0);
+        let ch2_duty = shared(0.0);
+        let ch2_l = shared(0.0);
+        let ch2_r = shared(0.0);
 
-        let s3_freq = shared(0.0);
-        let s3_vol = shared(0.0);
-        let s3_l = shared(0.0);
-        let s3_r = shared(0.0);
+        let ch3_freq = shared(0.0);
+        let ch3_vol = shared(0.0);
+        let ch3_l = shared(0.0);
+        let ch3_r = shared(0.0);
 
-        let s4_freq = shared(0.0);
-        let s4_vol = shared(0.0);
-        let s4_l = shared(0.0);
-        let s4_r = shared(0.0);
+        let ch4_freq = shared(0.0);
+        let ch4_vol = shared(0.0);
+        let ch4_l = shared(0.0);
+        let ch4_r = shared(0.0);
 
         let global_l = shared(0.0);
         let global_r = shared(0.0);
@@ -67,72 +67,72 @@ impl Synth {
 
         match config.sample_format() {
             cpal::SampleFormat::F32 => {
-                Synth::run_audio::<f32>(s1_freq.clone(),
-                                        s1_vol.clone(),
-                                        s1_duty.clone(),
-                                        s1_l.clone(),
-                                        s1_r.clone(),
-                                        s2_freq.clone(),
-                                        s2_vol.clone(),
-                                        s2_duty.clone(),
-                                        s2_l.clone(),
-                                        s2_r.clone(),
-                                        s3_freq.clone(),
-                                        s3_vol.clone(),
-                                        s3_l.clone(),
-                                        s3_r.clone(),
-                                        s4_freq.clone(),
-                                        s4_vol.clone(),
-                                        s4_l.clone(),
-                                        s4_r.clone(),
+                Synth::run_audio::<f32>(ch1_freq.clone(),
+                                        ch1_vol.clone(),
+                                        ch1_duty.clone(),
+                                        ch1_l.clone(),
+                                        ch1_r.clone(),
+                                        ch2_freq.clone(),
+                                        ch2_vol.clone(),
+                                        ch2_duty.clone(),
+                                        ch2_l.clone(),
+                                        ch2_r.clone(),
+                                        ch3_freq.clone(),
+                                        ch3_vol.clone(),
+                                        ch3_l.clone(),
+                                        ch3_r.clone(),
+                                        ch4_freq.clone(),
+                                        ch4_vol.clone(),
+                                        ch4_l.clone(),
+                                        ch4_r.clone(),
                                         global_l.clone(),
                                         global_r.clone(),
                                         device,
                                         config.into())
             },
             cpal::SampleFormat::I16 => {
-                Synth::run_audio::<i16>(s1_freq.clone(),
-                                        s1_vol.clone(),
-                                        s1_duty.clone(),
-                                        s1_l.clone(),
-                                        s1_r.clone(),
-                                        s2_freq.clone(),
-                                        s2_vol.clone(),
-                                        s2_duty.clone(),
-                                        s2_l.clone(),
-                                        s2_r.clone(),
-                                        s3_freq.clone(),
-                                        s3_vol.clone(),
-                                        s3_l.clone(),
-                                        s3_r.clone(),
-                                        s4_freq.clone(),
-                                        s4_vol.clone(),
-                                        s4_l.clone(),
-                                        s4_r.clone(),
+                Synth::run_audio::<i16>(ch1_freq.clone(),
+                                        ch1_vol.clone(),
+                                        ch1_duty.clone(),
+                                        ch1_l.clone(),
+                                        ch1_r.clone(),
+                                        ch2_freq.clone(),
+                                        ch2_vol.clone(),
+                                        ch2_duty.clone(),
+                                        ch2_l.clone(),
+                                        ch2_r.clone(),
+                                        ch3_freq.clone(),
+                                        ch3_vol.clone(),
+                                        ch3_l.clone(),
+                                        ch3_r.clone(),
+                                        ch4_freq.clone(),
+                                        ch4_vol.clone(),
+                                        ch4_l.clone(),
+                                        ch4_r.clone(),
                                         global_l.clone(),
                                         global_r.clone(),
                                         device,
                                         config.into())
             },
             cpal::SampleFormat::U16 => {
-                Synth::run_audio::<u16>(s1_freq.clone(),
-                                        s1_vol.clone(),
-                                        s1_duty.clone(),
-                                        s1_l.clone(),
-                                        s1_r.clone(),
-                                        s2_freq.clone(),
-                                        s2_vol.clone(),
-                                        s2_duty.clone(),
-                                        s2_l.clone(),
-                                        s2_r.clone(),
-                                        s3_freq.clone(),
-                                        s3_vol.clone(),
-                                        s3_l.clone(),
-                                        s3_r.clone(),
-                                        s4_freq.clone(),
-                                        s4_vol.clone(),
-                                        s4_l.clone(),
-                                        s4_r.clone(),
+                Synth::run_audio::<u16>(ch1_freq.clone(),
+                                        ch1_vol.clone(),
+                                        ch1_duty.clone(),
+                                        ch1_l.clone(),
+                                        ch1_r.clone(),
+                                        ch2_freq.clone(),
+                                        ch2_vol.clone(),
+                                        ch2_duty.clone(),
+                                        ch2_l.clone(),
+                                        ch2_r.clone(),
+                                        ch3_freq.clone(),
+                                        ch3_vol.clone(),
+                                        ch3_l.clone(),
+                                        ch3_r.clone(),
+                                        ch4_freq.clone(),
+                                        ch4_vol.clone(),
+                                        ch4_l.clone(),
+                                        ch4_r.clone(),
                                         global_l.clone(),
                                         global_r.clone(),
                                         device,
@@ -142,27 +142,27 @@ impl Synth {
         }
 
         Self {
-            s1_freq,
-            s1_vol,
-            s1_duty,
-            s1_l,
-            s1_r,
+            ch1_freq: ch1_freq,
+            ch1_vol: ch1_vol,
+            ch1_duty: ch1_duty,
+            ch1_l: ch1_l,
+            ch1_r: ch1_r,
 
-            s2_freq,
-            s2_vol,
-            s2_duty,
-            s2_l,
-            s2_r,
+            ch2_freq: ch2_freq,
+            ch2_vol: ch2_vol,
+            ch2_duty: ch2_duty,
+            ch2_l: ch2_l,
+            ch2_r: ch2_r,
 
-            s3_freq,
-            s3_vol,
-            s3_l,
-            s3_r,
+            ch3_freq: ch3_freq,
+            ch3_vol: ch3_vol,
+            ch3_l: ch3_l,
+            ch3_r: ch3_r,
 
-            s4_freq,
-            s4_vol,
-            s4_l,
-            s4_r,
+            ch4_freq: ch4_freq,
+            ch4_vol: ch4_vol,
+            ch4_l: ch4_l,
+            ch4_r: ch4_r,
 
             global_l,
             global_r,
@@ -170,24 +170,24 @@ impl Synth {
     }
 
     fn run_audio<T>(
-        s1_freq: Shared<f64>,
-        s1_vol: Shared<f64>,
-        s1_duty: Shared<f64>,
-        s1_l: Shared<f64>,
-        s1_r: Shared<f64>,
-        s2_freq: Shared<f64>,
-        s2_vol: Shared<f64>,
-        s2_duty: Shared<f64>,
-        s2_l: Shared<f64>,
-        s2_r: Shared<f64>,
-        s3_freq: Shared<f64>,
-        s3_vol: Shared<f64>,
-        s3_l: Shared<f64>,
-        s3_r: Shared<f64>,
-        s4_freq: Shared<f64>,
-        s4_vol: Shared<f64>,
-        s4_l: Shared<f64>,
-        s4_r: Shared<f64>,
+        ch1_freq: Shared<f64>,
+        ch1_vol: Shared<f64>,
+        ch1_duty: Shared<f64>,
+        ch1_l: Shared<f64>,
+        ch1_r: Shared<f64>,
+        ch2_freq: Shared<f64>,
+        ch2_vol: Shared<f64>,
+        ch2_duty: Shared<f64>,
+        ch2_l: Shared<f64>,
+        ch2_r: Shared<f64>,
+        ch3_freq: Shared<f64>,
+        ch3_vol: Shared<f64>,
+        ch3_l: Shared<f64>,
+        ch3_r: Shared<f64>,
+        ch4_freq: Shared<f64>,
+        ch4_vol: Shared<f64>,
+        ch4_l: Shared<f64>,
+        ch4_r: Shared<f64>,
         global_l: Shared<f64>,
         global_r: Shared<f64>,
         device: Device,
@@ -199,17 +199,17 @@ impl Synth {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
-            let sc1_mono = (lfo(move |_| (var(&s1_freq).0.value(), var(&s1_duty).0.value())) >> pulse()) * var(&s1_vol) * constant(0.25);
-            let sc2_mono = (lfo(move |_| (var(&s2_freq).0.value(), var(&s2_duty).0.value())) >> pulse()) * var(&s2_vol) * constant(0.25);
-            let sc3_mono = var(&s3_freq) >> sine() * var(&s3_vol) * constant(0.25);
-            let sc4_mono = var(&s4_freq) >> square() * var(&s4_vol) * constant(0.25);
+            let ch1_mono = (lfo(move |_| (var(&ch1_freq).0.value(), var(&ch1_duty).0.value())) >> pulse()) * var(&ch1_vol) * constant(0.25);
+            let ch2_mono = (lfo(move |_| (var(&ch2_freq).0.value(), var(&ch2_duty).0.value())) >> pulse()) * var(&ch2_vol) * constant(0.25);
+            let ch3_mono = var(&ch3_freq) >> sine() * var(&ch3_vol) * constant(0.25);
+            let ch4_mono = var(&ch4_freq) >> square() * var(&ch4_vol) * constant(0.25);
 
-            let sc1_stereo = sc1_mono >> ((pass() * var(&s1_l)) ^ (pass() * var(&s1_r)));
-            let sc2_stereo = sc2_mono >> ((pass() * var(&s2_l)) ^ (pass() * var(&s2_r)));
-            let sc3_stereo = sc3_mono >> ((pass() * var(&s3_l)) ^ (pass() * var(&s3_r)));
-            let sc4_stereo = sc4_mono >> ((pass() * var(&s4_l)) ^ (pass() * var(&s4_r)));
+            let ch1_stereo = ch1_mono >> ((pass() * var(&ch1_l)) ^ (pass() * var(&ch1_r)));
+            let ch2_stereo = ch2_mono >> ((pass() * var(&ch2_l)) ^ (pass() * var(&ch2_r)));
+            let ch3_stereo = ch3_mono >> ((pass() * var(&ch3_l)) ^ (pass() * var(&ch3_r)));
+            let ch4_stereo = ch4_mono >> ((pass() * var(&ch4_l)) ^ (pass() * var(&ch4_r)));
 
-            let total_stereo = sc1_stereo + sc2_stereo; // +*/ sc4_stereo; //+ sc3_stereo; //+ sc4_stereo;
+            let total_stereo = ch1_stereo + ch2_stereo; // +*/ ch4_stereo; //+ ch3_stereo; //+ ch4_stereo;
 
             let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
 

@@ -1,7 +1,7 @@
 use crate::memory::Memory;
 use crate::sound::apu::{APU, DutyCycle};
 
-pub struct SC1 {
+pub struct CH1 {
     pub dac_enabled: bool,
     sweep_pace: u8,
     negative_direction: bool,
@@ -14,11 +14,11 @@ pub struct SC1 {
     pub period: u16,
     pub trigger: bool,
     length_enabled: bool,
-    length_cycle_count: u32,
-    sweep_cycle_count: u32
+    length_cycle_count: u64,
+    sweep_cycle_count: u64
 }
 
-impl SC1 {
+impl CH1 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
@@ -55,7 +55,7 @@ impl SC1 {
 
     pub fn cycle(&mut self, cycles: u32) {
         if self.length_enabled {
-            self.length_cycle_count += cycles;
+            self.length_cycle_count += cycles as u64;
 
             if self.length_cycle_count >= APU::hz_to_cycles(256) {
                 self.length_cycle_count = 0;
@@ -70,34 +70,36 @@ impl SC1 {
             }
         }
 
-        // if self.sweep_pace != 0 {
-        //     self.sweep_cycle_count += cycles;
-        //
-        //     if self.sweep_cycle_count >= (APU::hz_to_cycles(128) * self.sweep_pace as u32) {
-        //         self.sweep_cycle_count = 0;
-        //
-        //         let divisor = 2 ^ (self.sweep_step as u16);
-        //         if divisor != 0 {
-        //             let step = self.period / divisor;
-        //             if self.negative_direction {
-        //                 self.period -= step;
-        //             } else {
-        //                 let (value, overflow) = self.period.overflowing_add(step);
-        //
-        //                 if value > 0x7FF || overflow {
-        //                     self.dac_enabled = false;
-        //                     self.clear();
-        //                 } else {
-        //                     self.period = value;
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        if self.sweep_pace != 0 {
+            self.sweep_cycle_count += cycles as u64;
+
+            if self.sweep_cycle_count >= (APU::hz_to_cycles(128) * self.sweep_pace as u64) {
+                self.sweep_cycle_count = 0;
+
+                let divisor = 2 ^ (self.sweep_step as u16);
+                if divisor != 0 {
+                    let step = self.period / divisor;
+                    if self.negative_direction {
+                        println!("REDUCING PERIOD {}, by {}", self.period, step);
+                        self.period -= step;
+                    } else {
+                        println!("INCREASING PERIOD");
+                        let (value, overflow) = self.period.overflowing_add(step);
+
+                        if value > 0x7FF || overflow {
+                            self.dac_enabled = false;
+                            self.clear();
+                        } else {
+                            self.period = value;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-impl Memory for SC1 {
+impl Memory for CH1 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR10: Sweep

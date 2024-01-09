@@ -2,7 +2,7 @@ use crate::memory::Memory;
 use crate::mmu::Interrupts;
 
 pub struct Timer {
-    div: u8,
+    pub div: u8,
     tima: u8,
     tma: u8,
     pub interrupts: Interrupts,

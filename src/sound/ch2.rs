@@ -1,7 +1,7 @@
 use crate::memory::Memory;
 use crate::sound::apu::DutyCycle;
 
-pub struct SC2 {
+pub struct CH2 {
     pub dac_enabled: bool,
     pub duty_cycle: DutyCycle,
     length_timer: u8,
@@ -14,7 +14,7 @@ pub struct SC2 {
     length_cycle_count: u32
 }
 
-impl SC2 {
+impl CH2 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
@@ -47,7 +47,7 @@ impl SC2 {
     }
 }
 
-impl Memory for SC2 {
+impl Memory for CH2 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR21: Length Timer & Duty Cycle

@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use crate::memory::Memory;
 
-pub struct SC3 {
+pub struct CH3 {
     pub dac_enabled: bool,
     length_timer: u8,
     pub output_level: OutputLevel,
@@ -21,7 +21,7 @@ bitflags! {
     }
 }
 
-impl SC3 {
+impl CH3 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
@@ -48,7 +48,7 @@ impl SC3 {
     }
 }
 
-impl Memory for SC3 {
+impl Memory for CH3 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR30: DAC Enable

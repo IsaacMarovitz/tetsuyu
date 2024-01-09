@@ -1,7 +1,7 @@
 use crate::memory::Memory;
 use crate::sound::apu::APU;
 
-pub struct SC4 {
+pub struct CH4 {
     pub dac_enabled: bool,
     length_timer: u8,
     volume: u8,
@@ -16,11 +16,11 @@ pub struct SC4 {
     pub frequency: u32,
     pub lfsr: u16,
     pub final_volume: u8,
-    lfsr_cycle_count: u32,
-    length_cycle_count: u32
+    lfsr_cycle_count: u64,
+    length_cycle_count: u64
 }
 
-impl SC4 {
+impl CH4 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
@@ -61,7 +61,7 @@ impl SC4 {
 
     pub fn cycle(&mut self, cycles: u32) {
         if self.length_enabled {
-            self.length_cycle_count += cycles;
+            self.length_cycle_count += cycles as u64;
 
             if self.length_cycle_count >= APU::hz_to_cycles(256) {
                 self.length_cycle_count = 0;
@@ -76,7 +76,7 @@ impl SC4 {
             }
         }
 
-        self.lfsr_cycle_count += cycles;
+        self.lfsr_cycle_count += cycles as u64;
         let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
         let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
 
@@ -116,7 +116,7 @@ impl SC4 {
     }
 }
 
-impl Memory for SC4 {
+impl Memory for CH4 {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR41: Length Timer
