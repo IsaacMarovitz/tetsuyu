@@ -1,5 +1,5 @@
 use crate::memory::Memory;
-use crate::sound::apu::{APU, DutyCycle};
+use crate::sound::apu::{DutyCycle};
 
 pub struct CH1 {
     pub dac_enabled: bool,
@@ -14,8 +14,8 @@ pub struct CH1 {
     pub period: u16,
     pub trigger: bool,
     length_enabled: bool,
-    length_cycle_count: u64,
-    sweep_cycle_count: u64
+    length_cycle_count: u32,
+    sweep_cycle_count: u32
 }
 
 impl CH1 {
@@ -53,15 +53,14 @@ impl CH1 {
         self.length_enabled = false;
     }
 
-    pub fn cycle(&mut self, cycles: u32) {
+    pub fn cycle(&mut self) {
         if self.length_enabled {
-            self.length_cycle_count += cycles as u64;
+            self.length_cycle_count += 1;
 
-            if self.length_cycle_count >= APU::hz_to_cycles(256) {
+            if self.length_cycle_count >= 2 {
                 self.length_cycle_count = 0;
 
                 if self.length_timer >= 64 {
-                    println!("NOTE OVER");
                     self.dac_enabled = false;
                     self.length_enabled = false;
                 } else {
@@ -71,19 +70,17 @@ impl CH1 {
         }
 
         if self.sweep_pace != 0 {
-            self.sweep_cycle_count += cycles as u64;
+            self.sweep_cycle_count += 1;
 
-            if self.sweep_cycle_count >= (APU::hz_to_cycles(128) * self.sweep_pace as u64) {
+            if self.sweep_cycle_count >= (4 * self.sweep_pace as u32) {
                 self.sweep_cycle_count = 0;
 
                 let divisor = 2 ^ (self.sweep_step as u16);
                 if divisor != 0 {
                     let step = self.period / divisor;
                     if self.negative_direction {
-                        println!("REDUCING PERIOD {}, by {}", self.period, step);
                         self.period -= step;
                     } else {
-                        println!("INCREASING PERIOD");
                         let (value, overflow) = self.period.overflowing_add(step);
 
                         if value > 0x7FF || overflow {

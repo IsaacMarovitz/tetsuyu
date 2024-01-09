@@ -16,8 +16,8 @@ pub struct CH4 {
     pub frequency: u32,
     pub lfsr: u16,
     pub final_volume: u8,
-    lfsr_cycle_count: u64,
-    length_cycle_count: u64
+    lfsr_cycle_count: u32,
+    length_cycle_count: u32
 }
 
 impl CH4 {
@@ -59,11 +59,11 @@ impl CH4 {
         self.length_cycle_count = 0;
     }
 
-    pub fn cycle(&mut self, cycles: u32) {
+    pub fn cycle(&mut self) {
         if self.length_enabled {
-            self.length_cycle_count += cycles as u64;
+            self.length_cycle_count += 1;
 
-            if self.length_cycle_count >= APU::hz_to_cycles(256) {
+            if self.length_cycle_count >= 2 {
                 self.length_cycle_count = 0;
 
                 if self.dac_enabled {
@@ -76,7 +76,7 @@ impl CH4 {
             }
         }
 
-        self.lfsr_cycle_count += cycles as u64;
+        self.lfsr_cycle_count += 1;
         let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
         let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
 
@@ -84,7 +84,7 @@ impl CH4 {
             // Frequency in Hz
             self.frequency = 262144 / divisor;
 
-            if self.lfsr_cycle_count >= APU::hz_to_cycles(self.frequency) {
+            if self.lfsr_cycle_count >= (512 / self.frequency) {
                 self.lfsr_cycle_count = 0;
 
                 let bit = {

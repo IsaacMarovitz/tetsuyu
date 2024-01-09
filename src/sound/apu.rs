@@ -1,5 +1,4 @@
 use bitflags::bitflags;
-use crate::CLOCK_FREQUENCY;
 use crate::memory::Memory;
 use crate::sound::ch1::CH1;
 use crate::sound::ch2::CH2;
@@ -22,7 +21,6 @@ pub struct APU {
     ch4: CH4,
     synth: Synth,
     div_one: bool,
-    div_counter: u32
 }
 
 bitflags! {
@@ -57,31 +55,32 @@ impl APU {
             ch3: CH3::new(),
             ch4: CH4::new(),
             synth,
-            div_one: false,
-            div_counter: 0
+            div_one: false
         }
     }
 
-    pub fn cycle(&mut self, cycles: u32, div: u8) {
-        println!("{div}");
+    pub fn cycle(&mut self, div: u8) {
+        let mut div_tick = false;
+
         if self.div_one {
             // TODO: Double-speed mode
             if div & (0b000_1000) == 0 {
                 // Bit moved from 1 -> 0
-                self.div_counter += 1;
+                div_tick = true;
                 self.div_one = false;
-                println!("DIV COUNTER INCR!");
             }
         } else {
-            if div & (0b000_1000) == 1 {
+            if div & (0b000_1000) >> 3 == 1 {
                 self.div_one = true;
             }
         }
 
-        self.ch1.cycle(cycles);
-        self.ch2.cycle(cycles);
-        self.ch3.cycle(cycles);
-        self.ch4.cycle(cycles);
+        if div_tick {
+            self.ch1.cycle();
+            self.ch2.cycle();
+            self.ch3.cycle();
+            self.ch4.cycle();
+        }
 
         let ch1_vol = {
             if self.ch1.dac_enabled {
@@ -182,10 +181,6 @@ impl APU {
 
         self.synth.global_l.set_value(global_l);
         self.synth.global_r.set_value(global_r);
-    }
-
-    pub fn hz_to_cycles(hz: u32) -> u64 {
-        return CLOCK_FREQUENCY as u64 / hz as u64;
     }
 }
 

@@ -42,7 +42,7 @@ impl CH2 {
         self.length_enabled = false;
     }
 
-    pub fn cycle(&mut self, cycles: u32) {
+    pub fn cycle(&mut self) {
 
     }
 }
