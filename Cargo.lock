@@ -407,9 +407,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.12"
+version = "4.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcfab8ba68f3668e89f6ff60f5b205cea56aa7b769451a59f34b8682f51c056d"
+checksum = "c12ed66a79a555082f595f7eb980d08669de95009dd4b3d61168c573ebe38fc9"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -417,9 +417,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.12"
+version = "4.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb7fb5e4e979aec3be7791562fcba452f94ad85e954da024396433e0e25a79e9"
+checksum = "0f4645eab3431e5a8403a96bea02506a8b35d28cd0f0330977dd5d22f9c84f43"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2941,9 +2941,9 @@ checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 
 [[package]]
 name = "winit"
-version = "0.29.8"
+version = "0.29.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dc1a7ae1076890701c7dd71ea35b2aebaf9aeb7b8868ac2d33b1c7e8ef93c00"
+checksum = "c2376dab13e09c01ad8b679f0dbc7038af4ec43d9a91344338e37bd686481550"
 dependencies = [
  "ahash",
  "android-activity",
