@@ -8,6 +8,7 @@ use crate::mbc::mode::{CartTypes, MBCMode};
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
+use std::process;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, sleep};
@@ -49,7 +50,14 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), impl std::error::Error> {
     let args = Args::parse();
-    let mut file = File::open(args.rom_path).expect("No ROM found!");
+    let mut file = match File::open(args.rom_path.clone()) {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("Failed to open ROM at \"{}\": {}", args.rom_path.clone(), err);
+            process::exit(1);
+        }
+    };
+
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
 
@@ -67,7 +75,13 @@ async fn main() -> Result<(), impl std::error::Error> {
     match args.boot_rom {
         Some(path) => {
             let mut boot_rom = Vec::new();
-            let mut boot = File::open(path).expect("No Boot ROM found!");
+            let mut boot = match File::open(path.clone()) {
+                Ok(file) => file,
+                Err(err) => {
+                    eprintln!("Failed to open Boot ROM at \"{}\": {}", path.clone(), err);
+                    process::exit(1);
+                }
+            };
             boot.read_to_end(&mut boot_rom).expect("Failed to read Boot ROM!");
 
             // Display Nintendo Logo
