@@ -7,7 +7,6 @@ use crate::cpu::CPU;
 use crate::joypad::JoypadButton;
 use crate::mode::GBMode;
 use clap::Parser;
-use num_traits::FromPrimitive;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process;
@@ -18,7 +17,7 @@ use tokio::time::{sleep, Duration, Instant};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::event_loop::ControlFlow;
-use winit::keyboard::{Key, ModifiersState};
+use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
@@ -164,7 +163,6 @@ async fn main() -> Result<(), impl std::error::Error> {
 
     {
         let context = Arc::clone(&context);
-        let mut modifiers = ModifiersState::default();
         event_loop.run(move |event, elwt| {
             let config = config.clone();
             let mut context = context.lock().unwrap();
@@ -187,9 +185,6 @@ async fn main() -> Result<(), impl std::error::Error> {
                         }
                         WindowEvent::Resized(physical_size) => {
                             context.resize(physical_size);
-                        }
-                        WindowEvent::ModifiersChanged(new) => {
-                            modifiers = new.state();
                         }
                         WindowEvent::KeyboardInput { event, .. } => {
                             if !event.repeat {

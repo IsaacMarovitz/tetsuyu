@@ -77,7 +77,7 @@ impl Memory for Joypad {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
-            0xFF00 => self.select = (v & 0x30),
+            0xFF00 => self.select = v & 0x30,
             _ => panic!("Write to unsupported Joypad address ({:#06x})!", a),
         }
 

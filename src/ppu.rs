@@ -1,4 +1,4 @@
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 use crate::config::{Color, Palette};
 use crate::memory::Memory;
 use crate::mmu::Interrupts;

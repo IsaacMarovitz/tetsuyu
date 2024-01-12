@@ -1,5 +1,4 @@
 use crate::memory::Memory;
-use crate::sound::apu::APU;
 
 pub struct CH4 {
     pub dac_enabled: bool,

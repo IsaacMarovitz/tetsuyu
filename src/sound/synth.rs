@@ -206,10 +206,10 @@ impl Synth {
 
             let ch1_stereo = ch1_mono >> ((pass() * var(&ch1_l)) ^ (pass() * var(&ch1_r)));
             let ch2_stereo = ch2_mono >> ((pass() * var(&ch2_l)) ^ (pass() * var(&ch2_r)));
-            let ch3_stereo = ch3_mono >> ((pass() * var(&ch3_l)) ^ (pass() * var(&ch3_r)));
-            let ch4_stereo = ch4_mono >> ((pass() * var(&ch4_l)) ^ (pass() * var(&ch4_r)));
+            let _ch3_stereo = ch3_mono >> ((pass() * var(&ch3_l)) ^ (pass() * var(&ch3_r)));
+            let _ch4_stereo = ch4_mono >> ((pass() * var(&ch4_l)) ^ (pass() * var(&ch4_r)));
 
-            let total_stereo = ch1_stereo + ch2_stereo; // +*/ ch4_stereo; //+ ch3_stereo; //+ ch4_stereo;
+            let total_stereo = ch1_stereo + ch2_stereo;
 
             let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
 

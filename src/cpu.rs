@@ -749,7 +749,7 @@ impl CPU {
                       v = self.alu_set(v, 7);
                       self.mem.write(a, v);                     4 },
             0xFF => { self.reg.a = self.alu_set(self.reg.a, 7); 2 },
-            code => panic!("CB Instruction {:#04x} is unknown!", code)
+            // code => panic!("CB Instruction {:#04x} is unknown!", code)
         }
     }
 

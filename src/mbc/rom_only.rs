@@ -13,7 +13,7 @@ impl Memory for ROMOnly {
         }
     }
 
-    fn write(&mut self, a: u16, v: u8) { }
+    fn write(&mut self, _a: u16, _v: u8) { }
 }
 
 impl MBC for ROMOnly { }
