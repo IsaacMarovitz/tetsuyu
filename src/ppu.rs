@@ -1,4 +1,5 @@
 use bitflags::{bitflags, Flags};
+use crate::config::{Color, Palette};
 use crate::memory::Memory;
 use crate::mmu::Interrupts;
 use crate::mode::GBMode;
@@ -8,6 +9,7 @@ pub const SCREEN_H: usize = 144;
 
 pub struct PPU {
     mode: GBMode,
+    palette: Palette,
     ppu_mode: PPUMode,
     cycle_count: u32,
     vblanked_lines: u32,
@@ -95,9 +97,10 @@ bitflags! {
     }
 }
 impl PPU {
-    pub fn new(mode: GBMode) -> Self {
+    pub fn new(mode: GBMode, palette: Palette) -> Self {
         Self {
             mode,
+            palette,
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
             vblanked_lines: 0,
@@ -208,12 +211,12 @@ impl PPU {
         }
     }
 
-    fn grey_to_l(v: u8, i: usize) -> (u8, u8, u8) {
+    fn grey_to_l(palette: Palette, v: u8, i: usize) -> Color {
         match v >> (2 * i) & 0x03 {
-            0x00 => (175, 203, 70),
-            0x01 => (121, 170, 109),
-            0x02 => (34, 111, 95),
-            _ => (8, 41, 85)
+            0x00 => palette.dark,
+            0x01 => palette.dark_gray,
+            0x02 => palette.light_gray,
+            _ => palette.light
         }
     }
 
@@ -328,8 +331,8 @@ impl PPU {
                 let b = 0;
                 self.set_rgb(x, r, g, b);
             } else {
-                let (r, g, b) = Self::grey_to_l(self.bgp, color);
-                self.set_rgb(x, r, g, b);
+                let color = Self::grey_to_l(self.palette.clone(), self.bgp, color);
+                self.set_rgb(x, color.r, color.g, color.b);
             }
         }
     }
@@ -402,13 +405,13 @@ impl PPU {
                 if self.mode == GBMode::Color {
 
                 } else {
-                    let (r, g, b) = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
-                        Self::grey_to_l(self.op1, color)
+                    let color = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
+                        Self::grey_to_l(self.palette.clone(), self.op1, color)
                     } else {
-                        Self::grey_to_l(self.op0, color)
+                        Self::grey_to_l(self.palette.clone(), self.op0, color)
                     };
 
-                    self.set_rgb(px.wrapping_add(x) as usize, r, g, b);
+                    self.set_rgb(px.wrapping_add(x) as usize, color.r, color.g, color.b);
                 }
             }
         }

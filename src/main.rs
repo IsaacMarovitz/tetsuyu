@@ -1,38 +1,40 @@
 #[macro_use]
 extern crate num_derive;
 
+use crate::config::{Config, Input};
 use crate::context::Context;
 use crate::cpu::CPU;
+use crate::joypad::JoypadButton;
 use crate::mode::GBMode;
-use crate::mbc::mode::{CartTypes, MBCMode};
 use clap::Parser;
+use num_traits::FromPrimitive;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tokio::time::{Duration, Instant, sleep};
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::{sleep, Duration, Instant};
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
+use winit::event_loop::ControlFlow;
 use winit::keyboard::{Key, ModifiersState};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
-use winit::event_loop::ControlFlow;
-use num_traits::FromPrimitive;
-use crate::joypad::JoypadButton;
 
+mod config;
 mod context;
 mod cpu;
-mod mmu;
-mod mode;
-mod registers;
-mod ppu;
-mod serial;
-mod timer;
+mod joypad;
 mod mbc;
 mod memory;
-mod joypad;
+mod mmu;
+mod mode;
+mod ppu;
+mod registers;
+mod serial;
 mod sound;
+mod timer;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
@@ -43,52 +45,46 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 struct Args {
     rom_path: String,
     boot_rom: Option<String>,
-    #[arg(short, long)]
-    print_serial: bool
 }
 
 #[tokio::main]
 async fn main() -> Result<(), impl std::error::Error> {
+    let config = match File::open("./config.toml") {
+        Ok(mut file) => {
+            let mut config_data = String::new();
+            file.read_to_string(&mut config_data)
+                .expect("Failed to read config!");
+
+            let config = toml::from_str(&config_data).expect("Failed to parse config!");
+            config
+        }
+        Err(_) => {
+            let default = Config::default();
+            let config = toml::to_string(&default).expect("Failed to serialize config!");
+            let mut buffer = File::create("./config.toml").expect("Failed to create file!");
+            buffer
+                .write_all(config.as_bytes())
+                .expect("Failed to write config!");
+
+            default
+        }
+    };
+
     let args = Args::parse();
     let mut file = match File::open(args.rom_path.clone()) {
         Ok(file) => file,
         Err(err) => {
-            eprintln!("Failed to open ROM at \"{}\": {}", args.rom_path.clone(), err);
+            eprintln!(
+                "Failed to open ROM at \"{}\": {}",
+                args.rom_path.clone(),
+                err
+            );
             process::exit(1);
         }
     };
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
-
-    let cart_type: CartTypes = FromPrimitive::from_u8(buffer[0x0147]).expect("Failed to get Cart Type!");
-    let mbc_mode = match cart_type.get_mbc() {
-        MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
-        v => {
-            println!("Cart Type: {:}, MBC Type: {:}", cart_type, v);
-            v
-        }
-    };
-
-    let mut booting = true;
-
-    match args.boot_rom {
-        Some(path) => {
-            let mut boot_rom = Vec::new();
-            let mut boot = match File::open(path.clone()) {
-                Ok(file) => file,
-                Err(err) => {
-                    eprintln!("Failed to open Boot ROM at \"{}\": {}", path.clone(), err);
-                    process::exit(1);
-                }
-            };
-            boot.read_to_end(&mut boot_rom).expect("Failed to read Boot ROM!");
-
-            // Display Nintendo Logo
-            buffer[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
-        },
-        None => booting = false
-    }
 
     // Get game name
     let name_data = &buffer[0x0134..=0x0143];
@@ -102,12 +98,15 @@ async fn main() -> Result<(), impl std::error::Error> {
     let panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         panic(info);
-        std::process::exit(1);
+        process::exit(1);
     }));
 
     let window = WindowBuilder::new()
         .with_title(format!("tetsuyu - {:}", game_name))
-        .with_inner_size(winit::dpi::LogicalSize::new((ppu::SCREEN_W as u32) * 2, (ppu::SCREEN_H as u32) * 2))
+        .with_inner_size(winit::dpi::LogicalSize::new(
+            config.window_w,
+            config.window_h,
+        ))
         .build(&event_loop)
         .unwrap();
 
@@ -115,10 +114,15 @@ async fn main() -> Result<(), impl std::error::Error> {
     let (input_tx, mut input_rx) = mpsc::unbounded_channel::<(JoypadButton, bool)>();
 
     {
+        let config = config.clone();
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, mbc_mode, args.print_serial, buffer, booting);
+            let mut cpu = CPU::new(
+                GBMode::Classic,
+                buffer,
+                config
+            );
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 
@@ -162,13 +166,14 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         let mut modifiers = ModifiersState::default();
         event_loop.run(move |event, elwt| {
+            let config = config.clone();
             let mut context = context.lock().unwrap();
 
             match event {
                 Event::AboutToWait => {
                     // TODO: Handle errors
                     let _ = context.render();
-                },
+                }
                 Event::WindowEvent { event, window_id } => {
                     let size = context.size;
                     match event {
@@ -189,37 +194,46 @@ async fn main() -> Result<(), impl std::error::Error> {
                         WindowEvent::KeyboardInput { event, .. } => {
                             if !event.repeat {
                                 if event.state == ElementState::Pressed {
-                                    match event.key_without_modifiers().as_ref() {
-                                        Key::Character("w") => input_tx.send((JoypadButton::UP, true)).unwrap(),
-                                        Key::Character("a") => input_tx.send((JoypadButton::LEFT, true)).unwrap(),
-                                        Key::Character("s") => input_tx.send((JoypadButton::DOWN, true)).unwrap(),
-                                        Key::Character("d") => input_tx.send((JoypadButton::RIGHT, true)).unwrap(),
-                                        Key::Character("z") => input_tx.send((JoypadButton::A, true)).unwrap(),
-                                        Key::Character("x") => input_tx.send((JoypadButton::B, true)).unwrap(),
-                                        Key::Character("c") => input_tx.send((JoypadButton::SELECT, true)).unwrap(),
-                                        Key::Character("v") => input_tx.send((JoypadButton::START, true)).unwrap(),
-                                        _ => (),
-                                    }
+                                    send_input(
+                                        event.key_without_modifiers(),
+                                        true,
+                                        config.input,
+                                        input_tx.clone(),
+                                    );
                                 } else if event.state == ElementState::Released {
-                                    match event.key_without_modifiers().as_ref() {
-                                        Key::Character("w") => input_tx.send((JoypadButton::UP, false)).unwrap(),
-                                        Key::Character("a") => input_tx.send((JoypadButton::LEFT, false)).unwrap(),
-                                        Key::Character("s") => input_tx.send((JoypadButton::DOWN, false)).unwrap(),
-                                        Key::Character("d") => input_tx.send((JoypadButton::RIGHT, false)).unwrap(),
-                                        Key::Character("z") => input_tx.send((JoypadButton::A, false)).unwrap(),
-                                        Key::Character("x") => input_tx.send((JoypadButton::B, false)).unwrap(),
-                                        Key::Character("c") => input_tx.send((JoypadButton::SELECT, false)).unwrap(),
-                                        Key::Character("v") => input_tx.send((JoypadButton::START, false)).unwrap(),
-                                        _ => (),
-                                    }
+                                    send_input(
+                                        event.key_without_modifiers(),
+                                        false,
+                                        config.input,
+                                        input_tx.clone(),
+                                    );
                                 }
                             }
                         }
                         _ => (),
                     }
-                },
-                _ => ()
+                }
+                _ => (),
             }
         })
+    }
+}
+
+pub fn send_input(
+    key: Key,
+    pressed: bool,
+    input: Input,
+    input_tx: UnboundedSender<(JoypadButton, bool)>,
+) {
+    match key {
+        key if key == input.up => input_tx.send((JoypadButton::UP, pressed)).unwrap(),
+        key if key == input.left => input_tx.send((JoypadButton::LEFT, pressed)).unwrap(),
+        key if key == input.down => input_tx.send((JoypadButton::DOWN, pressed)).unwrap(),
+        key if key == input.right => input_tx.send((JoypadButton::RIGHT, pressed)).unwrap(),
+        key if key == input.a => input_tx.send((JoypadButton::A, pressed)).unwrap(),
+        key if key == input.b => input_tx.send((JoypadButton::B, pressed)).unwrap(),
+        key if key == input.select => input_tx.send((JoypadButton::SELECT, pressed)).unwrap(),
+        key if key == input.start => input_tx.send((JoypadButton::START, pressed)).unwrap(),
+        _ => (),
     }
 }

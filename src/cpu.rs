@@ -1,4 +1,7 @@
-use crate::mbc::mode::MBCMode;
+use std::fs::File;
+use std::io::Read;
+use std::process;
+use crate::config::Config;
 use crate::mmu::MMU;
 use crate::mode::GBMode;
 use crate::registers::{Registers, Flags};
@@ -14,10 +17,31 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode, mbc_mode: MBCMode, print_serial: bool, rom: Vec<u8>, booting: bool) -> Self {
+    pub fn new(mode: GBMode, mut rom: Vec<u8>, config: Config) -> Self {
+        let booting: bool = match config.boot_rom {
+            Some(ref path) => {
+                let mut boot_rom = Vec::new();
+                let mut boot = match File::open(path.clone()) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        eprintln!("Failed to open Boot ROM at \"{}\": {}", path.clone(), err);
+                        process::exit(1);
+                    }
+                };
+                boot.read_to_end(&mut boot_rom)
+                    .expect("Failed to read Boot ROM!");
+
+                // Display Nintendo Logo
+                rom[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+
+                true
+            }
+            None => false,
+        };
+
         Self {
             reg: Registers::new(mode, booting),
-            mem: MMU::new(mode, mbc_mode, print_serial, rom),
+            mem: MMU::new(mode, rom, config),
             halted: false,
             ime: false,
             ime_ask: false

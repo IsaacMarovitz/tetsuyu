@@ -1,7 +1,9 @@
 use bitflags::bitflags;
+use num_traits::FromPrimitive;
+use crate::config::Config;
 use crate::sound::apu::APU;
 use crate::joypad::Joypad;
-use crate::mbc::mode::{MBC, MBCMode};
+use crate::mbc::mode::{CartTypes, MBC, MBCMode};
 use crate::mbc::rom_only::ROMOnly;
 use crate::mbc::mbc1::MBC1;
 use crate::mbc::mbc2::MBC2;
@@ -39,7 +41,17 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(mode: GBMode,  mbc_mode: MBCMode, print_serial: bool, rom: Vec<u8>) -> Self {
+    pub fn new(mode: GBMode, rom: Vec<u8>, config: Config) -> Self {
+        let cart_type: CartTypes =
+            FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
+        let mbc_mode = match cart_type.get_mbc() {
+            MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
+            v => {
+                println!("Cart Type: {:}, MBC Type: {:}", cart_type, v);
+                v
+            }
+        };
+
         let mbc: Box<dyn MBC> = match mbc_mode {
             MBCMode::RomOnly => Box::new(ROMOnly::new(rom)),
             MBCMode::MBC1 => Box::new(MBC1::new(rom)),
@@ -52,8 +64,8 @@ impl MMU {
         Self {
             mbc: mbc,
             apu: APU::new(),
-            ppu: PPU::new(mode),
-            serial: Serial::new(print_serial),
+            ppu: PPU::new(mode, config.palette),
+            serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
             timer: Timer::new(),
             wram: [0; 0x8000],
