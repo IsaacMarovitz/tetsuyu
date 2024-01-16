@@ -1,8 +1,6 @@
 use bitflags::bitflags;
 use crate::config::{Color, Palette};
-use crate::memory::Memory;
-use crate::mmu::Interrupts;
-use crate::mode::GBMode;
+use crate::components::prelude::*;
 
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;

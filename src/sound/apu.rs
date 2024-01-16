@@ -1,10 +1,6 @@
 use bitflags::bitflags;
-use crate::memory::Memory;
-use crate::sound::ch1::CH1;
-use crate::sound::ch2::CH2;
-use crate::sound::ch3::{OutputLevel, CH3};
-use crate::sound::ch4::CH4;
-use crate::sound::synth::Synth;
+use crate::components::memory::Memory;
+use crate::sound::prelude::*;
 
 pub struct APU {
     audio_enabled: bool,

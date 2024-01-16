@@ -1,5 +1,4 @@
-use crate::memory::Memory;
-use crate::mmu::Interrupts;
+use crate::components::prelude::*;
 
 pub struct Timer {
     pub div: u8,

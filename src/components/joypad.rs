@@ -1,6 +1,5 @@
 use bitflags::bitflags;
-use crate::memory::Memory;
-use crate::mmu::Interrupts;
+use crate::components::prelude::*;
 
 bitflags! {
     #[derive(Copy, Clone)]

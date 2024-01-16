@@ -2,18 +2,8 @@ use bitflags::bitflags;
 use num_traits::FromPrimitive;
 use crate::config::Config;
 use crate::sound::apu::APU;
-use crate::joypad::Joypad;
-use crate::mbc::mode::{CartTypes, MBC, MBCMode};
-use crate::mbc::rom_only::ROMOnly;
-use crate::mbc::mbc1::MBC1;
-use crate::mbc::mbc2::MBC2;
-use crate::mbc::mbc3::MBC3;
-use crate::mbc::mbc5::MBC5;
-use crate::memory::Memory;
-use crate::ppu::PPU;
-use crate::timer::Timer;
-use crate::mode::GBMode;
-use crate::serial::Serial;
+use crate::mbc::prelude::*;
+use crate::components::prelude::*;
 
 pub struct MMU {
     mbc: Box<dyn MBC+'static>,

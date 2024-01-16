@@ -1,5 +1,5 @@
 use crate::mbc::mode::MBC;
-use crate::memory::Memory;
+use crate::components::memory::Memory;
 
 pub struct MBC1 {
     rom: Vec<u8>,

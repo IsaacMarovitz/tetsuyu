@@ -1,5 +1,5 @@
+use crate::components::mode::GBMode;
 use bitflags::bitflags;
-use crate::mode::GBMode;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -83,34 +83,30 @@ impl Registers {
 
     pub fn new(mode: GBMode, booting: bool) -> Registers {
         match mode {
-            GBMode::Classic => {
-                Registers {
-                    a: 0x01,
-                    f: (Flags::C | Flags::H | Flags::Z).bits(),
-                    b: 0x00,
-                    c: 0x13,
-                    d: 0x00,
-                    e: 0xD8,
-                    h: 0x01,
-                    l: 0x4D,
-                    pc: if booting { 0x0000 } else { 0x0100 },
-                    sp: 0xFFFE
-                }
+            GBMode::Classic => Registers {
+                a: 0x01,
+                f: (Flags::C | Flags::H | Flags::Z).bits(),
+                b: 0x00,
+                c: 0x13,
+                d: 0x00,
+                e: 0xD8,
+                h: 0x01,
+                l: 0x4D,
+                pc: if booting { 0x0000 } else { 0x0100 },
+                sp: 0xFFFE,
             },
-            GBMode::Color => {
-                Registers {
-                    a: 0x11,
-                    f: (Flags::Z).bits(),
-                    b: 0x00,
-                    c: 0x00,
-                    d: 0xFF,
-                    e: 0x56,
-                    h: 0x00,
-                    l: 0x0D,
-                    pc: if booting { 0x0000 } else { 0x0100 },
-                    sp: 0xFFFE
-                }
-            }
+            GBMode::Color => Registers {
+                a: 0x11,
+                f: (Flags::Z).bits(),
+                b: 0x00,
+                c: 0x00,
+                d: 0xFF,
+                e: 0x56,
+                h: 0x00,
+                l: 0x0D,
+                pc: if booting { 0x0000 } else { 0x0100 },
+                sp: 0xFFFE,
+            },
         }
     }
 }

@@ -3,9 +3,9 @@ extern crate num_derive;
 
 use crate::config::{Config, Input};
 use crate::context::Context;
-use crate::cpu::CPU;
-use crate::joypad::JoypadButton;
-use crate::mode::GBMode;
+use crate::components::cpu::CPU;
+use crate::components::joypad::JoypadButton;
+use crate::components::mode::GBMode;
 use clap::Parser;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -23,17 +23,10 @@ use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod config;
 mod context;
-mod cpu;
-mod joypad;
-mod mbc;
-mod memory;
-mod mmu;
-mod mode;
-mod ppu;
-mod registers;
-mod serial;
+
 mod sound;
-mod timer;
+mod components;
+mod mbc;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;

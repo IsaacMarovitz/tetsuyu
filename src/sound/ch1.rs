@@ -1,5 +1,5 @@
-use crate::memory::Memory;
-use crate::sound::apu::{DutyCycle};
+use crate::components::memory::Memory;
+use crate::sound::apu::DutyCycle;
 
 pub struct CH1 {
     pub dac_enabled: bool,

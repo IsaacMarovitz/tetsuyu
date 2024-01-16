@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fmt::{Formatter};
-use crate::memory::Memory;
+use crate::components::memory::Memory;
 
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum CartTypes {

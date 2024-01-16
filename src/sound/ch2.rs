@@ -1,4 +1,4 @@
-use crate::memory::Memory;
+use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
 
 pub struct CH2 {

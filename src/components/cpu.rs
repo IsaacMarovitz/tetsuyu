@@ -2,10 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::process;
 use crate::config::Config;
-use crate::mmu::MMU;
-use crate::mode::GBMode;
-use crate::registers::{Registers, Flags};
-use crate::memory::Memory;
+use crate::components::prelude::*;
 
 pub struct CPU {
     reg: Registers,

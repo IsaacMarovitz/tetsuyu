@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use crate::memory::Memory;
+use crate::components::memory::Memory;
 
 pub struct CH3 {
     pub dac_enabled: bool,

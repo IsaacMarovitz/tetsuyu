@@ -1,4 +1,4 @@
-use crate::memory::Memory;
+use crate::components::memory::Memory;
 
 pub struct CH4 {
     pub dac_enabled: bool,

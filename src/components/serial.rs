@@ -1,6 +1,5 @@
 use std::io::Write;
-use crate::memory::Memory;
-use crate::mmu::Interrupts;
+use crate::components::prelude::*;
 
 // TODO: Handle serial properly
 pub struct Serial {
