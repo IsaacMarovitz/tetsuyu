@@ -8,7 +8,7 @@ pub struct Timer {
     enabled: bool,
     step: u32,
     internal_count: u32,
-    internal_divider: u32
+    internal_divider: u32,
 }
 
 impl Timer {
@@ -21,7 +21,7 @@ impl Timer {
             enabled: false,
             step: 256,
             internal_count: 0,
-            internal_divider: 0
+            internal_divider: 0,
         }
     }
 
@@ -61,11 +61,11 @@ impl Memory for Timer {
                     16 => 1,
                     64 => 2,
                     256 => 3,
-                    _ => panic!("Unknown timer step ({})!", self.step)
+                    _ => panic!("Unknown timer step ({})!", self.step),
                 };
 
                 v
-            },
+            }
             _ => panic!("Read to unsupported timer address ({:#06x})!", a),
         }
     }
@@ -82,9 +82,9 @@ impl Memory for Timer {
                     1 => 16,
                     2 => 64,
                     3 => 256,
-                    _ => panic!("Unknown timer step ({})!", v)
+                    _ => panic!("Unknown timer step ({})!", v),
                 }
-            },
+            }
             _ => panic!("Write to unsupported timer address ({:#06x})!", a),
         }
     }

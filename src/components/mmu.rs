@@ -1,12 +1,12 @@
+use crate::components::prelude::*;
+use crate::config::Config;
+use crate::mbc::prelude::*;
+use crate::sound::apu::APU;
 use bitflags::bitflags;
 use num_traits::FromPrimitive;
-use crate::config::Config;
-use crate::sound::apu::APU;
-use crate::mbc::prelude::*;
-use crate::components::prelude::*;
 
 pub struct MMU {
-    mbc: Box<dyn MBC+'static>,
+    mbc: Box<dyn MBC + 'static>,
     pub ppu: PPU,
     apu: APU,
     serial: Serial,
@@ -48,7 +48,7 @@ impl MMU {
             MBCMode::MBC2 => Box::new(MBC2::new(rom)),
             MBCMode::MBC3 => Box::new(MBC3::new(rom)),
             MBCMode::MBC5 => Box::new(MBC5::new(rom)),
-            v => panic!("Unsupported MBC type! {:}", v)
+            v => panic!("Unsupported MBC type! {:}", v),
         };
 
         Self {
@@ -62,7 +62,7 @@ impl MMU {
             hram: [0; 0x7f],
             intf: Interrupts::empty(),
             inte: Interrupts::empty(),
-            wram_bank: 0x01
+            wram_bank: 0x01,
         }
     }
 
@@ -88,7 +88,7 @@ impl MMU {
 
     fn oamdma(&mut self, value: u8) {
         let base = (value as u16) << 8;
-        for i in 0 .. 0xA0 {
+        for i in 0..0xA0 {
             let b = self.read_word(base + i);
             self.write_word(0xFE00 + i, b);
         }
@@ -140,10 +140,15 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.write(a, v),
             0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
-            0xFF50..=0xFF5F => {},
-            0xFF70 => self.wram_bank = match v & 0x07 { 0 => 1, n => n as usize },
-            0xFEA0..=0xFEFF => {},
-            0xFF7F => {},
+            0xFF50..=0xFF5F => {}
+            0xFF70 => {
+                self.wram_bank = match v & 0x07 {
+                    0 => 1,
+                    n => n as usize,
+                }
+            }
+            0xFEA0..=0xFEFF => {}
+            0xFF7F => {}
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }

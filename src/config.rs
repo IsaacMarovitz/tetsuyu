@@ -23,7 +23,7 @@ impl Default for Config {
                 ch1_enabled: true,
                 ch2_enabled: true,
                 ch3_enabled: true,
-                ch4_enabled: true
+                ch4_enabled: true,
             },
             input: Input {
                 up: Key::Character("w".parse().unwrap()),
@@ -36,11 +36,23 @@ impl Default for Config {
                 start: Key::Character("v".parse().unwrap()),
             },
             palette: Palette {
-                dark: Color { r: 175, g: 203, b: 70 },
-                dark_gray: Color { r: 121, g: 170, b: 109 },
-                light_gray: Color { r: 34, g: 111, b: 95 },
-                light: Color { r: 8, g: 41, b: 85 }
-            }
+                dark: Color {
+                    r: 175,
+                    g: 203,
+                    b: 70,
+                },
+                dark_gray: Color {
+                    r: 121,
+                    g: 170,
+                    b: 109,
+                },
+                light_gray: Color {
+                    r: 34,
+                    g: 111,
+                    b: 95,
+                },
+                light: Color { r: 8, g: 41, b: 85 },
+            },
         }
     }
 }
@@ -50,14 +62,14 @@ pub struct Palette {
     pub dark: Color,
     pub dark_gray: Color,
     pub light_gray: Color,
-    pub light: Color
+    pub light: Color,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
-    pub b: u8
+    pub b: u8,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -65,7 +77,7 @@ pub struct Audio {
     pub ch1_enabled: bool,
     pub ch2_enabled: bool,
     pub ch3_enabled: bool,
-    pub ch4_enabled: bool
+    pub ch4_enabled: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -77,5 +89,5 @@ pub struct Input {
     pub a: Key,
     pub b: Key,
     pub select: Key,
-    pub start: Key
+    pub start: Key,
 }

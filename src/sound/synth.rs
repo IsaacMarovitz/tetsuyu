@@ -1,8 +1,8 @@
-use std::time::Duration;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, StreamConfig, FromSample, SizedSample};
-use fundsp::hacker::*;
 use assert_no_alloc::*;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Device, FromSample, SizedSample, StreamConfig};
+use fundsp::hacker::*;
+use std::time::Duration;
 
 pub struct Synth {
     pub ch1_freq: Shared<f64>,
@@ -28,7 +28,7 @@ pub struct Synth {
     pub ch4_r: Shared<f64>,
 
     pub global_l: Shared<f64>,
-    pub global_r: Shared<f64>
+    pub global_r: Shared<f64>,
 }
 
 impl Synth {
@@ -66,78 +66,78 @@ impl Synth {
         let config = device.default_output_config().unwrap();
 
         match config.sample_format() {
-            cpal::SampleFormat::F32 => {
-                Synth::run_audio::<f32>(ch1_freq.clone(),
-                                        ch1_vol.clone(),
-                                        ch1_duty.clone(),
-                                        ch1_l.clone(),
-                                        ch1_r.clone(),
-                                        ch2_freq.clone(),
-                                        ch2_vol.clone(),
-                                        ch2_duty.clone(),
-                                        ch2_l.clone(),
-                                        ch2_r.clone(),
-                                        ch3_freq.clone(),
-                                        ch3_vol.clone(),
-                                        ch3_l.clone(),
-                                        ch3_r.clone(),
-                                        ch4_freq.clone(),
-                                        ch4_vol.clone(),
-                                        ch4_l.clone(),
-                                        ch4_r.clone(),
-                                        global_l.clone(),
-                                        global_r.clone(),
-                                        device,
-                                        config.into())
-            },
-            cpal::SampleFormat::I16 => {
-                Synth::run_audio::<i16>(ch1_freq.clone(),
-                                        ch1_vol.clone(),
-                                        ch1_duty.clone(),
-                                        ch1_l.clone(),
-                                        ch1_r.clone(),
-                                        ch2_freq.clone(),
-                                        ch2_vol.clone(),
-                                        ch2_duty.clone(),
-                                        ch2_l.clone(),
-                                        ch2_r.clone(),
-                                        ch3_freq.clone(),
-                                        ch3_vol.clone(),
-                                        ch3_l.clone(),
-                                        ch3_r.clone(),
-                                        ch4_freq.clone(),
-                                        ch4_vol.clone(),
-                                        ch4_l.clone(),
-                                        ch4_r.clone(),
-                                        global_l.clone(),
-                                        global_r.clone(),
-                                        device,
-                                        config.into())
-            },
-            cpal::SampleFormat::U16 => {
-                Synth::run_audio::<u16>(ch1_freq.clone(),
-                                        ch1_vol.clone(),
-                                        ch1_duty.clone(),
-                                        ch1_l.clone(),
-                                        ch1_r.clone(),
-                                        ch2_freq.clone(),
-                                        ch2_vol.clone(),
-                                        ch2_duty.clone(),
-                                        ch2_l.clone(),
-                                        ch2_r.clone(),
-                                        ch3_freq.clone(),
-                                        ch3_vol.clone(),
-                                        ch3_l.clone(),
-                                        ch3_r.clone(),
-                                        ch4_freq.clone(),
-                                        ch4_vol.clone(),
-                                        ch4_l.clone(),
-                                        ch4_r.clone(),
-                                        global_l.clone(),
-                                        global_r.clone(),
-                                        device,
-                                        config.into())
-            },
+            cpal::SampleFormat::F32 => Synth::run_audio::<f32>(
+                ch1_freq.clone(),
+                ch1_vol.clone(),
+                ch1_duty.clone(),
+                ch1_l.clone(),
+                ch1_r.clone(),
+                ch2_freq.clone(),
+                ch2_vol.clone(),
+                ch2_duty.clone(),
+                ch2_l.clone(),
+                ch2_r.clone(),
+                ch3_freq.clone(),
+                ch3_vol.clone(),
+                ch3_l.clone(),
+                ch3_r.clone(),
+                ch4_freq.clone(),
+                ch4_vol.clone(),
+                ch4_l.clone(),
+                ch4_r.clone(),
+                global_l.clone(),
+                global_r.clone(),
+                device,
+                config.into(),
+            ),
+            cpal::SampleFormat::I16 => Synth::run_audio::<i16>(
+                ch1_freq.clone(),
+                ch1_vol.clone(),
+                ch1_duty.clone(),
+                ch1_l.clone(),
+                ch1_r.clone(),
+                ch2_freq.clone(),
+                ch2_vol.clone(),
+                ch2_duty.clone(),
+                ch2_l.clone(),
+                ch2_r.clone(),
+                ch3_freq.clone(),
+                ch3_vol.clone(),
+                ch3_l.clone(),
+                ch3_r.clone(),
+                ch4_freq.clone(),
+                ch4_vol.clone(),
+                ch4_l.clone(),
+                ch4_r.clone(),
+                global_l.clone(),
+                global_r.clone(),
+                device,
+                config.into(),
+            ),
+            cpal::SampleFormat::U16 => Synth::run_audio::<u16>(
+                ch1_freq.clone(),
+                ch1_vol.clone(),
+                ch1_duty.clone(),
+                ch1_l.clone(),
+                ch1_r.clone(),
+                ch2_freq.clone(),
+                ch2_vol.clone(),
+                ch2_duty.clone(),
+                ch2_l.clone(),
+                ch2_r.clone(),
+                ch3_freq.clone(),
+                ch3_vol.clone(),
+                ch3_l.clone(),
+                ch3_r.clone(),
+                ch4_freq.clone(),
+                ch4_vol.clone(),
+                ch4_l.clone(),
+                ch4_r.clone(),
+                global_l.clone(),
+                global_r.clone(),
+                device,
+                config.into(),
+            ),
             _ => panic!("Unsupported format"),
         }
 
@@ -191,16 +191,22 @@ impl Synth {
         global_l: Shared<f64>,
         global_r: Shared<f64>,
         device: Device,
-        config: StreamConfig
-    ) where T: SizedSample + FromSample<f64>, {
-
-
+        config: StreamConfig,
+    ) where
+        T: SizedSample + FromSample<f64>,
+    {
         tokio::spawn(async move {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
-            let ch1_mono = (lfo(move |_| (var(&ch1_freq).0.value(), var(&ch1_duty).0.value())) >> pulse()) * var(&ch1_vol) * constant(0.25);
-            let ch2_mono = (lfo(move |_| (var(&ch2_freq).0.value(), var(&ch2_duty).0.value())) >> pulse()) * var(&ch2_vol) * constant(0.25);
+            let ch1_mono = (lfo(move |_| (var(&ch1_freq).0.value(), var(&ch1_duty).0.value()))
+                >> pulse())
+                * var(&ch1_vol)
+                * constant(0.25);
+            let ch2_mono = (lfo(move |_| (var(&ch2_freq).0.value(), var(&ch2_duty).0.value()))
+                >> pulse())
+                * var(&ch2_vol)
+                * constant(0.25);
             let ch3_mono = var(&ch3_freq) >> sine() * var(&ch3_vol) * constant(0.25);
             let ch4_mono = var(&ch4_freq) >> square() * var(&ch4_vol) * constant(0.25);
 
@@ -220,14 +226,16 @@ impl Synth {
 
             let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
-            let stream = device.build_output_stream(
-                &config,
-                move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                    Synth::write_data(data, channels, &mut next_value)
-                },
-                err_fn,
-                None,
-            ).unwrap();
+            let stream = device
+                .build_output_stream(
+                    &config,
+                    move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                        Synth::write_data(data, channels, &mut next_value)
+                    },
+                    err_fn,
+                    None,
+                )
+                .unwrap();
             stream.play().unwrap();
 
             loop {
@@ -236,7 +244,10 @@ impl Synth {
         });
     }
 
-    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f64, f64)) where T: SizedSample + FromSample<f64>, {
+    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f64, f64))
+    where
+        T: SizedSample + FromSample<f64>,
+    {
         for frame in output.chunks_mut(channels) {
             let sample = next_sample();
             let left = T::from_sample(sample.0);

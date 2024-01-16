@@ -1,12 +1,12 @@
-use crate::mbc::mode::MBC;
 use crate::components::memory::Memory;
+use crate::mbc::mode::MBC;
 
 pub struct MBC1 {
     rom: Vec<u8>,
     ram: Vec<u8>,
     ram_enabled: bool,
     bank_mode: BankMode,
-    bank: u8
+    bank: u8,
 }
 
 // TODO: MBC1M Support
@@ -33,10 +33,10 @@ impl Memory for MBC1 {
             0x2000..=0x3FFF => {
                 let n = match v & 0x1F {
                     0x00 => 0x01,
-                    n => n
+                    n => n,
                 };
                 self.bank = (self.bank & 0x60) | n;
-            },
+            }
             0x4000..=0x5FFF => self.bank = self.bank & 0x9F | ((v & 0x03) << 5),
             0x6000..=0x7FFF => match v {
                 0x00 => self.bank_mode = BankMode::ROM,
@@ -46,7 +46,7 @@ impl Memory for MBC1 {
             0xA000..=0xBFFF => {
                 let ram_bank = self.ram_bank();
                 if self.ram_enabled {
-                    self.ram[ a as usize + ram_bank * 0x2000 - 0xA000] = v;
+                    self.ram[a as usize + ram_bank * 0x2000 - 0xA000] = v;
                 }
             }
             _ => panic!("Write to unsupported MBC1 address ({:#06x})!", a),
@@ -54,7 +54,7 @@ impl Memory for MBC1 {
     }
 }
 
-impl MBC for MBC1 { }
+impl MBC for MBC1 {}
 
 impl MBC1 {
     pub fn new(rom: Vec<u8>) -> Self {
@@ -66,7 +66,7 @@ impl MBC1 {
             ram: vec![0x00; 32_768],
             ram_enabled: false,
             bank_mode: BankMode::ROM,
-            bank: 0x01
+            bank: 0x01,
         }
     }
 
@@ -89,5 +89,5 @@ impl MBC1 {
 
 enum BankMode {
     ROM,
-    RAM
+    RAM,
 }

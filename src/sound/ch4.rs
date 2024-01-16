@@ -16,7 +16,7 @@ pub struct CH4 {
     pub lfsr: u16,
     pub final_volume: u8,
     lfsr_cycle_count: u32,
-    length_cycle_count: u32
+    length_cycle_count: u32,
 }
 
 impl CH4 {
@@ -36,7 +36,7 @@ impl CH4 {
             lfsr: 0,
             final_volume: 0,
             lfsr_cycle_count: 0,
-            length_cycle_count: 0
+            length_cycle_count: 0,
         }
     }
 
@@ -120,12 +120,20 @@ impl Memory for CH4 {
             // NR41: Length Timer
             0xFF20 => 0xFF,
             // NR42: Volume & Envelope
-            0xFF21 => (self.volume & 0b0000_1111) << 4 | (self.positive_envelope as u8) << 3 | (self.envelope_pace & 0b0000_0111),
+            0xFF21 => {
+                (self.volume & 0b0000_1111) << 4
+                    | (self.positive_envelope as u8) << 3
+                    | (self.envelope_pace & 0b0000_0111)
+            }
             // NR43: Frequency & Randomness
-            0xFF22 => (self.clock & 0b0000_1111 << 4) | (self.lfsr_width as u8) << 3 | (self.clock_divider & 0b0000_0111),
+            0xFF22 => {
+                (self.clock & 0b0000_1111 << 4)
+                    | (self.lfsr_width as u8) << 3
+                    | (self.clock_divider & 0b0000_0111)
+            }
             // NR44: Control
             0xFF23 => (self.length_enabled as u8) << 6 | 0xBF,
-            _ => 0xFF
+            _ => 0xFF,
         }
     }
 
@@ -142,18 +150,18 @@ impl Memory for CH4 {
                 if self.read(0xFF21) & 0xF8 != 0 {
                     self.dac_enabled = true;
                 }
-            },
+            }
             // NR43: Frequency & Randomness
             0xFF22 => {
                 self.clock = (v & 0b1111_0000) >> 4;
                 self.lfsr_width = ((v & 0b0000_1000) >> 3) != 0;
                 self.clock_divider = v & 0b0000_0111;
-            },
+            }
             // NR44: Control
             0xFF23 => {
                 self.trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
-            },
+            }
             _ => panic!("Write to unsupported SC4 address ({:#06x})!", a),
         }
     }

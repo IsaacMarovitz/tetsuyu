@@ -1,6 +1,6 @@
-use std::fmt;
-use std::fmt::{Formatter};
 use crate::components::memory::Memory;
+use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Clone, Copy, PartialEq, FromPrimitive, Debug)]
 pub enum CartTypes {
@@ -33,7 +33,7 @@ pub enum CartTypes {
     PocketCamera = 0xFC,
     BandaiTAMA5 = 0xFD,
     HuC3 = 0xFE,
-    HuC1RamBat = 0xFF
+    HuC1RamBat = 0xFF,
 }
 
 impl CartTypes {
@@ -114,7 +114,7 @@ pub enum MBCMode {
     MBC2,
     MBC3,
     MBC5,
-    Unsupported
+    Unsupported,
 }
 
 impl fmt::Display for MBCMode {
@@ -130,4 +130,4 @@ impl fmt::Display for MBCMode {
     }
 }
 
-pub trait MBC : Memory + Send { }
+pub trait MBC: Memory + Send {}

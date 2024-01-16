@@ -10,5 +10,7 @@ pub mod timer;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::components::{cpu::*, joypad::*, memory::*, mmu::*, mode::*, ppu::*, registers::*, serial::*, timer::*};
+    pub use crate::components::{
+        cpu::*, joypad::*, memory::*, mmu::*, mode::*, ppu::*, registers::*, serial::*, timer::*,
+    };
 }

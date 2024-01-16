@@ -1,5 +1,5 @@
-use bitflags::bitflags;
 use crate::components::prelude::*;
+use bitflags::bitflags;
 
 bitflags! {
     #[derive(Copy, Clone)]
@@ -19,7 +19,7 @@ pub struct Joypad {
     matrix: u8,
     select: u8,
     previous_select: u8,
-    pub interrupts: Interrupts
+    pub interrupts: Interrupts,
 }
 
 impl Joypad {
@@ -28,7 +28,7 @@ impl Joypad {
             matrix: 0xFF,
             select: 0x0F,
             previous_select: 0x0F,
-            interrupts: Interrupts::empty()
+            interrupts: Interrupts::empty(),
         }
     }
 

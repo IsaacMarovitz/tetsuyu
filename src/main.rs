@@ -1,11 +1,9 @@
 #[macro_use]
 extern crate num_derive;
 
+use crate::components::prelude::*;
 use crate::config::{Config, Input};
 use crate::context::Context;
-use crate::components::cpu::CPU;
-use crate::components::joypad::JoypadButton;
-use crate::components::mode::GBMode;
 use clap::Parser;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -24,9 +22,9 @@ use winit::{event_loop::EventLoop, window::WindowBuilder};
 mod config;
 mod context;
 
-mod sound;
 mod components;
 mod mbc;
+mod sound;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
@@ -110,11 +108,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(
-                GBMode::Classic,
-                buffer,
-                config
-            );
+            let mut cpu = CPU::new(GBMode::Classic, buffer, config);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 

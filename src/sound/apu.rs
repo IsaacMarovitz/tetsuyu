@@ -1,6 +1,6 @@
-use bitflags::bitflags;
 use crate::components::memory::Memory;
 use crate::sound::prelude::*;
+use bitflags::bitflags;
 
 pub struct APU {
     audio_enabled: bool,
@@ -51,7 +51,7 @@ impl APU {
             ch3: CH3::new(),
             ch4: CH4::new(),
             synth,
-            div_one: false
+            div_one: false,
         }
     }
 
@@ -92,7 +92,7 @@ impl APU {
                 DutyCycle::QUARTER => 0.25,
                 DutyCycle::HALF => 0.5,
                 DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0
+                _ => 0.0,
             }
         };
 
@@ -110,7 +110,7 @@ impl APU {
                 DutyCycle::QUARTER => 0.25,
                 DutyCycle::HALF => 0.5,
                 DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0
+                _ => 0.0,
             }
         };
 
@@ -121,7 +121,7 @@ impl APU {
                     OutputLevel::QUARTER => 0.25,
                     OutputLevel::HALF => 0.5,
                     OutputLevel::MAX => 1.0,
-                    _ => 0.0
+                    _ => 0.0,
                 }
             } else {
                 0.0
@@ -184,22 +184,24 @@ impl Memory for APU {
     fn read(&self, a: u16) -> u8 {
         match a {
             // NR52: Audio Master Control
-            0xFF26 => ((self.audio_enabled as u8) << 7) |
-                      ((self.is_ch_4_on as u8) << 3) |
-                      ((self.is_ch_3_on as u8) << 2) |
-                      ((self.is_ch_2_on as u8) << 1) |
-                      ((self.is_ch_1_on as u8) << 0) | 0x70,
+            0xFF26 => {
+                ((self.audio_enabled as u8) << 7)
+                    | ((self.is_ch_4_on as u8) << 3)
+                    | ((self.is_ch_3_on as u8) << 2)
+                    | ((self.is_ch_2_on as u8) << 1)
+                    | ((self.is_ch_1_on as u8) << 0)
+                    | 0x70
+            }
             // NR51: Sound Panning
             0xFF25 => self.panning.bits(),
             // NR50: Master Volume & VIN
-            0xFF24 => (self.left_volume & 0b0000_0111) << 4 |
-                      (self.right_volume & 0b0000_0111),
+            0xFF24 => (self.left_volume & 0b0000_0111) << 4 | (self.right_volume & 0b0000_0111),
             0xFF10..=0xFF14 => self.ch1.read(a),
             0xFF15..=0xFF19 => self.ch2.read(a),
             0xFF1A..=0xFF1E => self.ch3.read(a),
             0xFF30..=0xFF3F => self.ch3.read(a),
             0xFF20..=0xFF24 => self.ch4.read(a),
-            _ => 0xFF
+            _ => 0xFF,
         }
     }
 
@@ -211,43 +213,42 @@ impl Memory for APU {
             0xFF26 => {
                 set_apu_control = true;
                 self.audio_enabled = (v >> 7) == 0x01;
-            },
+            }
             // NR51: Sound Panning
             0xFF25 => {
                 if self.audio_enabled {
                     self.panning = Panning::from_bits_truncate(v)
                 }
-            },
+            }
             // NR50: Master Volume & VIN
             0xFF24 => {
                 if self.audio_enabled {
                     self.left_volume = v >> 4;
                     self.right_volume = v & 0b0000_0111;
                 }
-            },
+            }
             0xFF10..=0xFF14 => {
                 if self.audio_enabled {
                     self.ch1.write(a, v)
                 }
-            },
+            }
             0xFF16..=0xFF19 => {
                 if self.audio_enabled {
                     self.ch2.write(a, v)
                 }
-            },
+            }
             0xFF1A..=0xFF1E => {
                 if self.audio_enabled {
                     self.ch3.write(a, v)
                 }
-            },
+            }
             0xFF30..=0xFF3F => self.ch3.write(a, v),
             0xFF20..=0xFF24 => {
                 if self.audio_enabled {
                     self.ch4.write(a, v)
                 }
-            },
-            _ => ()
-            // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
+            }
+            _ => (), // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
 
         if self.ch1.trigger {

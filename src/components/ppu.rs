@@ -1,6 +1,6 @@
-use bitflags::bitflags;
-use crate::config::{Color, Palette};
 use crate::components::prelude::*;
+use crate::config::{Color, Palette};
+use bitflags::bitflags;
 
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
@@ -27,14 +27,14 @@ pub struct PPU {
     oam: [u8; 0xA0],
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
-    pub frame_buffer: Vec<u8>
+    pub frame_buffer: Vec<u8>,
 }
 
 #[derive(PartialEq, Copy, Clone)]
 enum Priority {
     Color0,
     Priority,
-    Normal
+    Normal,
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -42,7 +42,7 @@ enum PPUMode {
     OAMScan = 2,
     Draw = 3,
     HBlank = 0,
-    VBlank = 1
+    VBlank = 1,
 }
 
 bitflags! {
@@ -118,7 +118,7 @@ impl PPU {
             oam: [0; 0xA0],
             bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
-            frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H]
+            frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H],
         }
     }
 
@@ -143,7 +143,7 @@ impl PPU {
                     // println!("[PPU] Switching to Draw!");
                 }
                 false
-            },
+            }
             PPUMode::Draw => {
                 // TODO: Allow variable length Mode 3
                 if self.cycle_count > 172 {
@@ -162,7 +162,7 @@ impl PPU {
                 } else {
                     false
                 }
-            },
+            }
             PPUMode::HBlank => {
                 if self.cycle_count > 456 {
                     self.ly += 1;
@@ -183,10 +183,10 @@ impl PPU {
                         }
                         false
                         // println!("[PPU] Switching to OAMScan!");
-                    }
+                    };
                 }
                 false
-            },
+            }
             PPUMode::VBlank => {
                 if self.cycle_count > 456 {
                     self.cycle_count -= 456;
@@ -206,7 +206,7 @@ impl PPU {
                 }
                 false
             }
-        }
+        };
     }
 
     fn grey_to_l(palette: Palette, v: u8, i: usize) -> Color {
@@ -214,7 +214,7 @@ impl PPU {
             0x00 => palette.dark,
             0x01 => palette.dark_gray,
             0x02 => palette.light_gray,
-            _ => palette.light
+            _ => palette.light,
         }
     }
 
@@ -433,14 +433,14 @@ impl Memory for PPU {
                 } else {
                     0xFF
                 }
-            },
+            }
             0xFE00..=0xFE9F => {
                 if self.ppu_mode != PPUMode::Draw && self.ppu_mode != PPUMode::OAMScan {
                     self.oam[a as usize - 0xFE00]
                 } else {
                     0xFF
                 }
-            },
+            }
             0xFF40 => self.lcdc.bits(),
             0xFF41 => {
                 let mut lcds = self.lcds;
@@ -448,7 +448,7 @@ impl Memory for PPU {
                     lcds |= LCDS::LYC_EQUALS;
                 }
                 lcds.bits() | self.ppu_mode as u8
-            },
+            }
             0xFF42 => self.sy,
             0xFF43 => self.sx,
             0xFF44 => self.ly,
@@ -471,12 +471,12 @@ impl Memory for PPU {
                 if self.ppu_mode != PPUMode::Draw {
                     self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v
                 }
-            },
+            }
             0xFE00..=0xFE9F => {
                 if self.ppu_mode != PPUMode::Draw && self.ppu_mode != PPUMode::OAMScan {
                     self.oam[a as usize - 0xFE00] = v
                 }
-            },
+            }
             0xFF40 => {
                 self.lcdc = LCDC::from_bits(v).unwrap();
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
@@ -484,11 +484,11 @@ impl Memory for PPU {
                     self.ppu_mode = PPUMode::HBlank;
                     self.frame_buffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
                 }
-            },
+            }
             0xFF41 => {
                 let sanitised = v & 0b1111_1100;
                 self.lcds = LCDS::from_bits(sanitised).unwrap()
-            },
+            }
             0xFF42 => self.sy = v,
             0xFF43 => self.sx = v,
             0xFF44 => print!("Attempted to write to LY!"),
@@ -502,7 +502,7 @@ impl Memory for PPU {
             0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
             // TODO: Handle CBG PAL
-            0xFF60..=0xFF6F => {},
+            0xFF60..=0xFF6F => {}
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }

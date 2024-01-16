@@ -1,5 +1,5 @@
-use bitflags::bitflags;
 use crate::components::memory::Memory;
+use bitflags::bitflags;
 
 pub struct CH3 {
     pub dac_enabled: bool,
@@ -9,7 +9,7 @@ pub struct CH3 {
     pub trigger: bool,
     length_enabled: bool,
     wave_ram: [u8; 16],
-    length_cycle_count: u32
+    length_cycle_count: u32,
 }
 
 bitflags! {
@@ -32,7 +32,7 @@ impl CH3 {
             trigger: false,
             length_enabled: false,
             wave_ram: [0; 16],
-            length_cycle_count: 0
+            length_cycle_count: 0,
         }
     }
 
@@ -82,7 +82,7 @@ impl Memory for CH3 {
                 } else {
                     0xFF
                 }
-            },
+            }
             _ => 0xFF,
         }
     }
@@ -99,19 +99,19 @@ impl Memory for CH3 {
             0xFF1D => {
                 self.period &= !0xFF;
                 self.period |= v as u16;
-            },
+            }
             // NR34: Period High & Control
             0xFF1E => {
                 self.trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;
-            },
+            }
             0xFF30..=0xFF3F => {
                 if !self.dac_enabled {
                     self.wave_ram[a as usize - 0xFF30] = v;
                 }
-            },
+            }
             _ => panic!("Write to unsupported SC3 address ({:#06x})!", a),
         }
     }

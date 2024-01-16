@@ -1,12 +1,12 @@
-use std::io::Write;
 use crate::components::prelude::*;
+use std::io::Write;
 
 // TODO: Handle serial properly
 pub struct Serial {
     pub interrupts: Interrupts,
     sb: u8,
     sc: u8,
-    print: bool
+    print: bool,
 }
 
 impl Serial {
@@ -15,7 +15,7 @@ impl Serial {
             interrupts: Interrupts::empty(),
             sb: 0,
             sc: 0,
-            print
+            print,
         }
     }
 }
@@ -37,7 +37,7 @@ impl Memory for Serial {
                     print!("{}", std::str::from_utf8(&[v]).unwrap());
                     let _ = std::io::stdout().flush();
                 }
-            },
+            }
             0xFF02 => self.sc = v,
             _ => panic!("Write to unsupported Serial address ({:#06x})!", a),
         }

@@ -1,12 +1,12 @@
-use crate::mbc::mode::MBC;
 use crate::components::memory::Memory;
+use crate::mbc::mode::MBC;
 
 pub struct MBC5 {
     rom: Vec<u8>,
     ram: Vec<u8>,
     ram_enabled: bool,
     rom_bank: usize,
-    ram_bank: usize
+    ram_bank: usize,
 }
 
 impl Memory for MBC5 {
@@ -32,7 +32,7 @@ impl Memory for MBC5 {
             0x3000..=0x3FFF => self.rom_bank = (self.rom_bank & 0x0ff) | (((v & 0x01) as usize) << 8),
             0x4000..=0x5FFF => self.ram_bank = (v & 0x0f) as usize,
             // Unknown writes
-            0x6000..=0x7FFF => {},
+            0x6000..=0x7FFF => {}
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     self.ram[a as usize + self.ram_bank * 0x2000 - 0xA000] = v;
@@ -43,7 +43,7 @@ impl Memory for MBC5 {
     }
 }
 
-impl MBC for MBC5 { }
+impl MBC for MBC5 {}
 
 impl MBC5 {
     pub fn new(rom: Vec<u8>) -> Self {
@@ -52,7 +52,7 @@ impl MBC5 {
             ram: vec![0x00; 131_072],
             ram_enabled: false,
             rom_bank: 0,
-            ram_bank: 0
+            ram_bank: 0,
         }
     }
 }

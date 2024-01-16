@@ -1,8 +1,8 @@
-use crate::mbc::mode::MBC;
 use crate::components::memory::Memory;
+use crate::mbc::mode::MBC;
 
 pub struct ROMOnly {
-    rom: Vec<u8>
+    rom: Vec<u8>,
 }
 
 impl Memory for ROMOnly {
@@ -13,15 +13,13 @@ impl Memory for ROMOnly {
         }
     }
 
-    fn write(&mut self, _a: u16, _v: u8) { }
+    fn write(&mut self, _a: u16, _v: u8) {}
 }
 
-impl MBC for ROMOnly { }
+impl MBC for ROMOnly {}
 
 impl ROMOnly {
     pub fn new(rom: Vec<u8>) -> Self {
-        Self {
-            rom
-        }
+        Self { rom }
     }
 }

@@ -1,6 +1,6 @@
-use std::time::SystemTime;
-use crate::mbc::mode::MBC;
 use crate::components::memory::Memory;
+use crate::mbc::mode::MBC;
+use std::time::SystemTime;
 
 pub struct MBC3 {
     rom: Vec<u8>,
@@ -8,7 +8,7 @@ pub struct MBC3 {
     rtc: RTC,
     ram_enabled: bool,
     rom_bank: usize,
-    ram_bank: usize
+    ram_bank: usize,
 }
 
 impl Memory for MBC3 {
@@ -40,13 +40,13 @@ impl Memory for MBC3 {
                     n => n,
                 };
                 self.rom_bank = n as usize;
-            },
+            }
             0x4000..=0x5FFF => self.ram_bank = (v & 0x0F) as usize,
             0x6000..=0x7FFF => {
                 if v & 0x01 != 0 {
                     self.rtc.tick();
                 }
-            },
+            }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     if self.ram_bank <= 0x03 {
@@ -55,13 +55,13 @@ impl Memory for MBC3 {
                         self.rtc.write(self.ram_bank as u16, v);
                     }
                 }
-            },
+            }
             _ => panic!("Write to unsupported MBC3 address ({:#06x})!", a),
         }
     }
 }
 
-impl MBC for MBC3 { }
+impl MBC for MBC3 {}
 
 impl MBC3 {
     pub fn new(rom: Vec<u8>) -> Self {
@@ -71,7 +71,7 @@ impl MBC3 {
             rtc: RTC::new(),
             ram_enabled: false,
             rom_bank: 1,
-            ram_bank: 0
+            ram_bank: 0,
         }
     }
 }
@@ -81,7 +81,7 @@ struct RTC {
     m: u8,
     h: u8,
     dl: u8,
-    dh: u8
+    dh: u8,
 }
 
 impl RTC {
@@ -91,7 +91,7 @@ impl RTC {
             m: 0,
             h: 0,
             dl: 0,
-            dh: 0
+            dh: 0,
         }
     }
 
