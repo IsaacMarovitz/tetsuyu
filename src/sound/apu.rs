@@ -15,8 +15,8 @@ pub struct APU {
     ch2: CH2,
     ch3: CH3,
     ch4: CH4,
-    synth: Synth,
     div_one: bool,
+    freq: f64
 }
 
 bitflags! {
@@ -35,8 +35,6 @@ bitflags! {
 
 impl APU {
     pub fn new() -> Self {
-        let synth = Synth::new();
-
         Self {
             audio_enabled: true,
             is_ch_4_on: false,
@@ -50,8 +48,8 @@ impl APU {
             ch2: CH2::new(),
             ch3: CH3::new(),
             ch4: CH4::new(),
-            synth,
             div_one: false,
+            freq: 256.0
         }
     }
 
@@ -71,12 +69,14 @@ impl APU {
             }
         }
 
-        if div_tick {
-            self.ch1.cycle();
-            self.ch2.cycle();
-            self.ch3.cycle();
-            self.ch4.cycle();
+        if !div_tick {
+            return
         }
+
+        self.ch1.cycle();
+        self.ch2.cycle();
+        self.ch3.cycle();
+        self.ch4.cycle();
 
         let ch1_vol = {
             if self.ch1.dac_enabled {
@@ -152,31 +152,6 @@ impl APU {
                 0.0
             }
         };
-
-        self.synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
-        self.synth.ch1_vol.set_value(ch1_vol);
-        self.synth.ch1_duty.set_value(ch1_duty);
-        self.synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
-        self.synth.ch2_vol.set_value(ch2_vol);
-        self.synth.ch2_duty.set_value(ch2_duty);
-        self.synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
-        self.synth.ch3_vol.set_value(ch3_vol);
-        self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.ch4_freq.set_value(self.ch4.frequency as f64);
-        self.synth.ch4_vol.set_value(ch4_vol);
-        self.synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.global_l.set_value(global_l);
-        self.synth.global_r.set_value(global_r);
     }
 }
 

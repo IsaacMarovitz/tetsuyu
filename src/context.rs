@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::components::ppu::{SCREEN_H, SCREEN_W};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -55,7 +56,7 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[2, 1, 0, 2, 3, 1];
 
 pub struct Context {
-    pub surface: wgpu::Surface,
+    pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
@@ -65,19 +66,16 @@ pub struct Context {
     index_buffer: wgpu::Buffer,
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
-    window: Window,
+    window: Arc<Window>,
 }
 
 impl Context {
-    pub async fn new(window: Window) -> Self {
+    pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
 
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -91,10 +89,10 @@ impl Context {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    required_features: wgpu::Features::empty(),
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
-                    limits: if cfg!(target_arch = "wasm32") {
+                    required_limits: if cfg!(target_arch = "wasm32") {
                         wgpu::Limits::downlevel_webgl2_defaults()
                     } else {
                         wgpu::Limits::default()
@@ -122,6 +120,7 @@ impl Context {
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
 

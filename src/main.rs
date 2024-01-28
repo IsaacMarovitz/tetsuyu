@@ -25,6 +25,7 @@ mod context;
 mod components;
 mod mbc;
 mod sound;
+mod blip;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
@@ -100,7 +101,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
-    let context = Arc::new(Mutex::new(Context::new(window).await));
+    let context = Arc::new(Mutex::new(Context::new(Arc::new(window)).await));
     let (input_tx, mut input_rx) = mpsc::unbounded_channel::<(JoypadButton, bool)>();
 
     {

@@ -7,6 +7,7 @@ pub struct CH4 {
     positive_envelope: bool,
     envelope_pace: u8,
     clock: u8,
+    pub bit: u16,
     // False = 15-bit, True = 7-bit
     lfsr_width: bool,
     clock_divider: u8,
@@ -15,7 +16,7 @@ pub struct CH4 {
     pub frequency: u32,
     pub lfsr: u16,
     pub final_volume: u8,
-    lfsr_cycle_count: u32,
+    clock_cycle_count: u32,
     length_cycle_count: u32,
 }
 
@@ -28,6 +29,7 @@ impl CH4 {
             positive_envelope: false,
             envelope_pace: 0,
             clock: 0,
+            bit: 0,
             lfsr_width: false,
             clock_divider: 0,
             trigger: false,
@@ -35,7 +37,7 @@ impl CH4 {
             frequency: 0,
             lfsr: 0,
             final_volume: 0,
-            lfsr_cycle_count: 0,
+            clock_cycle_count: 0,
             length_cycle_count: 0,
         }
     }
@@ -54,7 +56,7 @@ impl CH4 {
         self.frequency = 0;
         self.lfsr = 0;
         self.final_volume = 0;
-        self.lfsr_cycle_count = 0;
+        self.clock_cycle_count = 0;
         self.length_cycle_count = 0;
     }
 
@@ -74,41 +76,36 @@ impl CH4 {
             }
         }
 
-        self.lfsr_cycle_count += 1;
+        self.clock_cycle_count += 1;
         let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
         let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
 
-        if divisor != 0 {
-            // Frequency in Hz
-            self.frequency = 262144 / divisor;
+        if self.clock_cycle_count >= divisor*4 {
+            self.clock_cycle_count = 0;
 
-            if self.lfsr_cycle_count >= (512 / self.frequency) {
-                self.lfsr_cycle_count = 0;
-
-                let bit = {
-                    let bit_0 = (self.lfsr & 0b0000_0000_0000_0001) >> 0;
-                    let bit_1 = (self.lfsr & 0b0000_0000_0000_0010) >> 1;
-                    if bit_0 == bit_1 {
-                        1
-                    } else {
-                        0
-                    }
-                };
-
-                self.lfsr |= bit << 15;
-
-                if self.lfsr_width {
-                    self.lfsr &= 0b1111_1111_1011_1111;
-                    self.lfsr |= bit << 7;
-                }
-
-                self.lfsr >>= 1;
-
-                if self.lfsr & 0b0000_0000_0000_0001 == 0 {
-                    self.final_volume = 0;
+            self.bit = {
+                let bit_0 = (self.lfsr & 0b0000_0000_0000_0001) >> 0;
+                let bit_1 = (self.lfsr & 0b0000_0000_0000_0010) >> 1;
+                if bit_0 == bit_1 {
+                    1
                 } else {
-                    self.final_volume = self.volume;
+                    0
                 }
+            };
+
+            self.lfsr |= self.bit << 15;
+
+            if self.lfsr_width {
+                self.lfsr &= 0b1111_1111_1011_1111;
+                self.lfsr |= self.bit << 7;
+            }
+
+            self.lfsr >>= 1;
+
+            if self.lfsr & 0b0000_0000_0000_0001 == 0 {
+                self.final_volume = 0;
+            } else {
+                self.final_volume = self.volume;
             }
         }
     }
