@@ -1,5 +1,5 @@
-/// A Rust based re-implementation of blip-buff
-/// code.google.com/p/blip-buf
+/// A Rust based re-implementation of blip-buf
+/// https://code.google.com/p/blip-buf
 
 const BLIP_MAX_RATIO: u32 = 1 << 20;
 const BLIP_MAX_FRAME: u32 = 4000;
