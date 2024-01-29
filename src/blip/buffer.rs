@@ -1,3 +1,6 @@
+/// A Rust based re-implementation of blip-buff
+/// code.google.com/p/blip-buf
+
 const BLIP_MAX_RATIO: u32 = 1 << 20;
 const BLIP_MAX_FRAME: u32 = 4000;
 
@@ -174,8 +177,6 @@ impl Blip {
         let interp = fixed >> (phase_shift - DELTA_BITS) & (DELTA_UNIT - 1);
         let delta2 = (delta * interp as i32) >> DELTA_BITS;
         delta -= delta2;
-
-        // assert!(out <= )
 
         out[0] += BL_STEP[phase][0] * delta + BL_STEP[phase + 1][0] * delta2;
         out[1] += BL_STEP[phase][1] * delta + BL_STEP[phase + 1][1] * delta2;
