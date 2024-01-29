@@ -4,18 +4,18 @@ const BLIP_MAX_FRAME: u32 = 4000;
 const TIME_BITS: u32 = 20;
 const TIME_UNIT: u32 = 1 << TIME_BITS;
 const BASE_SHIFT: u32 = 9;
-const END_FRAME_EXTRA: u32 = 2;
-const HALF_WIDTH: u32 = 8;
-const BUF_EXTRA: u32 = HALF_WIDTH * 2 + END_FRAME_EXTRA;
+const END_FRAME_EXTRA: usize = 2;
+const HALF_WIDTH: usize = 8;
+const BUF_EXTRA: usize = HALF_WIDTH * 2 + END_FRAME_EXTRA;
 const PHASE_BITS: u32 = 5;
-const PHASE_COUNT: u32 = 1 << PHASE_BITS;
+const PHASE_COUNT: usize = 1 << PHASE_BITS;
 const DELTA_BITS: u32 = 15;
 const DELTA_UNIT: u32 = 1 << DELTA_BITS;
 const FRAC_BITS: u32 = TIME_BITS;
 const MAX_SAMPLE: i32 = 32767;
 const MIN_SAMPLE: i32 = -32768;
 
-const BL_STEP: [[i16; (PHASE_COUNT + 1) as usize]; HALF_WIDTH as usize] =
+const BL_STEP: [[i32; HALF_WIDTH]; (PHASE_COUNT + 1) as usize] =
 [
 [   43, -115,  350, -488, 1136, -914, 5861,21022],
 [   44, -118,  348, -473, 1076, -799, 5274,21001],
@@ -55,26 +55,31 @@ const BL_STEP: [[i16; (PHASE_COUNT + 1) as usize]; HALF_WIDTH as usize] =
 struct Blip {
     factor: u32,
     offset: u32,
-    avail: u32,
-    size: u32,
-    integrator: u32
+    avail: usize,
+    size: usize,
+    integrator: i32,
+    samples: Vec<i32>
 }
 
 impl Blip {
-    pub fn new(size: u32) -> Self {
+    pub fn new(size: usize) -> Self {
         assert!(size >= 0);
 
         let blip = Self {
-            TIME_UNIT / BLIP_MAX_RATIO,
-            size
+            factor: TIME_UNIT / BLIP_MAX_RATIO,
+            offset: 0,
+            avail: 0,
+            size,
+            integrator: 0,
+            samples: vec![0; size + BUF_EXTRA]
         };
 
         blip
     }
 
-    pub fn blip_set_rate(&mut self, clock_rate: f64, sample_rate: f64) {
+    pub fn set_rate(&mut self, clock_rate: u32, sample_rate: u32) {
         let factor = TIME_UNIT * sample_rate / clock_rate;
-        self.factor = factor as u32;
+        self.factor = factor;
 
         assert!(0 <= factor - self.factor && factor - self.factor < 1);
 
@@ -83,10 +88,10 @@ impl Blip {
         }
     }
 
-    pub fn blip_clocks_needed(&self, samples: u32) -> u32 {
+    pub fn clocks_needed(&self, samples: u32) -> u32 {
         let mut needed: u32;
 
-        assert!(samples >= 0 && self.avail + samples <= self.size);
+        assert!(samples >= 0 && self.avail + samples as usize <= self.size);
 
         needed = samples * TIME_UNIT;
         if needed < self.offset {
@@ -96,67 +101,110 @@ impl Blip {
         return (needed - self.offset + self.factor - 1) / self.factor;
     }
 
-    pub fn blip_end_frame(&mut self, t: u32)
+    pub fn end_frame(&mut self, t: u32)
     {
         let off = t * self.factor + self.offset;
-        self.avail += off >> TIME_BITS;
+        self.avail += off as usize >> TIME_BITS;
         self.offset = off & (TIME_UNIT - 1);
 
         assert!(self.avail <= self.size);
     }
 
-    pub fn blip_clear(&mut self) {
+    pub fn remove_samples(&mut self, count: usize) {
+        let remain = self.avail + BUF_EXTRA - count;
+        self.avail -= count;
+    }
+
+    pub fn read_samples(&mut self, out: &mut [i32], count: usize, stereo: bool) -> usize {
+        assert!(count >= 0);
+
+        let mut count = count;
+
+        if count > self.avail {
+            count = self.avail;
+        }
+
+        if count != 0 {
+            let step = if stereo {
+                2
+            } else {
+                1
+            };
+            let mut sum = self.integrator;
+            let mut n = 0;
+            let mut out_n = 0;
+
+            while n != count {
+                let mut s = sum >> DELTA_BITS;
+
+                sum += self.samples[n];
+                n += 1;
+
+                s = s.clamp(MIN_SAMPLE, MAX_SAMPLE);
+
+                out[out_n] = s;
+                out_n += step;
+
+                // High Pass Filter
+                sum -= s << (DELTA_BITS - BASE_SHIFT);
+            }
+            self.integrator = sum;
+
+            self.remove_samples(count);
+        }
+
+        count
+    }
+
+    pub fn clear(&mut self) {
         self.offset = self.factor / 2;
         self.avail = 0;
         self.integrator = 0;
-        // memset( SAMPLES( m ), 0, (m->size + buf_extra) * sizeof (buf_t) );
+        self.samples = vec![0; (self.size + BUF_EXTRA) as usize];
     }
 
-    pub fn blip_add_delta(&mut self, time: u32, mut delta: u32)
+    pub fn add_delta(&mut self, time: u32, mut delta: i32)
     {
         let fixed = time * self.factor + self.offset;
-        let mut out: [i16];
+        let mut out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
 
         let phase_shift = FRAC_BITS - PHASE_BITS;
-        let phase = fixed >> phase_shift & (PHASE_COUNT - 1);
-        let in_step = BL_STEP[phase];
-        let rev_step = BL_STEP[PHASE_COUNT - phase];
+        let phase: usize = fixed as usize >> phase_shift & (PHASE_COUNT - 1);
 
         let interp = fixed >> (phase_shift - DELTA_BITS) & (DELTA_UNIT - 1);
-        let delta2 = (delta * interp) >> DELTA_BITS;
+        let delta2 = (delta * interp as i32) >> DELTA_BITS;
         delta -= delta2;
 
         // assert!(out <= )
 
-        out[0] += in_step[0] * delta + in_step[HALF_WIDTH + 0] * delta2;
-        out[1] += in_step[1] * delta + in_step[HALF_WIDTH + 1] * delta2;
-        out[2] += in_step[2] * delta + in_step[HALF_WIDTH + 2] * delta2;
-        out[3] += in_step[3] * delta + in_step[HALF_WIDTH + 3] * delta2;
-        out[4] += in_step[4] * delta + in_step[HALF_WIDTH + 4] * delta2;
-        out[5] += in_step[5] * delta + in_step[HALF_WIDTH + 5] * delta2;
-        out[6] += in_step[6] * delta + in_step[HALF_WIDTH + 6] * delta2;
-        out[7] += in_step[7] * delta + in_step[HALF_WIDTH + 7] * delta2;
+        out[0] += BL_STEP[phase][0] * delta + BL_STEP[phase + 1][0] * delta2;
+        out[1] += BL_STEP[phase][1] * delta + BL_STEP[phase + 1][1] * delta2;
+        out[2] += BL_STEP[phase][2] * delta + BL_STEP[phase + 1][2] * delta2;
+        out[3] += BL_STEP[phase][3] * delta + BL_STEP[phase + 1][3] * delta2;
+        out[4] += BL_STEP[phase][4] * delta + BL_STEP[phase + 1][4] * delta2;
+        out[5] += BL_STEP[phase][5] * delta + BL_STEP[phase + 1][5] * delta2;
+        out[6] += BL_STEP[phase][6] * delta + BL_STEP[phase + 1][6] * delta2;
+        out[7] += BL_STEP[phase][7] * delta + BL_STEP[phase + 1][7] * delta2;
 
-        in_step = rev_step;
-        out[0] += in_step[7] * delta + in_step[7 - HALF_WIDTH] * delta2;
-        out[1] += in_step[6] * delta + in_step[6 - HALF_WIDTH] * delta2;
-        out[2] += in_step[5] * delta + in_step[5 - HALF_WIDTH] * delta2;
-        out[3] += in_step[4] * delta + in_step[4 - HALF_WIDTH] * delta2;
-        out[4] += in_step[3] * delta + in_step[3 - HALF_WIDTH] * delta2;
-        out[5] += in_step[2] * delta + in_step[2 - HALF_WIDTH] * delta2;
-        out[6] += in_step[1] * delta + in_step[1 - HALF_WIDTH] * delta2;
-        out[7] += in_step[0] * delta + in_step[0 - HALF_WIDTH] * delta2;
+        out[0] += BL_STEP[PHASE_COUNT - phase][7] * delta + BL_STEP[PHASE_COUNT - phase - 1][7] * delta2;
+        out[1] += BL_STEP[PHASE_COUNT - phase][6] * delta + BL_STEP[PHASE_COUNT - phase - 1][6] * delta2;
+        out[2] += BL_STEP[PHASE_COUNT - phase][5] * delta + BL_STEP[PHASE_COUNT - phase - 1][5] * delta2;
+        out[3] += BL_STEP[PHASE_COUNT - phase][4] * delta + BL_STEP[PHASE_COUNT - phase - 1][4] * delta2;
+        out[4] += BL_STEP[PHASE_COUNT - phase][3] * delta + BL_STEP[PHASE_COUNT - phase - 1][3] * delta2;
+        out[5] += BL_STEP[PHASE_COUNT - phase][2] * delta + BL_STEP[PHASE_COUNT - phase - 1][2] * delta2;
+        out[6] += BL_STEP[PHASE_COUNT - phase][1] * delta + BL_STEP[PHASE_COUNT - phase - 1][1] * delta2;
+        out[7] += BL_STEP[PHASE_COUNT - phase][0] * delta + BL_STEP[PHASE_COUNT - phase - 1][0] * delta2;
     }
 
-    pub fn blip_add_delta_fast(&mut self, time: u32, mut delta: u32)
+    pub fn add_delta_fast(&mut self, time: u32, mut delta: i32)
     {
         let fixed = time * self.factor + self.offset;
-        let mut out: [i16];
+        let mut out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
 
         let interp = fixed >> (FRAC_BITS - DELTA_BITS) & (DELTA_UNIT - 1);
-        let delta2 = delta * interp;
+        let delta2 = delta * interp as i32;
 
-        out[7] += delta * DELTA_UNIT - delta2;
+        out[7] += delta * DELTA_UNIT as i32 - delta2;
         out[8] += delta2;
     }
 }
