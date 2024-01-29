@@ -80,7 +80,14 @@ impl Blip {
         blip
     }
 
-    pub fn set_rate(&mut self, clock_rate: u32, sample_rate: u32) {
+    pub fn clear(&mut self) {
+        self.offset = self.factor / 2;
+        self.avail = 0;
+        self.integrator = 0;
+        self.samples = vec![0; (self.size + BUF_EXTRA) as usize];
+    }
+
+    pub fn set_rates(&mut self, clock_rate: u32, sample_rate: u32) {
         let factor = TIME_UNIT * sample_rate / clock_rate;
         self.factor = factor;
 
@@ -157,13 +164,6 @@ impl Blip {
         }
 
         count
-    }
-
-    pub fn clear(&mut self) {
-        self.offset = self.factor / 2;
-        self.avail = 0;
-        self.integrator = 0;
-        self.samples = vec![0; (self.size + BUF_EXTRA) as usize];
     }
 
     pub fn add_delta(&mut self, time: u32, mut delta: i32)
