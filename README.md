@@ -8,7 +8,11 @@ A GameBoy emulator, written in Rust.
 - Input
 - Cycle-Accurate CPU
 - Cross-Platform
-- Cross-Graphics API (Metal, Vulkan, OpenGL, D3D12, WebGPU)
+- WGPU-based Backend
+- Configurable Settings
+  - Custom Palettes
+  - Custom Shaders
+  - Custom Inputs
 
 ### Partially Complete
 - [ ] Channel 1
@@ -25,11 +29,6 @@ A GameBoy emulator, written in Rust.
   - [ ] Period
 - [ ] Channel 4
   - [ ] LFSR
-        
-### Not Complete
-- CGB Support
-- UI/Config Settings
-- Custom Palettes
 
 <img width="400" alt="cpu_instrs Test" src="https://github.com/IsaacMarovitz/tetsuyu/assets/42140194/a1b62888-0efa-4132-93fe-7ee812f7c73e">
 <img width="400" alt="instr_timing Test" src="https://github.com/IsaacMarovitz/tetsuyu/assets/42140194/56fe26c1-cc4b-498e-9fd0-26a3d109c0ba">
