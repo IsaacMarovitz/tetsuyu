@@ -1,8 +1,26 @@
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use crate::components::ppu::{SCREEN_H, SCREEN_W};
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum Shader {
+    None,
+    MonoLCD,
+    LCD
+}
+
+impl Shader {
+    fn source(&self) -> &str {
+        match *self {
+            Shader::None => include_str!("shaders/none.wgsl"),
+            Shader::MonoLCD => include_str!("shaders/mono_lcd.wgsl"),
+            Shader::LCD => include_str!("shaders/lcd.wgsl")
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,7 +76,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>, shader: Shader) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();
@@ -204,7 +222,7 @@ impl Context {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl((include_str!("shaders/shader.wgsl").to_owned() + shader.source()).into()),
         });
 
         let render_pipeline_layout =

@@ -101,7 +101,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
-    let context = Arc::new(Mutex::new(Context::new(Arc::new(window)).await));
+    let context = Arc::new(Mutex::new(Context::new(Arc::new(window), config.clone().shader).await));
     let (input_tx, mut input_rx) = mpsc::unbounded_channel::<(JoypadButton, bool)>();
 
     {
