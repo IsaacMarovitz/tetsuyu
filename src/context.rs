@@ -4,13 +4,18 @@ use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-// Code here is mostly derived from https://sotrh.github.io/learn-wgpu/beginner/tutorial1-window/
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 3],
     tex_coords: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Globals {
+    pub input_resolution: [f32; 2],
+    pub output_resolution: [f32; 2],
 }
 
 impl Vertex {
@@ -46,6 +51,7 @@ pub struct Context {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    global_buffer: wgpu::Buffer,
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
     window: Arc<Window>
@@ -131,6 +137,14 @@ impl Context {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
+        let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+           label: Some("Globals"),
+           contents: bytemuck::cast_slice(&[Globals{
+               input_resolution: [SCREEN_W as f32, SCREEN_H as f32],
+               output_resolution: [size.width as f32, size.height as f32],
+           }]),
+           usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST
+        });
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -151,6 +165,16 @@ impl Context {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }
                 ],
                 label: Some("Texture Bind Group Layout"),
             });
@@ -166,6 +190,14 @@ impl Context {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &global_buffer,
+                        offset: 0,
+                        size: None,
+                    })
+                }
             ],
             label: Some("Bind Group"),
         });
@@ -243,6 +275,7 @@ impl Context {
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            global_buffer,
             texture,
             bind_group
         }
@@ -265,6 +298,15 @@ impl Context {
             &self.vertex_buffer,
             0,
             bytemuck::cast_slice(&vertices));
+
+        self.queue.write_buffer(
+            &self.global_buffer,
+            0,
+            bytemuck::cast_slice(&[Globals{
+                input_resolution: [SCREEN_W as f32, SCREEN_H as f32],
+                output_resolution: [new_size.width as f32, new_size.height as f32],
+            }])
+        );
 
         self.window.request_redraw();
     }
@@ -372,7 +414,6 @@ impl Context {
             render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
         }
 
-        // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
