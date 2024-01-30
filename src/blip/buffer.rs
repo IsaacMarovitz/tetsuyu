@@ -145,14 +145,14 @@ impl BlipBuf {
                 1
             };
             let mut sum = self.integrator;
-            let mut n = 0;
+            let mut in_n = 0;
             let mut out_n = 0;
 
-            while n != count {
+            while in_n != count {
                 let mut s = sum >> DELTA_BITS;
 
-                sum += self.samples[n];
-                n += 1;
+                sum += self.samples[in_n];
+                in_n += 1;
 
                 s = s.clamp(MIN_SAMPLE, MAX_SAMPLE);
 
