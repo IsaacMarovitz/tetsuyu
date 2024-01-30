@@ -18,7 +18,7 @@ const FRAC_BITS: u32 = TIME_BITS;
 const MAX_SAMPLE: i32 = 32767;
 const MIN_SAMPLE: i32 = -32768;
 
-const BL_STEP: [[i32; HALF_WIDTH]; (PHASE_COUNT + 1) as usize] =
+const BL_STEP: [[i32; HALF_WIDTH]; PHASE_COUNT + 1] =
 [
 [   43, -115,  350, -488, 1136, -914, 5861,21022],
 [   44, -118,  348, -473, 1076, -799, 5274,21001],
@@ -84,7 +84,7 @@ impl Blip {
         self.offset = self.factor / 2;
         self.avail = 0;
         self.integrator = 0;
-        self.samples = vec![0; (self.size + BUF_EXTRA) as usize];
+        self.samples = vec![0; self.size + BUF_EXTRA];
     }
 
     pub fn set_rates(&mut self, clock_rate: u32, sample_rate: u32) {
@@ -123,6 +123,9 @@ impl Blip {
     pub fn remove_samples(&mut self, count: usize) {
         let remain = self.avail + BUF_EXTRA - count;
         self.avail -= count;
+
+        self.samples = self.samples[count..count + remain].to_vec();
+        self.samples.append(&mut vec![0; count]);
     }
 
     pub fn read_samples(&mut self, out: &mut [i32], count: usize, stereo: bool) -> usize {
