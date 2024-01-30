@@ -1,6 +1,31 @@
 use crate::components::memory::Memory;
 use crate::sound::prelude::*;
+use crate::blip::buffer::BlipBuf;
 use bitflags::bitflags;
+use crate::CLOCK_FREQUENCY;
+
+struct Blip {
+    data: BlipBuf,
+    from: u32,
+    ampl: i32
+}
+
+impl Blip {
+    pub fn new(data: BlipBuf) -> Self {
+        Self {
+            data,
+            from: 0,
+            ampl: 0
+        }
+    }
+
+    fn set(&mut self, time: u32, ampl: i32) {
+        self.from = time;
+        let delta = ampl - self.ampl;
+        self.ampl = ampl;
+        self.data.add_delta(time, delta);
+    }
+}
 
 pub struct APU {
     audio_enabled: bool,
@@ -16,7 +41,8 @@ pub struct APU {
     ch3: CH3,
     ch4: CH4,
     div_one: bool,
-    freq: f64
+    freq: f64,
+    blip: Blip
 }
 
 bitflags! {
@@ -34,7 +60,11 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new() -> Self {
+    pub fn new(sample_rate: usize) -> Self {
+        let mut blip_buf = BlipBuf::new(sample_rate);
+        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate as u32);
+        let mut blip = Blip::new(blip_buf);
+
         Self {
             audio_enabled: true,
             is_ch_4_on: false,
@@ -49,7 +79,8 @@ impl APU {
             ch3: CH3::new(),
             ch4: CH4::new(),
             div_one: false,
-            freq: 256.0
+            freq: 256.0,
+            blip
         }
     }
 
@@ -69,14 +100,12 @@ impl APU {
             }
         }
 
-        if !div_tick {
-            return
+        if div_tick {
+            self.ch1.cycle();
+            self.ch2.cycle();
+            self.ch3.cycle();
+            self.ch4.cycle();
         }
-
-        self.ch1.cycle();
-        self.ch2.cycle();
-        self.ch3.cycle();
-        self.ch4.cycle();
 
         let ch1_vol = {
             if self.ch1.dac_enabled {

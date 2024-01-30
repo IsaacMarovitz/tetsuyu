@@ -53,7 +53,8 @@ impl MMU {
 
         Self {
             mbc: mbc,
-            apu: APU::new(),
+            // TODO: Get from FunDSP
+            apu: APU::new(48000),
             ppu: PPU::new(mode, config.palette),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),

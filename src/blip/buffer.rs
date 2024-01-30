@@ -55,7 +55,7 @@ const BL_STEP: [[i32; HALF_WIDTH]; PHASE_COUNT + 1] =
 [    0,   43, -115,  350, -488, 1136, -914, 5861]
 ];
 
-struct Blip {
+pub struct BlipBuf {
     factor: u32,
     offset: u32,
     avail: usize,
@@ -64,7 +64,7 @@ struct Blip {
     samples: Vec<i32>
 }
 
-impl Blip {
+impl BlipBuf {
     pub fn new(size: usize) -> Self {
         assert!(size >= 0);
 
@@ -88,7 +88,8 @@ impl Blip {
     }
 
     pub fn set_rates(&mut self, clock_rate: u32, sample_rate: u32) {
-        let factor = TIME_UNIT * sample_rate / clock_rate;
+        // TODO: Fix this
+        let factor = (TIME_UNIT as f32 * sample_rate as f32 / clock_rate as f32) as u32;
         self.factor = factor;
 
         assert!(0 <= factor - self.factor && factor - self.factor < 1);
@@ -171,7 +172,8 @@ impl Blip {
 
     pub fn add_delta(&mut self, time: u32, mut delta: i32)
     {
-        let fixed = time * self.factor + self.offset;
+        // TODO: Fix this
+        let fixed = (time as f32 * self.factor as f32) as u32 + self.offset;
         let mut out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
 
         let phase_shift = FRAC_BITS - PHASE_BITS;
