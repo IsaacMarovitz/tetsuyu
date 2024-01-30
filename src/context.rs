@@ -9,7 +9,8 @@ use winit::window::Window;
 pub enum Shader {
     None,
     MonoLCD,
-    LCD
+    LCD,
+    CRT
 }
 
 impl Shader {
@@ -17,7 +18,8 @@ impl Shader {
         match *self {
             Shader::None => include_str!("shaders/none.wgsl"),
             Shader::MonoLCD => include_str!("shaders/mono_lcd.wgsl"),
-            Shader::LCD => include_str!("shaders/lcd.wgsl")
+            Shader::LCD => include_str!("shaders/lcd.wgsl"),
+            Shader::CRT => include_str!("shaders/crt.wgsl")
         }
     }
 }
