@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use crate::components::ppu::{SCREEN_H, SCREEN_W};
 use wgpu::util::DeviceExt;
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 // Code here is mostly derived from https://sotrh.github.io/learn-wgpu/beginner/tutorial1-window/
@@ -34,25 +35,6 @@ impl Vertex {
     }
 }
 
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-1.0, -1.0, 0.0],
-        tex_coords: [0.0, 1.0],
-    },
-    Vertex {
-        position: [-1.0, 1.0, 0.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [1.0, -1.0, 0.0],
-        tex_coords: [1.0, 1.0],
-    },
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        tex_coords: [1.0, 0.0],
-    },
-];
-
 const INDICES: &[u16] = &[2, 1, 0, 2, 3, 1];
 
 pub struct Context {
@@ -60,13 +42,13 @@ pub struct Context {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
-    pub size: winit::dpi::PhysicalSize<u32>,
+    pub size: PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
-    window: Arc<Window>,
+    window: Arc<Window>
 }
 
 impl Context {
@@ -238,10 +220,11 @@ impl Context {
             multiview: None,
         });
 
+        let vertices = Self::recalculate_vertex_buffer(size);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -261,7 +244,7 @@ impl Context {
             vertex_buffer,
             index_buffer,
             texture,
-            bind_group,
+            bind_group
         }
     }
 
@@ -269,7 +252,7 @@ impl Context {
         &self.window
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.width = new_size.width;
@@ -277,7 +260,54 @@ impl Context {
             self.surface.configure(&self.device, &self.config);
         }
 
+        let vertices = Self::recalculate_vertex_buffer(new_size);
+        self.queue.write_buffer(
+            &self.vertex_buffer,
+            0,
+            bytemuck::cast_slice(&vertices));
+
         self.window.request_redraw();
+    }
+
+    pub fn recalculate_vertex_buffer(size: PhysicalSize<u32>) -> [Vertex; 4] {
+        let context_aspect = size.width as f32 / size.height as f32;
+        let image_aspect = SCREEN_W as f32 / SCREEN_H as f32;
+
+        let (scale, offset_x, offset_y) = if context_aspect > image_aspect {
+            let scale = size.height as f32 / 144_f32;
+            let image_width = scale * SCREEN_W as f32;
+            let offset_x = (size.width as f32 - image_width) / 2.0;
+            (scale, offset_x, 0_f32)
+        } else {
+            let scale = size.width as f32 / 160_f32;
+            let image_height = scale * SCREEN_H as f32;
+            let offset_y = (size.height as f32 - image_height) / 2.0;
+            (scale, 0_f32, offset_y)
+        };
+
+        let x1 = (offset_x / size.width as f32) * 2.0 - 1.0;
+        let y1 = (offset_y / size.height as f32) * 2.0 - 1.0;
+        let x2 = x1 + 2.0 * (scale * SCREEN_W as f32) / size.width as f32;
+        let y2 = y1 + 2.0 * (scale * SCREEN_H as f32) / size.height as f32;
+
+        [
+            Vertex {
+                position: [x1, y1, 0.0],
+                tex_coords: [0.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2, 0.0],
+                tex_coords: [0.0, 0.0],
+            },
+            Vertex {
+                position: [x2, y1, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y2, 0.0],
+                tex_coords: [1.0, 0.0],
+            },
+        ]
     }
 
     pub fn update(&mut self, rgba: Vec<u8>) {
