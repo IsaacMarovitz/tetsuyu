@@ -306,21 +306,17 @@ impl PPU {
         // Only show window if it's enabled and it intersects current scanline
         let in_window_y = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
 
-        // Pixel Y
-        let py = if in_window_y {
-            self.ly.wrapping_sub(self.wy)
-        } else {
-            self.sy.wrapping_add(self.ly)
-        };
-
         for x in 0..SCREEN_W {
             let in_window_x = x as u8 >= wx;
 
-            // Pixel X
-            let px = if in_window_y && in_window_x {
-                x as u8 - wx
+            let (px, py) = if in_window_y && in_window_x {
+                let px = x as u8 - wx;
+                let py = self.ly.wrapping_sub(self.wy);
+                (px, py)
             } else {
-                self.sx.wrapping_add(x as u8)
+                let px = self.sx.wrapping_add(x as u8);
+                let py = self.sy.wrapping_add(self.ly);
+                (px, py)
             };
 
             // Tile Map Base Address
