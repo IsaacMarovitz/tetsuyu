@@ -3,7 +3,7 @@
 A GameBoy emulator, written in Rust.
 
 ### Features
-- Supports MBC1/MBC2/MBC3/MBC5 DMG Titles
+- Supports MBC1/MBC2/MBC3/MBC5 Titles
 - Sprite & BG Rendering
 - Input
 - Cycle-Accurate CPU
