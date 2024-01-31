@@ -1,6 +1,6 @@
 use crate::components::prelude::*;
 use crate::config::{Color, Config, Palette};
-use bitflags::bitflags;
+use bitflags::{bitflags, Flags};
 
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
@@ -166,11 +166,7 @@ impl PPU {
 
         self.cycle_count += cycles;
 
-        if self.ly == self.lc {
-            if self.lcds.contains(LCDS::LYC_SELECT) {
-                self.interrupts |= Interrupts::LCD;
-            }
-        }
+        self.check_lyc();
 
         return match self.ppu_mode {
             PPUMode::OAMScan => {
@@ -244,6 +240,19 @@ impl PPU {
                 false
             }
         };
+    }
+
+    fn check_lyc(&mut self) {
+        let mut lcds = self.lcds;
+        if self.ly == self.lc {
+            if lcds.contains(LCDS::LYC_SELECT) && !lcds.contains(LCDS::LYC_EQUALS) {
+                self.interrupts |= Interrupts::LCD;
+            }
+
+            lcds |= LCDS::LYC_EQUALS;
+        } else {
+            lcds &= !LCDS::LYC_EQUALS;
+        }
     }
 
     fn grey_to_l(palette: Palette, v: u8, i: usize) -> Color {
@@ -495,13 +504,7 @@ impl Memory for PPU {
                 }
             }
             0xFF40 => self.lcdc.bits(),
-            0xFF41 => {
-                let mut lcds = self.lcds;
-                if self.ly == self.lc {
-                    lcds |= LCDS::LYC_EQUALS;
-                }
-                lcds.bits() | self.ppu_mode as u8
-            }
+            0xFF41 => self.lcds.bits() | self.ppu_mode as u8,
             0xFF42 => self.sy,
             0xFF43 => self.sx,
             0xFF44 => self.ly,
@@ -566,8 +569,9 @@ impl Memory for PPU {
                 }
             }
             0xFF41 => {
-                let sanitised = v & 0b1111_1100;
-                self.lcds = LCDS::from_bits(sanitised).unwrap()
+                let sanitised = v & 0b1111_1000 | (self.lcds.bits() & 0b0000_0100);
+                self.lcds = LCDS::from_bits_truncate(sanitised);
+                self.check_lyc();
             }
             0xFF42 => self.sy = v,
             0xFF43 => self.sx = v,
