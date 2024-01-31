@@ -244,15 +244,14 @@ impl PPU {
     }
 
     fn check_lyc(&mut self) {
-        let mut lcds = self.lcds;
         if self.ly == self.lc {
-            if lcds.contains(LCDS::LYC_SELECT) && !lcds.contains(LCDS::LYC_EQUALS) {
+            if self.lcds.contains(LCDS::LYC_SELECT) && !self.lcds.contains(LCDS::LYC_EQUALS) {
                 self.interrupts |= Interrupts::LCD;
             }
 
-            lcds |= LCDS::LYC_EQUALS;
+            self.lcds |= LCDS::LYC_EQUALS;
         } else {
-            lcds &= !LCDS::LYC_EQUALS;
+            self.lcds &= !LCDS::LYC_EQUALS;
         }
     }
 
