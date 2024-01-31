@@ -55,7 +55,7 @@ bitflags! {
         const PRIORITY     = 0b1000_0000;
         const Y_FLIP       = 0b0100_0000;
         const X_FLIP       = 0b0010_0000;
-        const PALLETE_NO_0 = 0b0001_0000;
+        const PALETTE_NO_0 = 0b0001_0000;
         const BANK         = 0b0000_1000;
     }
 }
