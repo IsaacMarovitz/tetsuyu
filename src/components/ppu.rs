@@ -342,7 +342,7 @@ impl PPU {
             } as u16 * 16;
 
             let tile_data_location = tile_data_base + tile_offset;
-            let tile_attributes = Attributes::from_bits(self.read_ram1(tile_address)).unwrap();
+            let tile_attributes = Attributes::from_bits_retain(self.read_ram1(tile_address));
 
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
             let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
@@ -372,9 +372,10 @@ impl PPU {
             };
 
             if self.mode == GBMode::Color {
-                let r = self.bcpd[0][color][0];
-                let g = self.bcpd[0][color][1];
-                let b = self.bcpd[0][color][2];
+                let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
+                let r = self.bcpd[palette_no_1][color][0];
+                let g = self.bcpd[palette_no_1][color][1];
+                let b = self.bcpd[palette_no_1][color][2];
                 self.set_rgb_mapped(x, r, g, b);
             } else {
                 let color = Self::grey_to_l(self.palette.clone(), self.bgp, color);
@@ -449,12 +450,13 @@ impl PPU {
                 }
 
                 if self.mode == GBMode::Color {
-                    let r = self.ocpd[0][color][0];
-                    let g = self.ocpd[0][color][1];
-                    let b = self.ocpd[0][color][2];
+                    let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
+                    let r = self.ocpd[palette_no_1][color][0];
+                    let g = self.ocpd[palette_no_1][color][1];
+                    let b = self.ocpd[palette_no_1][color][2];
                     self.set_rgb_mapped(px.wrapping_add(x) as usize, r, g, b);
                 } else {
-                    let color = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
+                    let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
                         Self::grey_to_l(self.palette.clone(), self.op1, color)
                     } else {
                         Self::grey_to_l(self.palette.clone(), self.op0, color)
