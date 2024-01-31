@@ -166,12 +166,11 @@ impl PPU {
 
         self.cycle_count += cycles;
 
-        self.check_lyc();
-
         return match self.ppu_mode {
             PPUMode::OAMScan => {
-                if self.cycle_count > 80 {
-                    self.cycle_count -= 80;
+                self.check_lyc();
+
+                if self.cycle_count >= 80 {
                     self.ppu_mode = PPUMode::Draw;
                     // println!("[PPU] Switching to Draw!");
                 }
@@ -179,7 +178,7 @@ impl PPU {
             }
             PPUMode::Draw => {
                 // TODO: Allow variable length Mode 3
-                if self.cycle_count > 172 {
+                if self.cycle_count >= (172 + 80) {
                     self.ppu_mode = PPUMode::HBlank;
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
@@ -197,7 +196,7 @@ impl PPU {
                 }
             }
             PPUMode::HBlank => {
-                if self.cycle_count > 456 {
+                if self.cycle_count >= 456 {
                     self.ly += 1;
                     self.cycle_count -= 456;
 
@@ -211,6 +210,7 @@ impl PPU {
                         // println!("[PPU] Switching to VBlank!");
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
+                        self.check_lyc();
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
@@ -221,7 +221,7 @@ impl PPU {
                 false
             }
             PPUMode::VBlank => {
-                if self.cycle_count > 456 {
+                if self.cycle_count >= 456 {
                     self.cycle_count -= 456;
                     self.vblanked_lines += 1;
 
@@ -229,6 +229,7 @@ impl PPU {
                         self.vblanked_lines = 0;
                         self.ly = 0;
                         self.ppu_mode = PPUMode::OAMScan;
+                        self.check_lyc();
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
@@ -576,7 +577,10 @@ impl Memory for PPU {
             0xFF42 => self.sy = v,
             0xFF43 => self.sx = v,
             0xFF44 => print!("Attempted to write to LY!"),
-            0xFF45 => self.lc = v,
+            0xFF45 => {
+                self.lc = v;
+                self.check_lyc();
+            }
             0xFF47 => self.bgp = v,
             0xFF48 => self.op0 = v,
             0xFF49 => self.op1 = v,
