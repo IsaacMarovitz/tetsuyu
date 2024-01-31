@@ -183,9 +183,9 @@ impl PPU {
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
                     }
-                    if self.mode == GBMode::CGB || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                        self.draw_bg();
-                    }
+
+                    self.draw_bg();
+
                     if self.lcdc.contains(LCDC::OBJ_ENABLE) {
                         self.draw_sprites();
                     }
@@ -199,6 +199,7 @@ impl PPU {
                 if self.cycle_count >= 456 {
                     self.ly += 1;
                     self.cycle_count -= 456;
+                    self.check_lyc();
 
                     return if self.ly > 143 {
                         self.ppu_mode = PPUMode::VBlank;
@@ -210,7 +211,6 @@ impl PPU {
                         // println!("[PPU] Switching to VBlank!");
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
-                        self.check_lyc();
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
@@ -229,7 +229,6 @@ impl PPU {
                         self.vblanked_lines = 0;
                         self.ly = 0;
                         self.ppu_mode = PPUMode::OAMScan;
-                        self.check_lyc();
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
@@ -237,6 +236,8 @@ impl PPU {
                     } else {
                         self.ly += 1;
                     }
+
+                    self.check_lyc();
                 }
                 false
             }
@@ -387,7 +388,12 @@ impl PPU {
                 let b = self.bcpd[palette_no_1][color][2];
                 self.set_rgb_mapped(x, r, g, b);
             } else {
-                let color = Self::grey_to_l(self.palette.clone(), self.bgp, color);
+                let color = if !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                    Self::grey_to_l(self.palette.clone(), self.bgp, 0)
+                } else {
+                    Self::grey_to_l(self.palette.clone(), self.bgp, color)
+                };
+
                 self.set_rgb(x, color.r, color.g, color.b);
             }
         }
