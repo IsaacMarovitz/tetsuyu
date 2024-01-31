@@ -22,6 +22,10 @@ pub struct PPU {
     op1: u8,
     lcdc: LCDC,
     lcds: LCDS,
+    bcps: BGPI,
+    bcpd: [[[u8; 3]; 4]; 8],
+    ocps: BGPI,
+    ocpd: [[[u8; 3]; 4]; 8],
     ram: [u8; 0x4000],
     ram_bank: usize,
     oam: [u8; 0xA0],
@@ -94,6 +98,35 @@ bitflags! {
         // PPU mode (Read-only): Indicates the PPU’s current status.
     }
 }
+
+struct BGPI {
+    i: u8,
+    auto_increment: bool
+}
+
+impl BGPI {
+    fn new() -> Self {
+        Self {
+            i: 0,
+            auto_increment: false
+        }
+    }
+
+    fn read(&self) -> u8 {
+        let a = if self.auto_increment {
+            0x80
+        } else {
+            0x00
+        };
+        a | self.i
+    }
+
+    fn write(&mut self, v: u8) {
+        self.auto_increment = v & 0x80 != 0x00;
+        self.i = v & 0x3F;
+    }
+}
+
 impl PPU {
     pub fn new(mode: GBMode, palette: Palette) -> Self {
         Self {
@@ -113,6 +146,10 @@ impl PPU {
             op1: 0x01,
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
+            bcps: BGPI::new(),
+            bcpd: [[[0; 3]; 4]; 8],
+            ocps: BGPI::new(),
+            ocpd: [[[0; 3]; 4]; 8],
             ram: [0; 0x4000],
             ram_bank: 0,
             oam: [0; 0xA0],
@@ -218,8 +255,19 @@ impl PPU {
         }
     }
 
+    fn set_rgb_mapped(&mut self, x: usize, r: u8, g: u8, b: u8) {
+        let r_init = r as u32;
+        let g_init = g as u32;
+        let b_init = b as u32;
+
+        let r = ((r_init * 13 + g_init * 2 + b_init) >> 1) as u8;
+        let g = ((g_init * 3 + b_init) << 1) as u8;
+        let b = ((r_init * 3 + g_init * 2 + b_init * 11) >> 1) as u8;
+
+        self.set_rgb(x, r, g, b);
+    }
+
     fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
-        // TODO: Color mapping from CGB -> sRGB
         let bytes_per_pixel = 4;
         let bytes_per_row = bytes_per_pixel * SCREEN_W;
         let vertical_offset = self.ly as usize * bytes_per_row;
@@ -324,10 +372,10 @@ impl PPU {
             };
 
             if self.mode == GBMode::Color {
-                let r = 0;
-                let g = 0;
-                let b = 0;
-                self.set_rgb(x, r, g, b);
+                let r = self.bcpd[0][color][0];
+                let g = self.bcpd[0][color][1];
+                let b = self.bcpd[0][color][2];
+                self.set_rgb_mapped(x, r, g, b);
             } else {
                 let color = Self::grey_to_l(self.palette.clone(), self.bgp, color);
                 self.set_rgb(x, color.r, color.g, color.b);
@@ -401,7 +449,10 @@ impl PPU {
                 }
 
                 if self.mode == GBMode::Color {
-
+                    let r = self.ocpd[0][color][0];
+                    let g = self.ocpd[0][color][1];
+                    let b = self.ocpd[0][color][2];
+                    self.set_rgb_mapped(px.wrapping_add(x) as usize, r, g, b);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALLETE_NO_0) {
                         Self::grey_to_l(self.palette.clone(), self.op1, color)
@@ -460,7 +511,34 @@ impl Memory for PPU {
             0xFF4B => self.wx,
             0xFF4D => 0x00,
             0xFF4F => 0xFE | self.ram_bank as u8,
-            0xFF60..=0xFF6F => 0x00,
+            0xFF68 => self.bcps.read(),
+            0xFF69 => {
+                let r = self.bcps.i as usize >> 3;
+                let c = self.bcps.i as usize >> 1 & 0x03;
+                if self.bcps.i & 0x01 == 0x00 {
+                    let a = self.bcpd[r][c][0] >> 0;
+                    let b = self.bcpd[r][c][1] << 5;
+                    a | b
+                } else {
+                    let a = self.bcpd[r][c][1] >> 3;
+                    let b = self.bcpd[r][c][2] << 2;
+                    a | b
+                }
+            }
+            0xFF6A => self.ocps.read(),
+            0xFF6B => {
+                let r = self.ocps.i as usize >> 3;
+                let c = self.ocps.i as usize >> 1 & 0x03;
+                if self.ocps.i & 0x01 == 0x00 {
+                    let a = self.ocpd[r][c][0] >> 0;
+                    let b = self.ocpd[r][c][1] << 5;
+                    a | b
+                } else {
+                    let a = self.ocpd[r][c][1] >> 3;
+                    let b = self.ocpd[r][c][2] << 2;
+                    a | b
+                }
+            }
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
     }
@@ -501,8 +579,40 @@ impl Memory for PPU {
             // TODO: Handle PPU speed switching
             0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
-            // TODO: Handle CBG PAL
-            0xFF60..=0xFF6F => {}
+            0xFF68 => self.bcps.write(v),
+            0xFF69 => {
+                let r = self.bcps.i as usize >> 3;
+                let c = self.bcps.i as usize >> 1 & 0x03;
+                if self.bcps.i & 0x01 == 0x00 {
+                    self.bcpd[r][c][0] = v & 0x1F;
+                    self.bcpd[r][c][1] = (self.bcpd[r][c][1] & 0x18) | (v >> 5);
+                } else {
+                    self.bcpd[r][c][1] = (self.bcpd[r][c][1] & 0x07) | ((v & 0x03) << 3);
+                    self.bcpd[r][c][2] = (v >> 2) & 0x1F;
+                }
+
+                if self.bcps.auto_increment {
+                    self.bcps.i += 1;
+                    self.bcps.i &= 0x3F;
+                }
+            }
+            0xFF6A => self.ocps.write(v),
+            0xFF6B => {
+                let r = self.ocps.i as usize >> 3;
+                let c = self.ocps.i as usize >> 1 & 0x03;
+                if self.ocps.i & 0x01 == 0x00 {
+                    self.ocpd[r][c][0] = v & 0x1F;
+                    self.ocpd[r][c][1] = (self.ocpd[r][c][1] & 0x18) | (v >> 5);
+                } else {
+                    self.ocpd[r][c][1] = (self.ocpd[r][c][1] & 0x07) | ((v & 0x03) << 3);
+                    self.ocpd[r][c][2] = (v >> 2) & 0x1F;
+                }
+
+                if self.ocps.auto_increment {
+                    self.ocps.i += 1;
+                    self.ocps.i &= 0x3F;
+                }
+            }
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }
