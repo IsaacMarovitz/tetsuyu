@@ -81,7 +81,7 @@ async fn main() -> Result<(), impl std::error::Error> {
     let name_data = &buffer[0x0134..=0x0143];
     let index = name_data.iter().position(|&r| r == 0x00).unwrap();
     let game_name = std::str::from_utf8(&name_data[0..index]).expect("Failed to get game name!");
-    println!("Starting \"{game_name}\"...");
+    println!("Starting \"{}\" in {:?} Mode...", game_name, config.mode);
 
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
