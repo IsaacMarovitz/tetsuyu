@@ -83,7 +83,7 @@ impl Registers {
 
     pub fn new(mode: GBMode, booting: bool) -> Registers {
         match mode {
-            GBMode::Classic => Registers {
+            GBMode::DMG => Registers {
                 a: 0x01,
                 f: (Flags::C | Flags::H | Flags::Z).bits(),
                 b: 0x00,
@@ -95,7 +95,7 @@ impl Registers {
                 pc: if booting { 0x0000 } else { 0x0100 },
                 sp: 0xFFFE,
             },
-            GBMode::Color => Registers {
+            GBMode::CGB => Registers {
                 a: 0x11,
                 f: (Flags::Z).bits(),
                 b: 0x00,

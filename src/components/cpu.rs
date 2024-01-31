@@ -14,7 +14,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mode: GBMode, mut rom: Vec<u8>, config: Config) -> Self {
+    pub fn new(mut rom: Vec<u8>, config: Config) -> Self {
         let booting: bool = match config.boot_rom {
             Some(ref path) => {
                 let mut boot_rom = Vec::new();
@@ -37,8 +37,8 @@ impl CPU {
         };
 
         Self {
-            reg: Registers::new(mode, booting),
-            mem: MMU::new(mode, rom, config),
+            reg: Registers::new(config.clone().mode, booting),
+            mem: MMU::new(rom, config),
             halted: false,
             ime: false,
             ime_ask: false

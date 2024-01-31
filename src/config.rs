@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use winit::keyboard::Key;
+use crate::components::mode::GBMode;
 use crate::context::Shader;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
     pub window_w: u32,
     pub window_h: u32,
+    pub mode: GBMode,
     pub print_serial: bool,
     pub boot_rom: Option<String>,
     pub audio: Audio,
@@ -19,6 +21,7 @@ impl Default for Config {
         Config {
             window_w: 160 * 2,
             window_h: 144 * 2,
+            mode: GBMode::DMG,
             print_serial: false,
             boot_rom: None,
             audio: Audio {

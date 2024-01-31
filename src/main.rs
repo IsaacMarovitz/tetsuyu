@@ -109,7 +109,7 @@ async fn main() -> Result<(), impl std::error::Error> {
         let context = Arc::clone(&context);
         // Start CPU
         tokio::spawn(async move {
-            let mut cpu = CPU::new(GBMode::Classic, buffer, config);
+            let mut cpu = CPU::new(buffer, config);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
 

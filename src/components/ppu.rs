@@ -1,5 +1,5 @@
 use crate::components::prelude::*;
-use crate::config::{Color, Palette};
+use crate::config::{Color, Config, Palette};
 use bitflags::bitflags;
 
 pub const SCREEN_W: usize = 160;
@@ -128,10 +128,10 @@ impl BGPI {
 }
 
 impl PPU {
-    pub fn new(mode: GBMode, palette: Palette) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
-            mode,
-            palette,
+            mode: config.mode,
+            palette: config.palette,
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
             vblanked_lines: 0,
@@ -188,7 +188,7 @@ impl PPU {
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
                     }
-                    if self.mode == GBMode::Color || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                    if self.mode == GBMode::CGB || self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
                         self.draw_bg();
                     }
                     if self.lcdc.contains(LCDC::OBJ_ENABLE) {
@@ -347,7 +347,7 @@ impl PPU {
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
             let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
 
-            let tile_y_data = if self.mode == GBMode::Color && tile_attributes.contains(Attributes::BANK) {
+            let tile_y_data = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
                 let a = self.read_ram1(tile_data_location + ((tile_y * 2) as u16));
                 let b = self.read_ram1(tile_data_location + ((tile_y * 2) as u16) + 1);
                 [a, b]
@@ -371,7 +371,7 @@ impl PPU {
                 }
             };
 
-            if self.mode == GBMode::Color {
+            if self.mode == GBMode::CGB {
                 let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
                 let r = self.bcpd[palette_no_1][color][0];
                 let g = self.bcpd[palette_no_1][color][1];
@@ -414,7 +414,7 @@ impl PPU {
                 self.ly.wrapping_sub(py)
             };
             let tile_y_address: u16 = 0x8000_u16 + tile_number as u16 * 16 + tile_y as u16 * 2;
-            let tile_y_data = if self.mode == GBMode::Color && tile_attributes.contains(Attributes::BANK) {
+            let tile_y_data = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
                 let b1 = self.read_ram1(tile_y_address);
                 let b2 = self.read_ram1(tile_y_address + 1);
                 [b1, b2]
@@ -438,7 +438,7 @@ impl PPU {
                 }
 
                 let prio = self.bgprio[px.wrapping_add(x) as usize];
-                let skip = if self.mode == GBMode::Color && !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                let skip = if self.mode == GBMode::CGB && !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
                     prio == Priority::Priority
                 } else if prio == Priority::Priority {
                     prio != Priority::Color0
@@ -449,7 +449,7 @@ impl PPU {
                     continue;
                 }
 
-                if self.mode == GBMode::Color {
+                if self.mode == GBMode::CGB {
                     let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
                     let r = self.ocpd[palette_no_1][color][0];
                     let g = self.ocpd[palette_no_1][color][1];

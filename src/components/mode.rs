@@ -1,5 +1,7 @@
-#[derive(Clone, Copy, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 pub enum GBMode {
-    Classic,
-    Color,
+    DMG,
+    CGB,
 }

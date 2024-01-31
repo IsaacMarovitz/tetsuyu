@@ -31,7 +31,7 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(mode: GBMode, rom: Vec<u8>, config: Config) -> Self {
+    pub fn new(rom: Vec<u8>, config: Config) -> Self {
         let cart_type: CartTypes =
             FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
         let mbc_mode = match cart_type.get_mbc() {
@@ -53,9 +53,9 @@ impl MMU {
 
         Self {
             mbc: mbc,
-            // TODO: Get from FunDSP
+            // TODO: Get from cpal
             apu: APU::new(48000),
-            ppu: PPU::new(mode, config.palette),
+            ppu: PPU::new(config.clone()),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
             timer: Timer::new(),
