@@ -38,5 +38,6 @@ A GameBoy emulator, written in Rust.
 - https://gbdev.io/pandocs/CPU_Instruction_Set.html
 
 ### Referenced Implementations
+- https://github.com/LIJI32/SameBoy
 - https://github.com/mvdnes/rboy
 - https://github.com/mohanson/gameboy
