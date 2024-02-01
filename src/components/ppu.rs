@@ -17,6 +17,7 @@ pub struct PPU {
     lc: u8,
     wy: u8,
     wx: u8,
+    wly: u8,
     bgp: u8,
     op0: u8,
     op1: u8,
@@ -141,6 +142,7 @@ impl PPU {
             lc: 0x00,
             wy: 0x00,
             wx: 0x00,
+            wly: 0x00,
             bgp: 0x00,
             op0: 0x00,
             op1: 0x01,
@@ -197,8 +199,8 @@ impl PPU {
             }
             PPUMode::HBlank => {
                 if self.cycle_count >= 456 {
-                    self.ly += 1;
                     self.cycle_count -= 456;
+                    self.inc_ly();
                     self.check_lyc();
 
                     return if self.ly > 143 {
@@ -227,14 +229,14 @@ impl PPU {
 
                     if self.vblanked_lines >= 10 {
                         self.vblanked_lines = 0;
-                        self.ly = 0;
+                        self.reset_ly();
                         self.ppu_mode = PPUMode::OAMScan;
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
                         // println!("[PPU] Switching to OAMScan!");
                     } else {
-                        self.ly += 1;
+                        self.inc_ly()
                     }
 
                     self.check_lyc();
@@ -254,6 +256,27 @@ impl PPU {
         } else {
             self.lcds &= !LCDS::LYC_EQUALS;
         }
+    }
+
+    fn window_visible(&mut self) -> bool {
+        self.wy <= self.ly && self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wx < 168
+    }
+
+    fn inc_ly(&mut self) {
+        if self.ppu_mode == PPUMode::VBlank {
+            // Always INC in VBlank
+            self.wly += 1;
+        } else if self.window_visible() {
+            // Otherwise, we need to check if the window is visible on this scanline
+            self.wly += 1;
+        }
+
+        self.ly += 1;
+    }
+
+    fn reset_ly(&mut self) {
+        self.ly = 0;
+        self.wly = 0;
     }
 
     fn grey_to_l(palette: Palette, v: u8, i: usize) -> Color {
@@ -304,14 +327,14 @@ impl PPU {
         let wx = self.wx.wrapping_sub(7);
 
         // Only show window if it's enabled and it intersects current scanline
-        let in_window_y = self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wy <= self.ly;
+        let in_window_y = self.window_visible();
 
         for x in 0..SCREEN_W {
             let in_window_x = x as u8 >= wx;
 
             let (px, py) = if in_window_y && in_window_x {
                 let px = x as u8 - wx;
-                let py = self.ly.wrapping_sub(self.wy);
+                let py = self.wly;
                 (px, py)
             } else {
                 let px = self.sx.wrapping_add(x as u8);
@@ -582,7 +605,7 @@ impl Memory for PPU {
             0xFF40 => {
                 self.lcdc = LCDC::from_bits(v).unwrap();
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
-                    self.ly = 0;
+                    self.reset_ly();
                     self.ppu_mode = PPUMode::HBlank;
                     self.frame_buffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
                 }
