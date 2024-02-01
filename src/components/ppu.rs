@@ -397,6 +397,7 @@ impl PPU {
 
     fn draw_sprites(&mut self) {
         let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
+        let mut object_count = 0;
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;
@@ -434,6 +435,11 @@ impl PPU {
                 let b2 = self.read_ram0(tile_y_address + 1);
                 [b1, b2]
             };
+
+            object_count += 1;
+            if object_count > 10 {
+                continue;
+            }
 
             for x in 0..8 {
                 if px.wrapping_add(x) >= (SCREEN_W as u8) {
