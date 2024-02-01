@@ -398,6 +398,8 @@ impl PPU {
     fn draw_sprites(&mut self) {
         let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
         let mut object_count = 0;
+        let mut previous_px = 0;
+        let mut previous_address = 0;
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;
@@ -419,6 +421,15 @@ impl PPU {
             if px >= (SCREEN_W as u8) && px <= (0xFF - 7) {
                 continue;
             }
+
+            if previous_px == px {
+                if previous_address < sprite_address {
+                    continue;
+                }
+            }
+
+            previous_px = px;
+            previous_address = sprite_address;
 
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
                 sprite_size - 1 - self.ly.wrapping_sub(py)
