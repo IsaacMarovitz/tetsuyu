@@ -11,8 +11,8 @@ pub struct PPU {
     ppu_mode: PPUMode,
     cycle_count: u32,
     vblanked_lines: u32,
-    sy: u8,
-    sx: u8,
+    scy: u8,
+    scx: u8,
     ly: u8,
     lc: u8,
     wy: u8,
@@ -27,8 +27,8 @@ pub struct PPU {
     bcpd: [[[u8; 3]; 4]; 8],
     ocps: BGPI,
     ocpd: [[[u8; 3]; 4]; 8],
-    ram: [u8; 0x4000],
-    ram_bank: usize,
+    vram: [u8; 0x4000],
+    vram_bank: usize,
     oam: [u8; 0xA0],
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
@@ -136,8 +136,8 @@ impl PPU {
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
             vblanked_lines: 0,
-            sy: 0x00,
-            sx: 0x00,
+            scy: 0x00,
+            scx: 0x00,
             ly: 0x00,
             lc: 0x00,
             wy: 0x00,
@@ -152,8 +152,8 @@ impl PPU {
             bcpd: [[[0; 3]; 4]; 8],
             ocps: BGPI::new(),
             ocpd: [[[0; 3]; 4]; 8],
-            ram: [0; 0x4000],
-            ram_bank: 0,
+            vram: [0; 0x4000],
+            vram_bank: 0,
             oam: [0; 0xA0],
             bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
@@ -337,8 +337,8 @@ impl PPU {
                 let py = self.wly;
                 (px, py)
             } else {
-                let px = self.sx.wrapping_add(x as u8);
-                let py = self.sy.wrapping_add(self.ly);
+                let px = self.scx.wrapping_add(x as u8);
+                let py = self.scy.wrapping_add(self.ly);
                 (px, py)
             };
 
@@ -520,11 +520,11 @@ impl PPU {
     }
 
     fn read_ram0(&self, a: u16) -> u8 {
-        self.ram[a as usize - 0x8000]
+        self.vram[a as usize - 0x8000]
     }
 
     fn read_ram1(&self, a: u16) -> u8 {
-        self.ram[a as usize - 0x6000]
+        self.vram[a as usize - 0x6000]
     }
 }
 
@@ -533,7 +533,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000]
+                    self.vram[self.vram_bank * 0x2000 + a as usize - 0x8000]
                 } else {
                     0xFF
                 }
@@ -547,8 +547,8 @@ impl Memory for PPU {
             }
             0xFF40 => self.lcdc.bits(),
             0xFF41 => self.lcds.bits() | self.ppu_mode as u8,
-            0xFF42 => self.sy,
-            0xFF43 => self.sx,
+            0xFF42 => self.scy,
+            0xFF43 => self.scx,
             0xFF44 => self.ly,
             0xFF45 => self.lc,
             0xFF47 => self.bgp,
@@ -557,7 +557,7 @@ impl Memory for PPU {
             0xFF4A => self.wy,
             0xFF4B => self.wx,
             0xFF4D => 0x00,
-            0xFF4F => 0xFE | self.ram_bank as u8,
+            0xFF4F => 0xFE | self.vram_bank as u8,
             // TODO: DMA
             0xFF51..=0xFF55 => 0x00,
             0xFF68 => self.bcps.read(),
@@ -598,7 +598,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.ram[self.ram_bank * 0x2000 + a as usize - 0x8000] = v
+                    self.vram[self.vram_bank * 0x2000 + a as usize - 0x8000] = v
                 }
             }
             0xFE00..=0xFE9F => {
@@ -619,8 +619,8 @@ impl Memory for PPU {
                 self.lcds = LCDS::from_bits_truncate(sanitised);
                 self.check_lyc();
             }
-            0xFF42 => self.sy = v,
-            0xFF43 => self.sx = v,
+            0xFF42 => self.scy = v,
+            0xFF43 => self.scx = v,
             0xFF44 => println!("Attempted to write to LY!"),
             0xFF45 => {
                 self.lc = v;
@@ -634,7 +634,7 @@ impl Memory for PPU {
             0xFF4C => {}
             // TODO: Handle PPU speed switching
             0xFF4D => {}
-            0xFF4F => self.ram_bank = (v & 0x01) as usize,
+            0xFF4F => self.vram_bank = (v & 0x01) as usize,
             // TODO: DMA
             0xFF51..=0xFF55 => {}
             0xFF68 => self.bcps.write(v),
