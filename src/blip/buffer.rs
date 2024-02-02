@@ -1,3 +1,6 @@
+#![allow(unused)]
+// TODO: Remove this allow
+
 /// A Rust based re-implementation of blip-buf
 /// https://code.google.com/p/blip-buf
 
@@ -66,8 +69,6 @@ pub struct BlipBuf {
 
 impl BlipBuf {
     pub fn new(size: usize) -> Self {
-        assert!(size >= 0);
-
         let blip = Self {
             factor: TIME_UNIT / BLIP_MAX_RATIO,
             offset: 0,
@@ -92,17 +93,13 @@ impl BlipBuf {
         let factor = (TIME_UNIT as f32 * sample_rate as f32 / clock_rate as f32) as u32;
         self.factor = factor;
 
-        assert!(0 <= factor - self.factor && factor - self.factor < 1);
-
         if self.factor < factor {
             self.factor += 1;
         }
     }
 
     pub fn clocks_needed(&self, samples: u32) -> u32 {
-        let mut needed: u32;
-
-        assert!(samples >= 0 && self.avail + samples as usize <= self.size);
+        let needed: u32;
 
         needed = samples * TIME_UNIT;
         if needed < self.offset {
@@ -130,8 +127,6 @@ impl BlipBuf {
     }
 
     pub fn read_samples(&mut self, out: &mut [i32], count: usize, stereo: bool) -> usize {
-        assert!(count >= 0);
-
         let mut count = count;
 
         if count > self.avail {
@@ -174,7 +169,7 @@ impl BlipBuf {
     {
         // TODO: Fix this
         let fixed = (time as f32 * self.factor as f32) as u32 + self.offset;
-        let mut out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
+        let out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
 
         let phase_shift = FRAC_BITS - PHASE_BITS;
         let phase: usize = fixed as usize >> phase_shift & (PHASE_COUNT - 1);
@@ -202,10 +197,10 @@ impl BlipBuf {
         out[7] += BL_STEP[PHASE_COUNT - phase][0] * delta + BL_STEP[PHASE_COUNT - phase - 1][0] * delta2;
     }
 
-    pub fn add_delta_fast(&mut self, time: u32, mut delta: i32)
+    pub fn add_delta_fast(&mut self, time: u32, delta: i32)
     {
         let fixed = time * self.factor + self.offset;
-        let mut out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
+        let out = &mut self.samples[self.avail + (fixed >> FRAC_BITS) as usize..].as_mut();
 
         let interp = fixed >> (FRAC_BITS - DELTA_BITS) & (DELTA_UNIT - 1);
         let delta2 = delta * interp as i32;

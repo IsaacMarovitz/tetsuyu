@@ -1,3 +1,6 @@
+#![allow(unused)]
+// TODO: Remove this allow
+
 use crate::components::memory::Memory;
 use crate::sound::prelude::*;
 use crate::blip::buffer::BlipBuf;
@@ -63,7 +66,7 @@ impl APU {
     pub fn new(sample_rate: usize) -> Self {
         let mut blip_buf = BlipBuf::new(sample_rate);
         blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate as u32);
-        let mut blip = Blip::new(blip_buf);
+        let blip = Blip::new(blip_buf);
 
         Self {
             audio_enabled: true,

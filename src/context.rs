@@ -331,7 +331,7 @@ impl Context {
         self.window.request_redraw();
     }
 
-    pub fn recalculate_vertex_buffer(size: PhysicalSize<u32>) -> [Vertex; 4] {
+     fn recalculate_vertex_buffer(size: PhysicalSize<u32>) -> [Vertex; 4] {
         let context_aspect = size.width as f32 / size.height as f32;
         let image_aspect = SCREEN_W as f32 / SCREEN_H as f32;
 
