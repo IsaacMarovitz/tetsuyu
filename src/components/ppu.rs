@@ -558,6 +558,8 @@ impl Memory for PPU {
             0xFF4B => self.wx,
             0xFF4D => 0x00,
             0xFF4F => 0xFE | self.ram_bank as u8,
+            // TODO: DMA
+            0xFF51..=0xFF55 => 0x00,
             0xFF68 => self.bcps.read(),
             0xFF69 => {
                 let r = self.bcps.i as usize >> 3;
@@ -586,6 +588,8 @@ impl Memory for PPU {
                     a | b
                 }
             }
+            // TODO: Object Priority Mode
+            0xFF6C => 0x00,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
     }
@@ -631,6 +635,8 @@ impl Memory for PPU {
             // TODO: Handle PPU speed switching
             0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,
+            // TODO: DMA
+            0xFF51..=0xFF55 => {}
             0xFF68 => self.bcps.write(v),
             0xFF69 => {
                 let r = self.bcps.i as usize >> 3;
@@ -665,6 +671,8 @@ impl Memory for PPU {
                     self.ocps.i &= 0x3F;
                 }
             }
+            // TODO: Object Priority Mode
+            0xFF6C => {}
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }

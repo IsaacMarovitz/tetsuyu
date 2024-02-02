@@ -139,6 +139,7 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.read(a),
             0xFF10..=0xFF3F => self.apu.read(a),
             0xFF0F => self.intf.bits(),
+            0xFF51..=0xFF6F => self.ppu.read(a),
             0xFF70 => self.wram_bank as u8,
             0xFEA0..=0xFEFF => 0xFF,
             0xFFFF => self.inte.bits(),
@@ -166,7 +167,7 @@ impl Memory for MMU {
             0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
             0xFF50 => self.boot_rom_enabled = false,
-            0xFF51..=0xFF6F => {}
+            0xFF51..=0xFF6F => self.ppu.write(a, v),
             0xFF70 => {
                 self.wram_bank = match v & 0x07 {
                     0 => 1,
