@@ -423,7 +423,9 @@ impl PPU {
     fn draw_sprites(&mut self) {
         let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
         let mut object_count: u8 = 0;
-        let mut previous_px: u8 = 0;
+        // Start this with max value, otherwise first
+        // sprite will always be skipped
+        let mut previous_px: u8 = u8::MAX;
         let mut previous_address: u16 = 0;
 
         for i in 0..40 {
@@ -591,7 +593,7 @@ impl Memory for PPU {
                     a | b
                 }
             }
-            0xFF6C => self.opri,
+            0xFF6C => self.opri as u8,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
     }
