@@ -111,8 +111,8 @@ impl Memory for MMU {
                     self.mbc.read(a)
                 }
             }
-            0x0100..=0x1FFF => self.mbc.read(a),
-            0x0200..=0x7FFF => {
+            0x0100..=0x01FF => self.mbc.read(a),
+            0x0200..=0x08FF => {
                 if self.mode == GBMode::DMG {
                     self.mbc.read(a)
                 } else {
@@ -123,18 +123,8 @@ impl Memory for MMU {
                     }
                 }
             }
-            0x8000..=0x8FFF => {
-                if self.mode == GBMode::DMG {
-                    self.ppu.read(a)
-                } else {
-                    if self.boot_rom_enabled {
-                        self.boot_rom[a as usize]
-                    } else {
-                        self.ppu.read(a)
-                    }
-                }
-            }
-            0x9000..=0x9FFF => self.ppu.read(a),
+            0x0900..=0x7FFF => self.mbc.read(a),
+            0x8000..=0x9FFF => self.ppu.read(a),
             0xA000..=0xBFFF => self.mbc.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
@@ -175,10 +165,8 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.write(a, v),
             0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
-            0xFF50 => {
-                self.boot_rom_enabled = false;
-            }
-            0xFF51..=0xFF5F => {}
+            0xFF50 => self.boot_rom_enabled = false,
+            0xFF51..=0xFF6F => {}
             0xFF70 => {
                 self.wram_bank = match v & 0x07 {
                     0 => 1,
