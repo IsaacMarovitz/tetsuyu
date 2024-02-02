@@ -17,6 +17,9 @@ pub struct MMU {
     intf: Interrupts,
     inte: Interrupts,
     wram_bank: usize,
+    boot_rom: [u8;  0x900],
+    boot_rom_enabled: bool,
+    mode: GBMode
 }
 
 bitflags! {
@@ -31,9 +34,8 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(rom: Vec<u8>, config: Config) -> Self {
-        let cart_type: CartTypes =
-            FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
+    pub fn new(rom: Vec<u8>, config: Config, booting: bool, boot_rom: [u8; 0x900]) -> Self {
+        let cart_type: CartTypes = FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
         let mbc_mode = match cart_type.get_mbc() {
             MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
             v => {
@@ -64,6 +66,9 @@ impl MMU {
             intf: Interrupts::empty(),
             inte: Interrupts::empty(),
             wram_bank: 0x01,
+            boot_rom,
+            boot_rom_enabled: booting,
+            mode: config.mode
         }
     }
 
@@ -99,8 +104,37 @@ impl MMU {
 impl Memory for MMU {
     fn read(&self, a: u16) -> u8 {
         match a {
-            0x0000..=0x7FFF => self.mbc.read(a),
-            0x8000..=0x9FFF => self.ppu.read(a),
+            0x0000..=0x00FF => {
+                if self.boot_rom_enabled {
+                    self.boot_rom[a as usize]
+                } else {
+                    self.mbc.read(a)
+                }
+            }
+            0x0100..=0x1FFF => self.mbc.read(a),
+            0x0200..=0x7FFF => {
+                if self.mode == GBMode::DMG {
+                    self.mbc.read(a)
+                } else {
+                    if self.boot_rom_enabled {
+                        self.boot_rom[a as usize]
+                    } else {
+                        self.mbc.read(a)
+                    }
+                }
+            }
+            0x8000..=0x8FFF => {
+                if self.mode == GBMode::DMG {
+                    self.ppu.read(a)
+                } else {
+                    if self.boot_rom_enabled {
+                        self.boot_rom[a as usize]
+                    } else {
+                        self.ppu.read(a)
+                    }
+                }
+            }
+            0x9000..=0x9FFF => self.ppu.read(a),
             0xA000..=0xBFFF => self.mbc.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
             0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
@@ -141,7 +175,10 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.write(a, v),
             0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
-            0xFF50..=0xFF5F => {}
+            0xFF50 => {
+                self.boot_rom_enabled = false;
+            }
+            0xFF51..=0xFF5F => {}
             0xFF70 => {
                 self.wram_bank = match v & 0x07 {
                     0 => 1,
@@ -149,7 +186,6 @@ impl Memory for MMU {
                 }
             }
             0xFEA0..=0xFEFF => {}
-            0xFF7F => {}
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }

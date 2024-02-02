@@ -617,7 +617,7 @@ impl Memory for PPU {
             }
             0xFF42 => self.sy = v,
             0xFF43 => self.sx = v,
-            0xFF44 => print!("Attempted to write to LY!"),
+            0xFF44 => println!("Attempted to write to LY!"),
             0xFF45 => {
                 self.lc = v;
                 self.check_lyc();
@@ -627,6 +627,7 @@ impl Memory for PPU {
             0xFF49 => self.op1 = v,
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
+            0xFF4C => {}
             // TODO: Handle PPU speed switching
             0xFF4D => {}
             0xFF4F => self.ram_bank = (v & 0x01) as usize,

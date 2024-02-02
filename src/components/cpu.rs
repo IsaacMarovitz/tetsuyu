@@ -14,10 +14,11 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(mut rom: Vec<u8>, config: Config) -> Self {
+    pub fn new(rom: Vec<u8>, config: Config) -> Self {
+        let mut boot_rom: [u8; 0x900] = [0; 0x900];
         let booting: bool = match config.boot_rom {
             Some(ref path) => {
-                let mut boot_rom = Vec::new();
+                let mut boot_rom_vec = Vec::new();
                 let mut boot = match File::open(path.clone()) {
                     Ok(file) => file,
                     Err(err) => {
@@ -25,14 +26,14 @@ impl CPU {
                         process::exit(1);
                     }
                 };
-                boot.read_to_end(&mut boot_rom)
+                boot.read_to_end(&mut boot_rom_vec)
                     .expect("Failed to read Boot ROM!");
 
                 // Copy Boot ROM
                 if config.mode == GBMode::DMG {
-                    rom[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+                    boot_rom[0..=0x00FF].copy_from_slice(boot_rom_vec.as_slice());
                 } else if config.mode == GBMode::CGB {
-                    rom[0..=0x08FF].copy_from_slice(boot_rom.as_slice());
+                    boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
                 }
 
                 true
@@ -42,7 +43,7 @@ impl CPU {
 
         Self {
             reg: Registers::new(config.clone().mode, booting),
-            mem: MMU::new(rom, config),
+            mem: MMU::new(rom, config, booting, boot_rom),
             halted: false,
             ime: false,
             ime_ask: false
