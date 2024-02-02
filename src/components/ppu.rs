@@ -420,9 +420,9 @@ impl PPU {
 
     fn draw_sprites(&mut self) {
         let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
-        let mut object_count = 0;
-        let mut previous_px = 0;
-        let mut previous_address = 0;
+        let mut object_count: u8 = 0;
+        let mut previous_px: u8 = 0;
+        let mut previous_address: u16 = 0;
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;

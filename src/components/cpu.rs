@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::components::prelude::*;
 
 pub struct CPU {
-    reg: Registers,
+    pub reg: Registers,
     pub mem: MMU,
     halted: bool,
     // Enabled Interrupts
@@ -28,8 +28,12 @@ impl CPU {
                 boot.read_to_end(&mut boot_rom)
                     .expect("Failed to read Boot ROM!");
 
-                // Display Nintendo Logo
-                rom[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+                // Copy Boot ROM
+                if config.mode == GBMode::DMG {
+                    rom[0..=0x00FF].copy_from_slice(boot_rom.as_slice());
+                } else if config.mode == GBMode::CGB {
+                    rom[0..=0x08FF].copy_from_slice(boot_rom.as_slice());
+                }
 
                 true
             }
