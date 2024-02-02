@@ -30,6 +30,7 @@ pub struct PPU {
     vram: [u8; 0x4000],
     vram_bank: usize,
     oam: [u8; 0xA0],
+    opri: bool,
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
     pub frame_buffer: Vec<u8>,
@@ -155,6 +156,7 @@ impl PPU {
             vram: [0; 0x4000],
             vram_bank: 0,
             oam: [0; 0xA0],
+            opri: true,
             bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
             frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H],
@@ -445,6 +447,7 @@ impl PPU {
                 continue;
             }
 
+            // TODO: Respect OPRI
             if previous_px == px {
                 if previous_address < sprite_address {
                     continue;
@@ -533,7 +536,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.vram[self.vram_bank * 0x2000 + a as usize - 0x8000]
+                    self.vram[(self.vram_bank * 0x2000) + a as usize - 0x8000]
                 } else {
                     0xFF
                 }
@@ -588,8 +591,7 @@ impl Memory for PPU {
                     a | b
                 }
             }
-            // TODO: Object Priority Mode
-            0xFF6C => 0x00,
+            0xFF6C => self.opri,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
     }
@@ -598,7 +600,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.vram[self.vram_bank * 0x2000 + a as usize - 0x8000] = v
+                    self.vram[(self.vram_bank * 0x2000) + a as usize - 0x8000] = v
                 }
             }
             0xFE00..=0xFE9F => {
@@ -672,7 +674,7 @@ impl Memory for PPU {
                 }
             }
             // TODO: Object Priority Mode
-            0xFF6C => {}
+            0xFF6C => self.opri = v != 0,
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
     }
