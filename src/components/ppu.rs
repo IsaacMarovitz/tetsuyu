@@ -74,7 +74,7 @@ bitflags! {
         // BG & Window tile data area: 0 = 8800–97FF; 1 = 8000–8FFF
         const TILE_DATA_AREA  = 0b0001_0000;
         // BG tile map area: 0 = 9800–9BFF; 1 = 9C00–9FFF
-        const TILE_MAP_AREA   = 0b0000_1000;
+        const BG_TILE_MAP_AREA   = 0b0000_1000;
         // OBJ size: 0 = 8×8; 1 = 8×16
         const OBJ_SIZE        = 0b0000_0100;
         // OBJ enable: 0 = Off; 1 = On
@@ -351,7 +351,7 @@ impl PPU {
                 } else {
                     0x9800
                 }
-            } else if self.lcdc.contains(LCDC::TILE_MAP_AREA) {
+            } else if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) {
                 0x9C00
             } else {
                 0x9800
@@ -423,10 +423,10 @@ impl PPU {
     fn draw_sprites(&mut self) {
         let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
         let mut object_count: u8 = 0;
+        let mut previous_px: u8 = 0;
         // Start this with max value, otherwise first
         // sprite will always be skipped
-        let mut previous_px: u8 = u8::MAX;
-        let mut previous_address: u16 = 0;
+        let mut previous_address: u16 = u16::MAX;
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;
