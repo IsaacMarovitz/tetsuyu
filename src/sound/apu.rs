@@ -1,6 +1,7 @@
 #![allow(unused)]
 // TODO: Remove this allow
 
+use std::sync::{Arc, Mutex};
 use crate::components::memory::Memory;
 use crate::sound::prelude::*;
 use crate::blip::buffer::BlipBuf;
@@ -47,7 +48,9 @@ pub struct APU {
     ch4: CH4,
     div_one: bool,
     freq: f64,
+    sample_rate: u32,
     blip: Blip,
+    buffer: Arc<Mutex<Vec<(f32, f32)>>>,
     stream: Stream
 }
 
@@ -79,6 +82,8 @@ impl APU {
         blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate);
         let blip = Blip::new(blip_buf);
 
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+
         Self {
             audio_enabled: true,
             is_ch_4_on: false,
@@ -94,28 +99,53 @@ impl APU {
             ch4: CH4::new(),
             div_one: false,
             freq: 256.0,
+            sample_rate,
             blip,
+            buffer: buffer.clone(),
             stream: match sample_format {
                 SampleFormat::F32 => {
+                    let buffer_data = buffer.clone();
+
                     device.build_output_stream(
                         &config.config(),
                         move |data: &mut[f32], _| {
-
+                            let len = std::cmp::min(data.len() / 2, buffer_data.lock().unwrap().len());
+                            for (i, (data_l, data_r)) in buffer_data.lock().unwrap().drain(..len).enumerate() {
+                                data[i * 2 + 0] = data_l;
+                                data[i * 2 + 1] = data_r;
+                            }
                         },
                         move |err| println!("{}", err),
                         None).unwrap()
                 }
                 SampleFormat::F64 => {
+                    let buffer_data = buffer.clone();
+
                     device.build_output_stream(
                         &config.config(),
                         move |data: &mut[f64], _| {
-
+                            let len = std::cmp::min(data.len() / 2,  buffer_data.lock().unwrap().len());
+                            for (i, (data_l, data_r)) in buffer_data.lock().unwrap().drain(..len).enumerate() {
+                                data[i * 2 + 0] = data_l as f64;
+                                data[i * 2 + 1] = data_r as f64;
+                            }
                         },
                         move |err| println!("{}", err),
                         None).unwrap()
                 }
                 format => panic!("Unsupported Output Format {}!", format),
             },
+        }
+    }
+
+    pub fn play(&mut self, l: &[f32], r: &[f32]) {
+        assert_eq!(l.len(), r.len());
+        let mut buffer = self.buffer.lock().unwrap();
+        for (l, r) in l.iter().zip(r) {
+            if buffer.len() > self.sample_rate as usize {
+                return;
+            }
+            buffer.push((*l, *r));
         }
     }
 
