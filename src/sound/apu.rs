@@ -5,6 +5,8 @@ use crate::components::memory::Memory;
 use crate::sound::prelude::*;
 use crate::blip::buffer::BlipBuf;
 use bitflags::bitflags;
+use cpal::{SampleFormat, Stream};
+use cpal::traits::{DeviceTrait, HostTrait};
 use crate::CLOCK_FREQUENCY;
 
 struct Blip {
@@ -45,7 +47,8 @@ pub struct APU {
     ch4: CH4,
     div_one: bool,
     freq: f64,
-    blip: Blip
+    blip: Blip,
+    stream: Stream
 }
 
 bitflags! {
@@ -63,9 +66,17 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new(sample_rate: usize) -> Self {
-        let mut blip_buf = BlipBuf::new(sample_rate);
-        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate as u32);
+    pub fn new() -> Self {
+        let host = cpal::default_host();
+        let device = host.default_output_device().unwrap();
+        let config = device.default_output_config().unwrap();
+        let sample_rate = config.sample_rate().0;
+        let sample_format = config.sample_format();
+
+        println!("Initialising Audio Device: {}, at {} Hz ({})", device.name().unwrap(), sample_rate, sample_format);
+
+        let mut blip_buf = BlipBuf::new(sample_rate as usize);
+        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate);
         let blip = Blip::new(blip_buf);
 
         Self {
@@ -83,7 +94,28 @@ impl APU {
             ch4: CH4::new(),
             div_one: false,
             freq: 256.0,
-            blip
+            blip,
+            stream: match sample_format {
+                SampleFormat::F32 => {
+                    device.build_output_stream(
+                        &config.config(),
+                        move |data: &mut[f32], _| {
+
+                        },
+                        move |err| println!("{}", err),
+                        None).unwrap()
+                }
+                SampleFormat::F64 => {
+                    device.build_output_stream(
+                        &config.config(),
+                        move |data: &mut[f64], _| {
+
+                        },
+                        move |err| println!("{}", err),
+                        None).unwrap()
+                }
+                format => panic!("Unsupported Output Format {}!", format),
+            },
         }
     }
 

@@ -55,8 +55,7 @@ impl MMU {
 
         Self {
             mbc: mbc,
-            // TODO: Get from cpal
-            apu: APU::new(48000),
+            apu: APU::new(),
             ppu: PPU::new(config.clone()),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),

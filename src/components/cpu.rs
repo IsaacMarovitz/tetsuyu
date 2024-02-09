@@ -13,6 +13,8 @@ pub struct CPU {
     ime_ask: bool
 }
 
+unsafe impl Send for CPU {}
+
 impl CPU {
     pub fn new(rom: Vec<u8>, config: Config) -> Self {
         let mut boot_rom: [u8; 0x900] = [0; 0x900];
