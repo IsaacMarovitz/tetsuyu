@@ -25,7 +25,7 @@ impl CH1 {
             sweep_pace: 0,
             negative_direction: false,
             sweep_step: 0,
-            duty_cycle: DutyCycle::QUARTER,
+            duty_cycle: DutyCycle::EIGHTH,
             length_timer: 0,
             volume: 0,
             positive_envelope: false,
@@ -43,7 +43,7 @@ impl CH1 {
         self.sweep_pace = 0;
         self.negative_direction = false;
         self.sweep_step = 0;
-        self.duty_cycle = DutyCycle::QUARTER;
+        self.duty_cycle = DutyCycle::EIGHTH;
         self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;

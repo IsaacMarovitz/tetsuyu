@@ -18,7 +18,7 @@ impl CH2 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
-            duty_cycle: DutyCycle::QUARTER,
+            duty_cycle: DutyCycle::EIGHTH,
             length_timer: 0,
             volume: 0,
             positive_envelope: false,
@@ -32,7 +32,7 @@ impl CH2 {
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
-        self.duty_cycle = DutyCycle::QUARTER;
+        self.duty_cycle = DutyCycle::EIGHTH;
         self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;
