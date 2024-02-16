@@ -136,6 +136,7 @@ impl Memory for CH4 {
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
+            0xFF1F => {}
             // NR41: Length Timer
             0xFF20 => self.length_timer = v & 0b0011_1111,
             // NR42: Volume & Envelope

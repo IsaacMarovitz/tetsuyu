@@ -21,7 +21,6 @@ use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod config;
 mod context;
-
 mod components;
 mod mbc;
 mod sound;

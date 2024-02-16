@@ -82,6 +82,7 @@ impl Memory for CH2 {
     fn write(&mut self, a: u16, v: u8) {
         match a {
             // NR21: Length Timer & Duty Cycle
+            0xFF15 => {}
             0xFF16 => {
                 self.duty_cycle = DutyCycle::from_bits_truncate(v >> 6);
                 self.length_timer = v & 0b0011_1111;

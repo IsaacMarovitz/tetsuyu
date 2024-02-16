@@ -252,6 +252,14 @@ impl APU {
 impl Memory for APU {
     fn read(&self, a: u16) -> u8 {
         match a {
+            0xFF10..=0xFF14 => self.ch1.read(a),
+            0xFF15..=0xFF19 => self.ch2.read(a),
+            0xFF1A..=0xFF1E => self.ch3.read(a),
+            0xFF1F..=0xFF23 => self.ch4.read(a),
+            // NR50: Master Volume & VIN
+            0xFF24 => (self.left_volume & 0b0000_0111) << 4 | (self.right_volume & 0b0000_0111),
+            // NR51: Sound Panning
+            0xFF25 => self.panning.bits(),
             // NR52: Audio Master Control
             0xFF26 => {
                 ((self.audio_enabled as u8) << 7)
@@ -261,15 +269,7 @@ impl Memory for APU {
                     | ((self.is_ch_1_on as u8) << 0)
                     | 0x70
             }
-            // NR51: Sound Panning
-            0xFF25 => self.panning.bits(),
-            // NR50: Master Volume & VIN
-            0xFF24 => (self.left_volume & 0b0000_0111) << 4 | (self.right_volume & 0b0000_0111),
-            0xFF10..=0xFF14 => self.ch1.read(a),
-            0xFF15..=0xFF19 => self.ch2.read(a),
-            0xFF1A..=0xFF1E => self.ch3.read(a),
             0xFF30..=0xFF3F => self.ch3.read(a),
-            0xFF20..=0xFF24 => self.ch4.read(a),
             _ => 0xFF,
         }
     }
@@ -277,18 +277,19 @@ impl Memory for APU {
     fn write(&mut self, a: u16, v: u8) {
         let mut set_apu_control = false;
 
+        // Ignore writes from 0xFF10-0xFF25
+        // When APU is disabled
+        if a >= 0xFF10 && a <= 0xFF25 {
+            if !self.audio_enabled {
+                return;
+            }
+        }
+
         match a {
-            // NR52: Audio Master Control
-            0xFF26 => {
-                set_apu_control = true;
-                self.audio_enabled = (v >> 7) == 0x01;
-            }
-            // NR51: Sound Panning
-            0xFF25 => {
-                if self.audio_enabled {
-                    self.panning = Panning::from_bits_truncate(v)
-                }
-            }
+            0xFF10..=0xFF14 => self.ch1.write(a, v),
+            0xFF15..=0xFF19 => self.ch2.write(a, v),
+            0xFF1A..=0xFF1E => self.ch3.write(a, v),
+            0xFF1F..=0xFF23 => self.ch4.write(a, v),
             // NR50: Master Volume & VIN
             0xFF24 => {
                 if self.audio_enabled {
@@ -296,28 +297,19 @@ impl Memory for APU {
                     self.right_volume = v & 0b0000_0111;
                 }
             }
-            0xFF10..=0xFF14 => {
+            // NR51: Sound Panning
+            0xFF25 => {
                 if self.audio_enabled {
-                    self.ch1.write(a, v)
+                    self.panning = Panning::from_bits_truncate(v)
                 }
             }
-            0xFF16..=0xFF19 => {
-                if self.audio_enabled {
-                    self.ch2.write(a, v)
-                }
-            }
-            0xFF1A..=0xFF1E => {
-                if self.audio_enabled {
-                    self.ch3.write(a, v)
-                }
+            // NR52: Audio Master Control
+            0xFF26 => {
+                set_apu_control = true;
+                self.audio_enabled = (v >> 7) == 0x01;
             }
             0xFF30..=0xFF3F => self.ch3.write(a, v),
-            0xFF20..=0xFF24 => {
-                if self.audio_enabled {
-                    self.ch4.write(a, v)
-                }
-            }
-            _ => (), // _ => panic!("Write to unsupported APU address ({:#06x})!", a),
+            _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
 
         if self.ch1.trigger {
