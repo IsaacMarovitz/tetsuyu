@@ -9,29 +9,7 @@ use bitflags::bitflags;
 use cpal::{SampleFormat, Stream};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::CLOCK_FREQUENCY;
-
-struct Blip {
-    data: BlipBuf,
-    from: u32,
-    ampl: i32
-}
-
-impl Blip {
-    pub fn new(data: BlipBuf) -> Self {
-        Self {
-            data,
-            from: 0,
-            ampl: 0
-        }
-    }
-
-    fn set(&mut self, time: u32, ampl: i32) {
-        self.from = time;
-        let delta = ampl - self.ampl;
-        self.ampl = ampl;
-        self.data.add_delta(time, delta);
-    }
-}
+use crate::sound::blip::Blip;
 
 pub struct APU {
     audio_enabled: bool,
@@ -49,7 +27,6 @@ pub struct APU {
     div_one: bool,
     freq: f64,
     sample_rate: u32,
-    blip: Blip,
     buffer: Arc<Mutex<Vec<(f32, f32)>>>,
     stream: Stream
 }
@@ -78,10 +55,6 @@ impl APU {
 
         println!("Initialising Audio Device: {}, at {} Hz ({})", device.name().unwrap(), sample_rate, sample_format);
 
-        let mut blip_buf = BlipBuf::new(sample_rate as usize);
-        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate);
-        let blip = Blip::new(blip_buf);
-
         let buffer = Arc::new(Mutex::new(Vec::new()));
 
         Self {
@@ -93,14 +66,13 @@ impl APU {
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),
-            ch1: CH1::new(),
-            ch2: CH2::new(),
-            ch3: CH3::new(),
-            ch4: CH4::new(),
+            ch1: CH1::new(Self::create_blip(sample_rate)),
+            ch2: CH2::new(Self::create_blip(sample_rate)),
+            ch3: CH3::new(Self::create_blip(sample_rate)),
+            ch4: CH4::new(Self::create_blip(sample_rate)),
             div_one: false,
             freq: 256.0,
             sample_rate,
-            blip,
             buffer: buffer.clone(),
             stream: match sample_format {
                 SampleFormat::F32 => {
@@ -136,6 +108,12 @@ impl APU {
                 format => panic!("Unsupported Output Format {}!", format),
             },
         }
+    }
+
+    pub fn create_blip(sample_rate: u32) -> Blip {
+        let mut blip_buf = BlipBuf::new(sample_rate as usize);
+        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate);
+        Blip::new(blip_buf)
     }
 
     pub fn play(&mut self, l: &[f32], r: &[f32]) {
@@ -180,31 +158,11 @@ impl APU {
             }
         };
 
-        let ch1_duty = {
-            match self.ch1.duty_cycle {
-                DutyCycle::EIGHTH => 0.125,
-                DutyCycle::QUARTER => 0.25,
-                DutyCycle::HALF => 0.5,
-                DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0,
-            }
-        };
-
         let ch2_vol = {
             if self.ch2.dac_enabled {
                 self.ch2.volume as f64 / 0xF as f64
             } else {
                 0.0
-            }
-        };
-
-        let ch2_duty = {
-            match self.ch2.duty_cycle {
-                DutyCycle::EIGHTH => 0.125,
-                DutyCycle::QUARTER => 0.25,
-                DutyCycle::HALF => 0.5,
-                DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0,
             }
         };
 
@@ -246,6 +204,20 @@ impl APU {
                 0.0
             }
         };
+
+        let sc1 = self.ch1.blip.data.samples_avail();
+        let sc2 = self.ch1.blip.data.samples_avail();
+        let sc3 = self.ch1.blip.data.samples_avail();
+        let sc4 = self.ch1.blip.data.samples_avail();
+
+        // Check that all channels
+        // have equal number of samples
+        assert_eq!(sc1, sc2);
+        assert_eq!(sc2, sc3);
+        assert_eq!(sc3, sc4);
+
+        let sample_count = sc1;
+        let mut sum = 0;
     }
 }
 

@@ -98,6 +98,10 @@ impl BlipBuf {
         }
     }
 
+    pub fn samples_avail(&self) -> usize {
+        self.avail
+    }
+
     pub fn clocks_needed(&self, samples: u32) -> u32 {
         let needed: u32;
 

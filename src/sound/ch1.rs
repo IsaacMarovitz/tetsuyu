@@ -1,7 +1,9 @@
 use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
+use crate::sound::blip::Blip;
 
 pub struct CH1 {
+    pub blip: Blip,
     pub dac_enabled: bool,
     sweep_pace: u8,
     negative_direction: bool,
@@ -19,8 +21,9 @@ pub struct CH1 {
 }
 
 impl CH1 {
-    pub fn new() -> Self {
+    pub fn new(blip: Blip) -> Self {
         Self {
+            blip,
             dac_enabled: false,
             sweep_pace: 0,
             negative_direction: false,
@@ -93,6 +96,9 @@ impl CH1 {
                 }
             }
         }
+
+        self.blip.data.end_frame(4096);
+        //self.blip.from -= 4096;
     }
 }
 

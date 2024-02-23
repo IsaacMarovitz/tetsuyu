@@ -1,6 +1,8 @@
 use crate::components::memory::Memory;
+use crate::sound::blip::Blip;
 
 pub struct CH4 {
+    pub blip: Blip,
     pub dac_enabled: bool,
     length_timer: u8,
     volume: u8,
@@ -21,8 +23,9 @@ pub struct CH4 {
 }
 
 impl CH4 {
-    pub fn new() -> Self {
+    pub fn new(blip: Blip) -> Self {
         Self {
+            blip,
             dac_enabled: false,
             length_timer: 0,
             volume: 0,
@@ -108,6 +111,9 @@ impl CH4 {
                 self.final_volume = self.volume;
             }
         }
+
+        self.blip.data.end_frame(4096);
+        //self.blip.from -= 4096;
     }
 }
 

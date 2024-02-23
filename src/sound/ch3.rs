@@ -1,7 +1,9 @@
 use crate::components::memory::Memory;
 use bitflags::bitflags;
+use crate::sound::blip::Blip;
 
 pub struct CH3 {
+    pub blip: Blip,
     pub dac_enabled: bool,
     length_timer: u8,
     pub output_level: OutputLevel,
@@ -23,8 +25,9 @@ bitflags! {
 }
 
 impl CH3 {
-    pub fn new() -> Self {
+    pub fn new(blip: Blip) -> Self {
         Self {
+            blip,
             dac_enabled: false,
             length_timer: 0,
             output_level: OutputLevel::MUTE,
@@ -60,6 +63,9 @@ impl CH3 {
                 }
             }
         }
+
+        self.blip.data.end_frame(4096);
+        //self.blip.from -= 4096;
     }
 }
 
