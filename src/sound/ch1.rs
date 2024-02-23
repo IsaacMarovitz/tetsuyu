@@ -1,6 +1,7 @@
 use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
 use crate::sound::blip::Blip;
+use crate::sound::length_counter::LengthCounter;
 
 pub struct CH1 {
     pub blip: Blip,
@@ -9,15 +10,12 @@ pub struct CH1 {
     negative_direction: bool,
     sweep_step: u8,
     pub duty_cycle: DutyCycle,
-    pub length_timer: u8,
     pub volume: u8,
     positive_envelope: bool,
     envelope_pace: u8,
     pub period: u16,
-    pub trigger: bool,
-    length_enabled: bool,
-    length_cycle_count: u32,
     sweep_cycle_count: u32,
+    length_counter: LengthCounter
 }
 
 impl CH1 {
@@ -29,15 +27,12 @@ impl CH1 {
             negative_direction: false,
             sweep_step: 0,
             duty_cycle: DutyCycle::EIGHTH,
-            length_timer: 0,
             volume: 0,
             positive_envelope: false,
             envelope_pace: 0,
             period: 0,
-            trigger: false,
-            length_enabled: false,
-            length_cycle_count: 0,
             sweep_cycle_count: 0,
+            length_counter: LengthCounter::new()
         }
     }
 
@@ -47,31 +42,14 @@ impl CH1 {
         self.negative_direction = false;
         self.sweep_step = 0;
         self.duty_cycle = DutyCycle::EIGHTH;
-        self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;
         self.envelope_pace = 0;
         self.period = 0;
-        self.trigger = false;
-        self.length_enabled = false;
+        self.length_counter.clear();
     }
 
     pub fn cycle(&mut self) {
-        if self.length_enabled {
-            self.length_cycle_count += 1;
-
-            if self.length_cycle_count >= 2 {
-                self.length_cycle_count = 0;
-
-                if self.length_timer >= 64 {
-                    self.dac_enabled = false;
-                    self.length_enabled = false;
-                } else {
-                    self.length_timer += 1;
-                }
-            }
-        }
-
         if self.sweep_pace != 0 {
             self.sweep_cycle_count += 1;
 
@@ -97,6 +75,7 @@ impl CH1 {
             }
         }
 
+        self.length_counter.cycle();
         self.blip.data.end_frame(4096);
         //self.blip.from -= 4096;
     }
@@ -123,7 +102,7 @@ impl Memory for CH1 {
             // NR13: Period Low
             0xFF13 => 0xFF,
             // NR14: Period High & Control
-            0xFF14 => (self.length_enabled as u8) << 6 | 0xBF,
+            0xFF14 => (self.length_counter.enabled as u8) << 6 | 0xBF,
             _ => 0xFF,
         }
     }
@@ -139,7 +118,7 @@ impl Memory for CH1 {
             // NR11: Length Timer & Duty Cycle
             0xFF11 => {
                 self.duty_cycle = DutyCycle::from_bits_truncate(v >> 6);
-                self.length_timer = v & 0b0011_1111;
+                self.length_counter.counter = (v & 0b0011_1111) as u16;
             }
             // NR12: Volume & Envelope
             0xFF12 => {
@@ -158,10 +137,14 @@ impl Memory for CH1 {
             }
             // NR14: Period High & Control
             0xFF14 => {
-                self.trigger = ((v & 0b1000_0000) >> 7) != 0;
-                self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
+                self.length_counter.trigger = ((v & 0b1000_0000) >> 7) != 0;
+                self.length_counter.enabled = ((v & 0b0100_0000) >> 6) != 0;
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;
+
+                if self.length_counter.trigger {
+                    self.length_counter.reload(1 << 6);
+                }
             }
             _ => panic!("Write to unsupported SC1 address ({:#06x})!", a),
         }

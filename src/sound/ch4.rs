@@ -1,10 +1,10 @@
 use crate::components::memory::Memory;
 use crate::sound::blip::Blip;
+use crate::sound::length_counter::LengthCounter;
 
 pub struct CH4 {
     pub blip: Blip,
     pub dac_enabled: bool,
-    length_timer: u8,
     volume: u8,
     positive_envelope: bool,
     envelope_pace: u8,
@@ -13,13 +13,11 @@ pub struct CH4 {
     // False = 15-bit, True = 7-bit
     lfsr_width: bool,
     clock_divider: u8,
-    pub trigger: bool,
-    length_enabled: bool,
     pub frequency: u32,
     pub lfsr: u16,
     pub final_volume: u8,
     clock_cycle_count: u32,
-    length_cycle_count: u32,
+    length_counter: LengthCounter
 }
 
 impl CH4 {
@@ -27,7 +25,6 @@ impl CH4 {
         Self {
             blip,
             dac_enabled: false,
-            length_timer: 0,
             volume: 0,
             positive_envelope: false,
             envelope_pace: 0,
@@ -35,50 +32,30 @@ impl CH4 {
             bit: 0,
             lfsr_width: false,
             clock_divider: 0,
-            trigger: false,
-            length_enabled: false,
             frequency: 0,
             lfsr: 0,
             final_volume: 0,
             clock_cycle_count: 0,
-            length_cycle_count: 0,
+            length_counter: LengthCounter::new()
         }
     }
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
-        self.length_timer = 0;
         self.volume = 0;
         self.positive_envelope = false;
         self.envelope_pace = 0;
         self.clock = 0;
         self.lfsr_width = false;
         self.clock_divider = 0;
-        self.trigger = false;
-        self.length_enabled = false;
         self.frequency = 0;
         self.lfsr = 0;
         self.final_volume = 0;
         self.clock_cycle_count = 0;
-        self.length_cycle_count = 0;
+        self.length_counter.clear();
     }
 
     pub fn cycle(&mut self) {
-        if self.length_enabled {
-            self.length_cycle_count += 1;
-
-            if self.length_cycle_count >= 2 {
-                self.length_cycle_count = 0;
-
-                if self.length_timer >= 64 {
-                    self.dac_enabled = false;
-                    self.length_enabled = false;
-                } else {
-                    self.length_timer += 1;
-                }
-            }
-        }
-
         self.clock_cycle_count += 1;
         let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
         let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
@@ -112,6 +89,7 @@ impl CH4 {
             }
         }
 
+        self.length_counter.cycle();
         self.blip.data.end_frame(4096);
         //self.blip.from -= 4096;
     }
@@ -135,7 +113,7 @@ impl Memory for CH4 {
                     | (self.clock_divider & 0b0000_0111)
             }
             // NR44: Control
-            0xFF23 => (self.length_enabled as u8) << 6 | 0xBF,
+            0xFF23 => (self.length_counter.enabled as u8) << 6 | 0xBF,
             _ => 0xFF,
         }
     }
@@ -144,7 +122,7 @@ impl Memory for CH4 {
         match a {
             0xFF1F => {}
             // NR41: Length Timer
-            0xFF20 => self.length_timer = v & 0b0011_1111,
+            0xFF20 => self.length_counter.counter = (v & 0b0011_1111) as u16,
             // NR42: Volume & Envelope
             0xFF21 => {
                 self.volume = (v & 0b1111_0000) >> 4;
@@ -163,8 +141,12 @@ impl Memory for CH4 {
             }
             // NR44: Control
             0xFF23 => {
-                self.trigger = ((v & 0b1000_0000) >> 7) != 0;
-                self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
+                self.length_counter.trigger = ((v & 0b1000_0000) >> 7) != 0;
+                self.length_counter.enabled = ((v & 0b0100_0000) >> 6) != 0;
+
+                if self.length_counter.trigger {
+                    self.length_counter.reload(1 << 6);
+                }
             }
             _ => panic!("Write to unsupported SC4 address ({:#06x})!", a),
         }

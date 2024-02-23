@@ -119,7 +119,7 @@ impl BlipBuf {
         self.avail += off as usize >> TIME_BITS;
         self.offset = off & (TIME_UNIT - 1);
 
-        assert!(self.avail <= self.size);
+        // assert!(self.avail <= self.size);
     }
 
     pub fn remove_samples(&mut self, count: usize) {

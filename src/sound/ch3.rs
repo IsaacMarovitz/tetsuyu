@@ -1,17 +1,15 @@
 use crate::components::memory::Memory;
 use bitflags::bitflags;
 use crate::sound::blip::Blip;
+use crate::sound::length_counter::LengthCounter;
 
 pub struct CH3 {
     pub blip: Blip,
     pub dac_enabled: bool,
-    length_timer: u8,
     pub output_level: OutputLevel,
     pub period: u16,
-    pub trigger: bool,
-    length_enabled: bool,
     wave_ram: [u8; 16],
-    length_cycle_count: u32,
+    length_counter: LengthCounter
 }
 
 bitflags! {
@@ -29,41 +27,22 @@ impl CH3 {
         Self {
             blip,
             dac_enabled: false,
-            length_timer: 0,
             output_level: OutputLevel::MUTE,
             period: 0,
-            trigger: false,
-            length_enabled: false,
             wave_ram: [0; 16],
-            length_cycle_count: 0,
+            length_counter: LengthCounter::new()
         }
     }
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
-        self.length_timer = 0;
         self.output_level = OutputLevel::MUTE;
         self.period = 0;
-        self.trigger = false;
-        self.length_enabled = false;
+        self.length_counter.clear();
     }
 
     pub fn cycle(&mut self) {
-        if self.length_enabled {
-            self.length_cycle_count += 1;
-
-            if self.length_cycle_count >= 2 {
-                self.length_cycle_count = 0;
-
-                if self.length_timer >= 64 {
-                    self.dac_enabled = false;
-                    self.length_enabled = false;
-                } else {
-                    self.length_timer += 1;
-                }
-            }
-        }
-
+        self.length_counter.cycle();
         self.blip.data.end_frame(4096);
         //self.blip.from -= 4096;
     }
@@ -81,7 +60,7 @@ impl Memory for CH3 {
             // NR33: Period Low
             0xFF1D => 0xFF,
             // NR34: Period High & Control
-            0xFF1E => (self.length_enabled as u8) << 6 | 0xBF,
+            0xFF1E => (self.length_counter.enabled as u8) << 6 | 0xBF,
             0xFF30..=0xFF3F => {
                 if !self.dac_enabled {
                     self.wave_ram[a as usize - 0xFF30]
@@ -98,7 +77,7 @@ impl Memory for CH3 {
             // NR30: DAC Enable
             0xFF1A => self.dac_enabled = ((v & 0b1000_0000) >> 7) != 0,
             // NR31: Length Timer
-            0xFF1B => self.length_timer = v,
+            0xFF1B => self.length_counter.counter = v as u16,
             // NR32: Output Level
             0xFF1C => self.output_level = OutputLevel::from_bits_truncate(v),
             // NR33: Period Low
@@ -108,10 +87,14 @@ impl Memory for CH3 {
             }
             // NR34: Period High & Control
             0xFF1E => {
-                self.trigger = ((v & 0b1000_0000) >> 7) != 0;
-                self.length_enabled = ((v & 0b0100_0000) >> 6) != 0;
+                self.length_counter.trigger = ((v & 0b1000_0000) >> 7) != 0;
+                self.length_counter.enabled = ((v & 0b0100_0000) >> 6) != 0;
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;
+
+                if self.length_counter.trigger {
+                    self.length_counter.reload(1 << 8);
+                }
             }
             0xFF30..=0xFF3F => {
                 if !self.dac_enabled {

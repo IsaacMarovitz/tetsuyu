@@ -284,35 +284,6 @@ impl Memory for APU {
             _ => panic!("Write to unsupported APU address ({:#06x})!", a),
         }
 
-        if self.ch1.trigger {
-            self.ch1.trigger = false;
-            if self.ch1.dac_enabled {
-                self.is_ch_1_on = true;
-            }
-        }
-
-        if self.ch2.trigger {
-            self.ch2.trigger = false;
-            if self.ch2.dac_enabled {
-                self.is_ch_2_on = true;
-            }
-        }
-
-        if self.ch3.trigger {
-            self.ch3.trigger = false;
-            if self.ch3.dac_enabled {
-                self.is_ch_3_on = true;
-            }
-        }
-
-        if self.ch4.trigger {
-            self.ch4.trigger = false;
-            self.ch4.lfsr = 0;
-            if self.ch4.dac_enabled {
-                self.is_ch_4_on = true;
-            }
-        }
-
         if set_apu_control {
             if !self.audio_enabled {
                 self.is_ch_1_on = false;
