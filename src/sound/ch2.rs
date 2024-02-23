@@ -2,16 +2,15 @@ use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
 use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
+use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH2 {
     pub blip: Blip,
     pub dac_enabled: bool,
     pub duty_cycle: DutyCycle,
-    pub volume: u8,
-    positive_envelope: bool,
-    envelope_pace: u8,
     pub period: u16,
-    length_counter: LengthCounter
+    length_counter: LengthCounter,
+    volume_envelope: VolumeEnvelope
 }
 
 impl CH2 {
@@ -20,22 +19,18 @@ impl CH2 {
             blip,
             dac_enabled: false,
             duty_cycle: DutyCycle::EIGHTH,
-            volume: 0,
-            positive_envelope: false,
-            envelope_pace: 0,
             period: 0,
-            length_counter: LengthCounter::new()
+            length_counter: LengthCounter::new(),
+            volume_envelope: VolumeEnvelope::new()
         }
     }
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
         self.duty_cycle = DutyCycle::EIGHTH;
-        self.volume = 0;
-        self.positive_envelope = false;
-        self.envelope_pace = 0;
         self.period = 0;
         self.length_counter.clear();
+        self.volume_envelope.clear();
     }
 
     pub fn cycle(&mut self) {
@@ -52,9 +47,9 @@ impl Memory for CH2 {
             0xFF16 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR22: Volume & Envelope
             0xFF17 => {
-                (self.volume & 0b0000_1111) << 4
-                    | (self.positive_envelope as u8) << 3
-                    | (self.envelope_pace & 0b0000_0111)
+                (self.volume_envelope.volume & 0b0000_1111) << 4
+                    | (self.volume_envelope.positive as u8) << 3
+                    | (self.volume_envelope.period as u8 & 0b0000_0111)
             }
             // NR23: Period Low
             0xFF18 => 0xFF,
@@ -74,9 +69,9 @@ impl Memory for CH2 {
             }
             // NR22: Volume & Envelope
             0xFF17 => {
-                self.volume = (v & 0b1111_0000) >> 4;
-                self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
-                self.envelope_pace = v & 0b0000_0111;
+                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
+                self.volume_envelope.period = (v & 0b0000_0111) as u16;
 
                 if self.read(0xFF17) & 0xF8 != 0 {
                     self.dac_enabled = true;

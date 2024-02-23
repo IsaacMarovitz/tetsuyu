@@ -1,13 +1,11 @@
 use crate::components::memory::Memory;
 use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
+use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH4 {
     pub blip: Blip,
     pub dac_enabled: bool,
-    volume: u8,
-    positive_envelope: bool,
-    envelope_pace: u8,
     clock: u8,
     pub bit: u16,
     // False = 15-bit, True = 7-bit
@@ -17,7 +15,8 @@ pub struct CH4 {
     pub lfsr: u16,
     pub final_volume: u8,
     clock_cycle_count: u32,
-    length_counter: LengthCounter
+    length_counter: LengthCounter,
+    volume_envelope: VolumeEnvelope
 }
 
 impl CH4 {
@@ -25,9 +24,6 @@ impl CH4 {
         Self {
             blip,
             dac_enabled: false,
-            volume: 0,
-            positive_envelope: false,
-            envelope_pace: 0,
             clock: 0,
             bit: 0,
             lfsr_width: false,
@@ -36,15 +32,13 @@ impl CH4 {
             lfsr: 0,
             final_volume: 0,
             clock_cycle_count: 0,
-            length_counter: LengthCounter::new()
+            length_counter: LengthCounter::new(),
+            volume_envelope: VolumeEnvelope::new()
         }
     }
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
-        self.volume = 0;
-        self.positive_envelope = false;
-        self.envelope_pace = 0;
         self.clock = 0;
         self.lfsr_width = false;
         self.clock_divider = 0;
@@ -53,6 +47,7 @@ impl CH4 {
         self.final_volume = 0;
         self.clock_cycle_count = 0;
         self.length_counter.clear();
+        self.volume_envelope.clear();
     }
 
     pub fn cycle(&mut self) {
@@ -85,7 +80,7 @@ impl CH4 {
             if self.lfsr & 0b0000_0000_0000_0001 == 0 {
                 self.final_volume = 0;
             } else {
-                self.final_volume = self.volume;
+                self.final_volume = self.volume_envelope.volume;
             }
         }
 
@@ -102,9 +97,9 @@ impl Memory for CH4 {
             0xFF20 => 0xFF,
             // NR42: Volume & Envelope
             0xFF21 => {
-                (self.volume & 0b0000_1111) << 4
-                    | (self.positive_envelope as u8) << 3
-                    | (self.envelope_pace & 0b0000_0111)
+                (self.volume_envelope.volume & 0b0000_1111) << 4
+                    | (self.volume_envelope.positive as u8) << 3
+                    | (self.volume_envelope.period as u8 & 0b0000_0111)
             }
             // NR43: Frequency & Randomness
             0xFF22 => {
@@ -125,9 +120,9 @@ impl Memory for CH4 {
             0xFF20 => self.length_counter.counter = (v & 0b0011_1111) as u16,
             // NR42: Volume & Envelope
             0xFF21 => {
-                self.volume = (v & 0b1111_0000) >> 4;
-                self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
-                self.envelope_pace = v & 0b0000_0111;
+                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
+                self.volume_envelope.period = (v & 0b0000_0111) as u16;
 
                 if self.read(0xFF21) & 0xF8 != 0 {
                     self.dac_enabled = true;

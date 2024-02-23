@@ -2,6 +2,7 @@ use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
 use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
+use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH1 {
     pub blip: Blip,
@@ -10,12 +11,10 @@ pub struct CH1 {
     negative_direction: bool,
     sweep_step: u8,
     pub duty_cycle: DutyCycle,
-    pub volume: u8,
-    positive_envelope: bool,
-    envelope_pace: u8,
     pub period: u16,
     sweep_cycle_count: u32,
-    length_counter: LengthCounter
+    length_counter: LengthCounter,
+    volume_envelope: VolumeEnvelope
 }
 
 impl CH1 {
@@ -27,12 +26,10 @@ impl CH1 {
             negative_direction: false,
             sweep_step: 0,
             duty_cycle: DutyCycle::EIGHTH,
-            volume: 0,
-            positive_envelope: false,
-            envelope_pace: 0,
             period: 0,
             sweep_cycle_count: 0,
-            length_counter: LengthCounter::new()
+            length_counter: LengthCounter::new(),
+            volume_envelope: VolumeEnvelope::new()
         }
     }
 
@@ -42,11 +39,9 @@ impl CH1 {
         self.negative_direction = false;
         self.sweep_step = 0;
         self.duty_cycle = DutyCycle::EIGHTH;
-        self.volume = 0;
-        self.positive_envelope = false;
-        self.envelope_pace = 0;
         self.period = 0;
         self.length_counter.clear();
+        self.volume_envelope.clear();
     }
 
     pub fn cycle(&mut self) {
@@ -95,9 +90,9 @@ impl Memory for CH1 {
             0xFF11 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR12: Volume & Envelope
             0xFF12 => {
-                (self.volume & 0b0000_1111) << 4
-                    | (self.positive_envelope as u8) << 3
-                    | (self.envelope_pace & 0b0000_0111)
+                (self.volume_envelope.volume & 0b0000_1111) << 4
+                    | (self.volume_envelope.positive as u8) << 3
+                    | (self.volume_envelope.positive as u8 & 0b0000_0111)
             }
             // NR13: Period Low
             0xFF13 => 0xFF,
@@ -122,9 +117,9 @@ impl Memory for CH1 {
             }
             // NR12: Volume & Envelope
             0xFF12 => {
-                self.volume = (v & 0b1111_0000) >> 4;
-                self.positive_envelope = ((v & 0b0000_1000) >> 3) != 0;
-                self.envelope_pace = v & 0b0000_0111;
+                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
+                self.volume_envelope.period = (v & 0b0000_0111) as u16;
 
                 if self.read(0xFF12) & 0xF8 != 0 {
                     self.dac_enabled = true;

@@ -5,6 +5,7 @@ mod ch3;
 mod ch4;
 mod blip;
 mod length_counter;
+mod volume_envelope;
 
 #[allow(unused_imports)]
 mod prelude {

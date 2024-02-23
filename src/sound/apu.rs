@@ -150,44 +150,6 @@ impl APU {
             self.ch4.cycle();
         }
 
-        let ch1_vol = {
-            if self.ch1.dac_enabled {
-                self.ch1.volume as f64 / 0xF as f64
-            } else {
-                0.0
-            }
-        };
-
-        let ch2_vol = {
-            if self.ch2.dac_enabled {
-                self.ch2.volume as f64 / 0xF as f64
-            } else {
-                0.0
-            }
-        };
-
-        let ch3_vol = {
-            if self.ch3.dac_enabled {
-                match self.ch3.output_level {
-                    OutputLevel::MUTE => 0.0,
-                    OutputLevel::QUARTER => 0.25,
-                    OutputLevel::HALF => 0.5,
-                    OutputLevel::MAX => 1.0,
-                    _ => 0.0,
-                }
-            } else {
-                0.0
-            }
-        };
-
-        let ch4_vol = {
-            if self.ch4.dac_enabled {
-                self.ch4.final_volume as f64 / 0xF as f64
-            } else {
-                0.0
-            }
-        };
-
         // TODO: Amplifier on original hardware NEVER completely mutes non-silent input
         let global_l = {
             if self.audio_enabled {
