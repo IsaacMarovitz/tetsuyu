@@ -6,8 +6,9 @@ mod ch4;
 mod blip;
 mod length_counter;
 mod volume_envelope;
+mod synth;
 
 #[allow(unused_imports)]
 mod prelude {
-    pub use crate::sound::{apu::*, ch1::*, ch2::*, ch3::*, ch4::*};
+    pub use crate::sound::{apu::*, ch1::*, ch2::*, ch3::*, ch4::*, synth::*};
 }

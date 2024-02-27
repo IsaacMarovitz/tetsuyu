@@ -1,22 +1,19 @@
 use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
-use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
 use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH2 {
-    pub blip: Blip,
     pub dac_enabled: bool,
     pub duty_cycle: DutyCycle,
     pub period: u16,
     length_counter: LengthCounter,
-    volume_envelope: VolumeEnvelope
+    pub volume_envelope: VolumeEnvelope
 }
 
 impl CH2 {
-    pub fn new(blip: Blip) -> Self {
+    pub fn new() -> Self {
         Self {
-            blip,
             dac_enabled: false,
             duty_cycle: DutyCycle::EIGHTH,
             period: 0,
@@ -35,8 +32,7 @@ impl CH2 {
 
     pub fn cycle(&mut self) {
         self.length_counter.cycle();
-        self.blip.data.end_frame(4096);
-        //self.blip.from -= 4096;
+        self.volume_envelope.cycle();
     }
 }
 
@@ -47,7 +43,7 @@ impl Memory for CH2 {
             0xFF16 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR22: Volume & Envelope
             0xFF17 => {
-                (self.volume_envelope.volume & 0b0000_1111) << 4
+                (self.volume_envelope.volume as u8 & 0b0000_1111) << 4
                     | (self.volume_envelope.positive as u8) << 3
                     | (self.volume_envelope.period as u8 & 0b0000_0111)
             }
@@ -69,7 +65,7 @@ impl Memory for CH2 {
             }
             // NR22: Volume & Envelope
             0xFF17 => {
-                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.volume = ((v & 0b1111_0000) >> 4) as f32;
                 self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
                 self.volume_envelope.period = (v & 0b0000_0111) as u16;
 

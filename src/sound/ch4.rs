@@ -1,10 +1,8 @@
 use crate::components::memory::Memory;
-use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
 use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH4 {
-    pub blip: Blip,
     pub dac_enabled: bool,
     clock: u8,
     pub bit: u16,
@@ -20,9 +18,8 @@ pub struct CH4 {
 }
 
 impl CH4 {
-    pub fn new(blip: Blip) -> Self {
+    pub fn new() -> Self {
         Self {
-            blip,
             dac_enabled: false,
             clock: 0,
             bit: 0,
@@ -80,13 +77,11 @@ impl CH4 {
             if self.lfsr & 0b0000_0000_0000_0001 == 0 {
                 self.final_volume = 0;
             } else {
-                self.final_volume = self.volume_envelope.volume;
+                self.final_volume = 0; // self.volume_envelope.volume;
             }
         }
 
         self.length_counter.cycle();
-        self.blip.data.end_frame(4096);
-        //self.blip.from -= 4096;
     }
 }
 
@@ -97,7 +92,7 @@ impl Memory for CH4 {
             0xFF20 => 0xFF,
             // NR42: Volume & Envelope
             0xFF21 => {
-                (self.volume_envelope.volume & 0b0000_1111) << 4
+                (self.volume_envelope.volume as u8 & 0b0000_1111) << 4
                     | (self.volume_envelope.positive as u8) << 3
                     | (self.volume_envelope.period as u8 & 0b0000_0111)
             }
@@ -120,7 +115,7 @@ impl Memory for CH4 {
             0xFF20 => self.length_counter.counter = (v & 0b0011_1111) as u16,
             // NR42: Volume & Envelope
             0xFF21 => {
-                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.volume = ((v & 0b1111_0000) >> 4) as f32;
                 self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
                 self.volume_envelope.period = (v & 0b0000_0111) as u16;
 

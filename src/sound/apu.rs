@@ -9,7 +9,6 @@ use bitflags::bitflags;
 use cpal::{SampleFormat, Stream};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::CLOCK_FREQUENCY;
-use crate::sound::blip::Blip;
 
 pub struct APU {
     audio_enabled: bool,
@@ -24,11 +23,9 @@ pub struct APU {
     ch2: CH2,
     ch3: CH3,
     ch4: CH4,
+    synth: Synth,
     div_one: bool,
-    freq: f64,
-    sample_rate: u32,
-    buffer: Arc<Mutex<Vec<(f32, f32)>>>,
-    stream: Stream
+    freq: f64
 }
 
 bitflags! {
@@ -47,15 +44,14 @@ bitflags! {
 
 impl APU {
     pub fn new() -> Self {
-        let host = cpal::default_host();
-        let device = host.default_output_device().unwrap();
-        let config = device.default_output_config().unwrap();
-        let sample_rate = config.sample_rate().0;
-        let sample_format = config.sample_format();
-
-        println!("Initialising Audio Device: {}, at {} Hz ({})", device.name().unwrap(), sample_rate, sample_format);
-
-        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let synth = Synth::new();
+        // let host = cpal::default_host();
+        // let device = host.default_output_device().unwrap();
+        // let config = device.default_output_config().unwrap();
+        // let sample_rate = config.sample_rate().0;
+        // let sample_format = config.sample_format();
+        //
+        // println!("Initialising Audio Device: {}, at {} Hz ({})", device.name().unwrap(), sample_rate, sample_format);
 
         Self {
             audio_enabled: true,
@@ -66,64 +62,13 @@ impl APU {
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),
-            ch1: CH1::new(Self::create_blip(sample_rate)),
-            ch2: CH2::new(Self::create_blip(sample_rate)),
-            ch3: CH3::new(Self::create_blip(sample_rate)),
-            ch4: CH4::new(Self::create_blip(sample_rate)),
+            ch1: CH1::new(),
+            ch2: CH2::new(),
+            ch3: CH3::new(),
+            ch4: CH4::new(),
+            synth,
             div_one: false,
             freq: 256.0,
-            sample_rate,
-            buffer: buffer.clone(),
-            stream: match sample_format {
-                SampleFormat::F32 => {
-                    let buffer_data = buffer.clone();
-
-                    device.build_output_stream(
-                        &config.config(),
-                        move |data: &mut[f32], _| {
-                            let len = std::cmp::min(data.len() / 2, buffer_data.lock().unwrap().len());
-                            for (i, (data_l, data_r)) in buffer_data.lock().unwrap().drain(..len).enumerate() {
-                                data[i * 2 + 0] = data_l;
-                                data[i * 2 + 1] = data_r;
-                            }
-                        },
-                        move |err| println!("{}", err),
-                        None).unwrap()
-                }
-                SampleFormat::F64 => {
-                    let buffer_data = buffer.clone();
-
-                    device.build_output_stream(
-                        &config.config(),
-                        move |data: &mut[f64], _| {
-                            let len = std::cmp::min(data.len() / 2,  buffer_data.lock().unwrap().len());
-                            for (i, (data_l, data_r)) in buffer_data.lock().unwrap().drain(..len).enumerate() {
-                                data[i * 2 + 0] = data_l as f64;
-                                data[i * 2 + 1] = data_r as f64;
-                            }
-                        },
-                        move |err| println!("{}", err),
-                        None).unwrap()
-                }
-                format => panic!("Unsupported Output Format {}!", format),
-            },
-        }
-    }
-
-    pub fn create_blip(sample_rate: u32) -> Blip {
-        let mut blip_buf = BlipBuf::new(sample_rate as usize);
-        blip_buf.set_rates(CLOCK_FREQUENCY, sample_rate);
-        Blip::new(blip_buf)
-    }
-
-    pub fn play(&mut self, l: &[f32], r: &[f32]) {
-        assert_eq!(l.len(), r.len());
-        let mut buffer = self.buffer.lock().unwrap();
-        for (l, r) in l.iter().zip(r) {
-            if buffer.len() > self.sample_rate as usize {
-                return;
-            }
-            buffer.push((*l, *r));
         }
     }
 
@@ -150,6 +95,64 @@ impl APU {
             self.ch4.cycle();
         }
 
+        let ch1_vol = {
+            if self.ch1.dac_enabled {
+                self.ch1.volume_envelope.volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
+        let ch1_duty = {
+            match self.ch1.duty_cycle {
+                DutyCycle::EIGHTH => 0.125,
+                DutyCycle::QUARTER => 0.25,
+                DutyCycle::HALF => 0.5,
+                DutyCycle::THREE_QUARTERS => 0.75,
+                _ => 0.0,
+            }
+        };
+
+        let ch2_vol = {
+            if self.ch2.dac_enabled {
+                self.ch2.volume_envelope.volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
+        let ch2_duty = {
+            match self.ch2.duty_cycle {
+                DutyCycle::EIGHTH => 0.125,
+                DutyCycle::QUARTER => 0.25,
+                DutyCycle::HALF => 0.5,
+                DutyCycle::THREE_QUARTERS => 0.75,
+                _ => 0.0,
+            }
+        };
+
+        let ch3_vol = {
+            if self.ch3.dac_enabled {
+                match self.ch3.output_level {
+                    OutputLevel::MUTE => 0.0,
+                    OutputLevel::QUARTER => 0.25,
+                    OutputLevel::HALF => 0.5,
+                    OutputLevel::MAX => 1.0,
+                    _ => 0.0,
+                }
+            } else {
+                0.0
+            }
+        };
+
+        let ch4_vol = {
+            if self.ch4.dac_enabled {
+                self.ch4.final_volume as f64 / 0xF as f64
+            } else {
+                0.0
+            }
+        };
+
         // TODO: Amplifier on original hardware NEVER completely mutes non-silent input
         let global_l = {
             if self.audio_enabled {
@@ -167,19 +170,31 @@ impl APU {
             }
         };
 
-        let sc1 = self.ch1.blip.data.samples_avail();
-        let sc2 = self.ch1.blip.data.samples_avail();
-        let sc3 = self.ch1.blip.data.samples_avail();
-        let sc4 = self.ch1.blip.data.samples_avail();
+        self.synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
+        self.synth.ch1_vol.set_value(ch1_vol);
+        self.synth.ch1_duty.set_value(ch1_duty);
+        self.synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
 
-        // Check that all channels
-        // have equal number of samples
-        assert_eq!(sc1, sc2);
-        assert_eq!(sc2, sc3);
-        assert_eq!(sc3, sc4);
+        self.synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
+        self.synth.ch2_vol.set_value(ch2_vol);
+        self.synth.ch2_duty.set_value(ch2_duty);
+        self.synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
 
-        let sample_count = sc1;
-        let mut sum = 0;
+        self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
+        self.synth.ch3_vol.set_value(ch3_vol);
+        self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
+
+        self.synth.ch4_freq.set_value(self.ch4.frequency as f64);
+        self.synth.ch4_vol.set_value(ch4_vol);
+        self.synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
+        self.synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
+
+        self.synth.global_l.set_value(global_l);
+        self.synth.global_r.set_value(global_r);
+
     }
 }
 

@@ -15,7 +15,7 @@ impl Blip {
         }
     }
 
-    fn set(&mut self, time: u32, ampl: i32) {
+    pub(crate) fn set(&mut self, time: u32, ampl: i32) {
         self.from = time;
         let delta = ampl - self.ampl;
         self.ampl = ampl;

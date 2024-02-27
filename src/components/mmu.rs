@@ -174,6 +174,7 @@ impl Memory for MMU {
                 }
             }
             0xFEA0..=0xFEFF => {}
+            0xFF7F => {}
             0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
             _ => panic!("Write to unsupported address ({:#06x})!", a),
         }

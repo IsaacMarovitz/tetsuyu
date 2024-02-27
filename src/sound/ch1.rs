@@ -1,11 +1,9 @@
 use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
-use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
 use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH1 {
-    pub blip: Blip,
     pub dac_enabled: bool,
     sweep_pace: u8,
     negative_direction: bool,
@@ -14,13 +12,12 @@ pub struct CH1 {
     pub period: u16,
     sweep_cycle_count: u32,
     length_counter: LengthCounter,
-    volume_envelope: VolumeEnvelope
+    pub volume_envelope: VolumeEnvelope
 }
 
 impl CH1 {
-    pub fn new(blip: Blip) -> Self {
+    pub fn new() -> Self {
         Self {
-            blip,
             dac_enabled: false,
             sweep_pace: 0,
             negative_direction: false,
@@ -45,6 +42,9 @@ impl CH1 {
     }
 
     pub fn cycle(&mut self) {
+        self.length_counter.cycle();
+        self.volume_envelope.cycle();
+
         if self.sweep_pace != 0 {
             self.sweep_cycle_count += 1;
 
@@ -69,10 +69,6 @@ impl CH1 {
                 }
             }
         }
-
-        self.length_counter.cycle();
-        self.blip.data.end_frame(4096);
-        //self.blip.from -= 4096;
     }
 }
 
@@ -90,7 +86,7 @@ impl Memory for CH1 {
             0xFF11 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR12: Volume & Envelope
             0xFF12 => {
-                (self.volume_envelope.volume & 0b0000_1111) << 4
+                (self.volume_envelope.volume as u8 & 0b0000_1111) << 4
                     | (self.volume_envelope.positive as u8) << 3
                     | (self.volume_envelope.positive as u8 & 0b0000_0111)
             }
@@ -117,7 +113,7 @@ impl Memory for CH1 {
             }
             // NR12: Volume & Envelope
             0xFF12 => {
-                self.volume_envelope.volume = (v & 0b1111_0000) >> 4;
+                self.volume_envelope.volume = ((v & 0b1111_0000) >> 4) as f32;
                 self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
                 self.volume_envelope.period = (v & 0b0000_0111) as u16;
 

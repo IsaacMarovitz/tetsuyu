@@ -1,10 +1,8 @@
 use crate::components::memory::Memory;
 use bitflags::bitflags;
-use crate::sound::blip::Blip;
 use crate::sound::length_counter::LengthCounter;
 
 pub struct CH3 {
-    pub blip: Blip,
     pub dac_enabled: bool,
     pub output_level: OutputLevel,
     pub period: u16,
@@ -23,9 +21,8 @@ bitflags! {
 }
 
 impl CH3 {
-    pub fn new(blip: Blip) -> Self {
+    pub fn new() -> Self {
         Self {
-            blip,
             dac_enabled: false,
             output_level: OutputLevel::MUTE,
             period: 0,
@@ -43,8 +40,6 @@ impl CH3 {
 
     pub fn cycle(&mut self) {
         self.length_counter.cycle();
-        self.blip.data.end_frame(4096);
-        //self.blip.from -= 4096;
     }
 }
 

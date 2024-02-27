@@ -1,5 +1,5 @@
 pub struct VolumeEnvelope {
-    pub volume: u8,
+    pub volume: f32,
     pub period: u16,
     pub positive: bool,
 }
@@ -7,7 +7,7 @@ pub struct VolumeEnvelope {
 impl VolumeEnvelope {
     pub fn new() -> Self {
         Self {
-            volume: 0,
+            volume: 0f32,
             period: 0,
             positive: false
         }
@@ -19,12 +19,14 @@ impl VolumeEnvelope {
         }
 
         let volume = if self.positive {
-            self.volume.wrapping_add(1)
+            // self.volume.wrapping_add(1)
+            0f32
         } else {
-            self.volume.wrapping_sub(1)
+            //println!("Decreasing");
+            self.volume + 0.01f32
         };
 
-        if volume <= 15 {
+        if volume <= 15f32 {
             self.volume = volume;
         }
     }
@@ -34,7 +36,7 @@ impl VolumeEnvelope {
     }
 
     pub fn clear(&mut self) {
-        self.volume = 0;
+        self.volume = 0f32;
         self.period = 0;
         self.positive = false;
     }
