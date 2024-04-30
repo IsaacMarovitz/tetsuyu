@@ -17,5 +17,4 @@ num-derive = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 pollster = "0.3"
-librashader-common = { git = "https://github.com/IsaacMarovitz/librashader.git", version = "0.2", features = ["wgpu"] }
-librashader = { git = "https://github.com/IsaacMarovitz/librashader.git", version = "0.2", features = ["wgpu"] }
+librashader = { version = "0.2", default-features = false, features = ["runtime-wgpu", "presets"], git = "https://github.com/IsaacMarovitz/librashader.git" }

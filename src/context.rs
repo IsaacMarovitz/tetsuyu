@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use librashader::presets::ShaderPreset;
 use librashader::runtime::wgpu::FilterChain;
-use librashader_common::Viewport;
+use librashader::runtime::Viewport;
 use wgpu::PresentMode;
 use crate::components::ppu::{SCREEN_H, SCREEN_W};
 use winit::dpi::PhysicalSize;

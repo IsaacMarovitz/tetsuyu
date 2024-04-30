@@ -164,12 +164,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9180feb72ccbc07cfe5ef7fa8bbf86ca71490d5dc9ef8ea02c7298ba94e7f7d"
 
 [[package]]
-name = "array-init"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
-
-[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -281,18 +275,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 
 [[package]]
-name = "bitvec"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
-dependencies = [
- "funty",
- "radium",
- "tap",
- "wyz",
-]
-
-[[package]]
 name = "blake3"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,25 +292,6 @@ name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
-
-[[package]]
-name = "block-sys"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae85a0696e7ea3b835a453750bf002770776609115e6d25c6d2ff28a8200f7e7"
-dependencies = [
- "objc-sys",
-]
-
-[[package]]
-name = "block2"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e58aa60e59d8dbfcc36138f5f18be5f24394d33b38b24f7fd0b1caa33095f22f"
-dependencies = [
- "block-sys",
- "objc2",
-]
 
 [[package]]
 name = "block2"
@@ -417,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32a725bc159af97c3e629873bb9f88fb8cf8a4867175f76dc987815ea07c83b"
+checksum = "065a29261d53ba54260972629f9ca6bffa69bac13cd1fed61420f7fa68b9f8bd"
 dependencies = [
  "jobserver",
  "libc",
@@ -973,12 +936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "funty"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
-
-[[package]]
 name = "funutd"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1027,15 +984,6 @@ checksum = "3fb2d69b19215e18bb912fa30f7ce15846e301408695e44e0ef719f1da9e19f2"
 dependencies = [
  "color_quant",
  "weezl",
-]
-
-[[package]]
-name = "gl"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a94edab108827d67608095e269cf862e60d920f144a5026d3dbcfd8b877fb404"
-dependencies = [
- "gl_generator",
 ]
 
 [[package]]
@@ -1129,7 +1077,6 @@ version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f56f6318968d03c18e1bcf4857ff88c61157e9da8e47c5f29055d60e1228884"
 dependencies = [
- "ash",
  "log",
  "presser",
  "thiserror",
@@ -1224,16 +1171,6 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
-
-[[package]]
-name = "icrate"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fb69199826926eb864697bddd27f73d9fddcffc004f5733131e15b465e30642"
-dependencies = [
- "block2 0.4.0",
- "objc2",
-]
 
 [[package]]
 name = "image"
@@ -1387,25 +1324,16 @@ name = "librashader"
 version = "0.2.7"
 source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
 dependencies = [
- "ash",
  "halfbrown",
- "icrate",
  "librashader-cache",
  "librashader-common",
  "librashader-preprocess",
  "librashader-presets",
  "librashader-reflect",
  "librashader-runtime",
- "librashader-runtime-d3d11",
- "librashader-runtime-d3d12",
- "librashader-runtime-gl",
- "librashader-runtime-mtl",
- "librashader-runtime-vk",
  "librashader-runtime-wgpu",
- "objc2",
  "wgpu",
  "wgpu-types",
- "windows 0.52.0",
 ]
 
 [[package]]
@@ -1422,7 +1350,6 @@ dependencies = [
  "platform-dirs",
  "serde",
  "thiserror",
- "windows 0.52.0",
 ]
 
 [[package]]
@@ -1430,14 +1357,10 @@ name = "librashader-common"
 version = "0.2.7"
 source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
 dependencies = [
- "ash",
- "gl",
  "halfbrown",
- "icrate",
  "num-traits",
  "rustc-hash",
  "wgpu-types",
- "windows 0.52.0",
 ]
 
 [[package]]
@@ -1486,7 +1409,6 @@ dependencies = [
  "rustc-hash",
  "serde",
  "spirv",
- "spirv-to-dxil",
  "thiserror",
 ]
 
@@ -1504,103 +1426,6 @@ dependencies = [
  "librashader-reflect",
  "num-traits",
  "tinymap",
-]
-
-[[package]]
-name = "librashader-runtime-d3d11"
-version = "0.2.7"
-source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
-dependencies = [
- "array-concat",
- "bytemuck",
- "librashader-cache",
- "librashader-common",
- "librashader-preprocess",
- "librashader-presets",
- "librashader-reflect",
- "librashader-runtime",
- "rayon",
- "thiserror",
- "windows 0.52.0",
-]
-
-[[package]]
-name = "librashader-runtime-d3d12"
-version = "0.2.7"
-source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
-dependencies = [
- "array-concat",
- "array-init",
- "bitvec",
- "bytemuck",
- "librashader-cache",
- "librashader-common",
- "librashader-preprocess",
- "librashader-presets",
- "librashader-reflect",
- "librashader-runtime",
- "mach-siegbert-vogt-dxcsa",
- "rayon",
- "thiserror",
- "widestring",
- "windows 0.52.0",
-]
-
-[[package]]
-name = "librashader-runtime-gl"
-version = "0.2.7"
-source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
-dependencies = [
- "bytemuck",
- "gl",
- "librashader-cache",
- "librashader-common",
- "librashader-preprocess",
- "librashader-presets",
- "librashader-reflect",
- "librashader-runtime",
- "librashader-spirv-cross",
- "rayon",
- "sptr",
- "thiserror",
-]
-
-[[package]]
-name = "librashader-runtime-mtl"
-version = "0.2.7"
-source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
-dependencies = [
- "array-concat",
- "bytemuck",
- "icrate",
- "librashader-common",
- "librashader-preprocess",
- "librashader-presets",
- "librashader-reflect",
- "librashader-runtime",
- "objc2",
- "rayon",
- "thiserror",
-]
-
-[[package]]
-name = "librashader-runtime-vk"
-version = "0.2.7"
-source = "git+https://github.com/IsaacMarovitz/librashader.git#03fc9eb0cfced134b6227eb8ce98cd211617b4b2"
-dependencies = [
- "array-concat",
- "ash",
- "bytemuck",
- "gpu-allocator",
- "librashader-cache",
- "librashader-common",
- "librashader-preprocess",
- "librashader-presets",
- "librashader-reflect",
- "librashader-runtime",
- "parking_lot",
- "rayon",
- "thiserror",
 ]
 
 [[package]]
@@ -1687,15 +1512,6 @@ name = "log"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
-
-[[package]]
-name = "mach-siegbert-vogt-dxcsa"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d3e62358869047ad84e507d5bcd47e7f3917629947ba34ac0b3e5969db00a7b"
-dependencies = [
- "bytemuck",
-]
 
 [[package]]
 name = "mach2"
@@ -1963,7 +1779,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb79768a710a9a1798848179edb186d1af7e8a8679f369e4b8d201dd2a034047"
 dependencies = [
- "block2 0.5.0",
+ "block2",
  "objc2",
  "objc2-core-data",
  "objc2-foundation",
@@ -1975,7 +1791,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e092bc42eaf30a08844e6a076938c60751225ec81431ab89f5d1ccd9f958d6c"
 dependencies = [
- "block2 0.5.0",
+ "block2",
  "objc2",
  "objc2-foundation",
 ]
@@ -1992,7 +1808,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfaefe14254871ea16c7d88968c0ff14ba554712a20d76421eec52f0a7fb8904"
 dependencies = [
- "block2 0.5.0",
+ "block2",
  "dispatch",
  "objc2",
 ]
@@ -2284,12 +2100,6 @@ checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
 dependencies = [
  "proc-macro2",
 ]
-
-[[package]]
-name = "radium"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
@@ -2634,35 +2444,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spirv-to-dxil"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a3fb4188c288f0bcf2d6e18a74647a6346ce974c7751ca075de89e4949d4b0e"
-dependencies = [
- "bytemuck",
- "mach-siegbert-vogt-dxcsa",
- "spirv-to-dxil-sys",
- "thiserror",
-]
-
-[[package]]
-name = "spirv-to-dxil-sys"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037a06e11f21b121d2aff4575185e1f61486908d1202f91d55997b05fdc51140"
-dependencies = [
- "build-target",
- "bytemuck",
- "cc",
-]
-
-[[package]]
-name = "sptr"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b9b39299b249ad65f3b7e96443bad61c02ca5cd3589f46cb6d610a0fd6c0d6a"
-
-[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2709,12 +2490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tap"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2733,7 +2508,6 @@ dependencies = [
  "cpal",
  "fundsp",
  "librashader",
- "librashader-common",
  "log",
  "num-derive",
  "num-traits",
@@ -3639,15 +3413,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b9415ee827af173ebb3f15f9083df5a122eb93572ec28741fb153356ea2578"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "wyz"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
-dependencies = [
- "tap",
 ]
 
 [[package]]
