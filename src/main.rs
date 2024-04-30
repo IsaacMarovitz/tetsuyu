@@ -157,6 +157,12 @@ fn main() {
     let game_name = std::str::from_utf8(&name_data[0..index]).expect("Failed to get game name!");
     println!("Starting \"{}\" in {:?} Mode...", game_name, config.mode);
 
+    let panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        panic(info);
+        process::exit(1);
+    }));
+
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
