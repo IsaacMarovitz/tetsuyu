@@ -3,6 +3,8 @@ use crate::config::{Color, Config, Palette};
 use crate::Framebuffer;
 use bitflags::bitflags;
 
+/// RGBA (4 bytes) per pixel
+pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
@@ -611,7 +613,7 @@ impl Memory for PPU {
                     self.ppu_mode = PPUMode::HBlank;
 
                     let mut framebuffer = self.framebuffer.write().unwrap();
-                    *framebuffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
+                    *framebuffer = [0; FRAMEBUFFER_SIZE];
                 }
             }
             0xFF41 => {

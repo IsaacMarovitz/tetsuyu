@@ -18,7 +18,7 @@ pub struct MMU {
     intf: Interrupts,
     inte: Interrupts,
     wram_bank: usize,
-    boot_rom: [u8;  0x900],
+    boot_rom: [u8; 0x900],
     boot_rom_enabled: bool,
     mode: GBMode
 }

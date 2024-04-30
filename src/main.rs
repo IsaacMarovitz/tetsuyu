@@ -22,7 +22,7 @@ use winit::event_loop::EventLoop;
 use winit::application::ApplicationHandler;
 use winit::window::{Window, WindowId};
 
-type Framebuffer = Arc<RwLock<Vec<u8>>>;
+type Framebuffer = Arc<RwLock<[u8; FRAMEBUFFER_SIZE]>>;
 
 mod config;
 mod context;
@@ -162,7 +162,7 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
-    let framebuffer: Framebuffer = Arc::new(RwLock::new(vec![0; 4 * SCREEN_W * SCREEN_H]));
+    let framebuffer: Framebuffer = Arc::new(RwLock::new([0; FRAMEBUFFER_SIZE]));
 
     let mut app = App {
         game_name: String::from(game_name),
