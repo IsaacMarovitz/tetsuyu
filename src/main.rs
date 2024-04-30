@@ -8,17 +8,19 @@ use clap::Parser;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::{process, thread};
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Sender};
+use std::sync::{Arc, Mutex, RwLock};
+use std::sync::mpsc::Sender;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use pollster::FutureExt;
 use wgpu::SurfaceError;
-use winit::event::{ElementState, Event, WindowEvent};
-use winit::event_loop::ControlFlow;
+use winit::event::{ElementState, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
-use winit::{event_loop::EventLoop, window::WindowBuilder};
+use winit::event_loop::EventLoop;
+use winit::application::ApplicationHandler;
+use winit::window::{Window, WindowId};
 
 mod config;
 mod context;
@@ -34,10 +36,83 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 #[derive(Parser)]
 struct Args {
     rom_path: String,
-    boot_rom: Option<String>,
+    boot_rom: Option<String>
 }
 
-fn main() -> Result<(), impl std::error::Error> {
+struct App {
+    game_name: String,
+    context: Option<Arc<Mutex<Context>>>,
+    config: Config,
+    input_tx: Sender<(JoypadButton, bool)>,
+    framebuffer: Arc<RwLock<Vec<u8>>>
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window_attributes = Window::default_attributes()
+            .with_title(format!("tetsuyu - {:}", self.game_name))
+            .with_inner_size(winit::dpi::LogicalSize::new(
+                self.config.window_w,
+                self.config.window_h,
+            ));
+        let window = event_loop.create_window(window_attributes).unwrap();
+
+        let context_future = Context::new(Arc::new(window), self.config.clone().shader);
+        self.context = Some(Arc::new(Mutex::new(context_future.block_on())));
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+        let context_arc = Arc::clone(&self.context.as_ref().unwrap());
+        let mut context = context_arc.lock().unwrap();
+        let size = context.size;
+
+        match event {
+            WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                match context.render() {
+                    Ok(_) => {}
+                    Err(SurfaceError::Lost) => context.resize(size),
+                    Err(SurfaceError::OutOfMemory) => event_loop.exit(),
+                    Err(e) => println!("{:?}", e),
+                }
+            }
+            WindowEvent::Resized(physical_size) => {
+                context.resize(physical_size);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if !event.repeat {
+                    if event.state == ElementState::Pressed {
+                        send_input(
+                            event.key_without_modifiers(),
+                            true,
+                            self.config.clone().input,
+                            self.input_tx.clone(),
+                        );
+                    } else if event.state == ElementState::Released {
+                        send_input(
+                            event.key_without_modifiers(),
+                            false,
+                            self.config.clone().input,
+                            self.input_tx.clone(),
+                        );
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        let context_arc = Arc::clone(&self.context.as_ref().unwrap());
+        let mut context = context_arc.lock().unwrap();
+
+        let framebuffer_arc = Arc::clone(&self.framebuffer);
+        context.update(&*framebuffer_arc.read().unwrap());
+
+        let _ = context.render();
+    }
+}
+
+fn main() {
     let config = match File::open("./config.toml") {
         Ok(mut file) => {
             let mut config_data = String::new();
@@ -84,116 +159,59 @@ fn main() -> Result<(), impl std::error::Error> {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let window = WindowBuilder::new()
-        .with_title(format!("tetsuyu - {:}", game_name))
-        .with_inner_size(winit::dpi::LogicalSize::new(
-            config.window_w,
-            config.window_h,
-        ))
-        .build(&event_loop)
-        .unwrap();
-
-    let context_future = Context::new(Arc::new(window), config.clone().shader);
-    let context = Arc::new(Mutex::new(context_future.block_on()));
-
     let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
+    let framebuffer_rw: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(vec![0; 4 * SCREEN_W * SCREEN_H]));
 
-    {
-        let config = config.clone();
-        let context = Arc::clone(&context);
-        // Start CPU
-        thread::spawn( move || {
-            let mut cpu = CPU::new(buffer, config);
-            let mut step_cycles = 0;
-            let mut step_zero = Instant::now();
+    let mut app = App {
+        game_name: String::from(game_name),
+        context: None,
+        config: config.clone(),
+        input_tx,
+        framebuffer: framebuffer_rw.clone()
+    };
 
-            loop {
-                // https://github.com/mohanson/gameboy/blob/master/src/cpu.rs#L13
-                if step_cycles > STEP_CYCLES {
-                    step_cycles -= STEP_CYCLES;
-                    let now = Instant::now();
-                    let duration = now.duration_since(step_zero);
-                    let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
-                    // println!("[CPU] Sleeping {}ms", milliseconds);
-                    thread::sleep(Duration::from_millis(milliseconds as u64));
-                    step_zero = now;
-                }
+    // Start CPU
+    thread::spawn(move || {
+        let mut cpu = CPU::new(buffer, config);
+        let mut step_cycles = 0;
+        let mut step_zero = Instant::now();
 
-                match input_rx.try_recv() {
-                    Ok(v) => {
-                        if v.1 {
-                            cpu.mem.joypad.down(v.0);
-                        } else {
-                            cpu.mem.joypad.up(v.0);
-                        }
-                    }
-                    Err(_) => {}
-                }
-
-                let cycles = cpu.cycle();
-                step_cycles += cycles;
-                let did_draw = cpu.mem.cycle(cycles);
-                if did_draw {
-                    let frame_buffer = cpu.mem.ppu.frame_buffer.clone();
-                    let mut context = context.lock().unwrap();
-                    context.update(frame_buffer);
-                    drop(context);
-                }
+        loop {
+            // https://github.com/mohanson/gameboy/blob/master/src/cpu.rs#L13
+            if step_cycles > STEP_CYCLES {
+                step_cycles -= STEP_CYCLES;
+                let now = Instant::now();
+                let duration = now.duration_since(step_zero);
+                let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
+                // println!("[CPU] Sleeping {}ms", milliseconds);
+                thread::sleep(Duration::from_millis(milliseconds as u64));
+                step_zero = now;
             }
-        });
-    }
 
-    {
-        let context = Arc::clone(&context);
-        event_loop.run(move |event, elwt| {
-            let config = config.clone();
-            let mut context = context.lock().unwrap();
-
-            match event {
-                Event::AboutToWait => {
-                    // TODO: Handle errors
-                    let _ = context.render();
-                }
-                Event::WindowEvent { event, window_id } => {
-                    let size = context.size;
-                    match event {
-                        WindowEvent::RedrawRequested if window_id == context.window().id() => {
-                            match context.render() {
-                                Ok(_) => {}
-                                Err(SurfaceError::Lost) => context.resize(size),
-                                Err(SurfaceError::OutOfMemory) => elwt.exit(),
-                                Err(e) => println!("{:?}", e),
-                            }
-                        }
-                        WindowEvent::Resized(physical_size) => {
-                            context.resize(physical_size);
-                        }
-                        WindowEvent::KeyboardInput { event, .. } => {
-                            if !event.repeat {
-                                if event.state == ElementState::Pressed {
-                                    send_input(
-                                        event.key_without_modifiers(),
-                                        true,
-                                        config.input,
-                                        input_tx.clone(),
-                                    );
-                                } else if event.state == ElementState::Released {
-                                    send_input(
-                                        event.key_without_modifiers(),
-                                        false,
-                                        config.input,
-                                        input_tx.clone(),
-                                    );
-                                }
-                            }
-                        }
-                        _ => (),
+            match input_rx.try_recv() {
+                Ok(v) => {
+                    if v.1 {
+                        cpu.mem.joypad.down(v.0);
+                    } else {
+                        cpu.mem.joypad.up(v.0);
                     }
                 }
-                _ => (),
+                Err(_) => {}
             }
-        })
-    }
+
+            let cycles = cpu.cycle();
+            step_cycles += cycles;
+            let did_draw = cpu.mem.cycle(cycles);
+            if did_draw {
+                let framebuffer = cpu.mem.ppu.frame_buffer.clone();
+
+                let mut framebuffer_w = framebuffer_rw.write().unwrap();
+                *framebuffer_w = framebuffer;
+            }
+        }
+    });
+
+    let _ = event_loop.run_app(&mut app);
 }
 
 pub fn send_input(
