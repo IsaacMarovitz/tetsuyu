@@ -613,7 +613,7 @@ impl Memory for PPU {
                     self.ppu_mode = PPUMode::HBlank;
 
                     let mut framebuffer = self.framebuffer.write().unwrap();
-                    *framebuffer = [0; FRAMEBUFFER_SIZE];
+                    *framebuffer = [0xFF; FRAMEBUFFER_SIZE];
                 }
             }
             0xFF41 => {

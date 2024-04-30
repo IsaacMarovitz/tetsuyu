@@ -167,7 +167,7 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
-    let framebuffer: Framebuffer = Arc::new(RwLock::new([0; FRAMEBUFFER_SIZE]));
+    let framebuffer: Framebuffer = Arc::new(RwLock::new([0xFF; FRAMEBUFFER_SIZE]));
 
     let mut app = App {
         game_name: String::from(game_name),
