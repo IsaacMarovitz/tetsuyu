@@ -1,4 +1,3 @@
-use assert_no_alloc::*;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::hacker::*;
@@ -220,7 +219,7 @@ impl Synth {
             c.set_sample_rate(sample_rate);
             c.allocate();
 
-            let mut next_value = move || assert_no_alloc(|| c.get_stereo());
+            let mut next_value = move || c.get_stereo();
 
             let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
