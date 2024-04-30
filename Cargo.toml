@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winit = { version = "0.29", features = ["serde"] }
+winit = { version = "0.30", features = ["serde"] }
 cpal = "0.15"
 fundsp = { version = "0.17", default-features = false }
 clap = { version = "4.5", features = ["derive"] }
