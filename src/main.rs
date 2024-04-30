@@ -32,7 +32,6 @@ mod sound;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;
-// STEP_CYCLES = 67108
 pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
 
 #[derive(Parser)]
@@ -187,7 +186,11 @@ fn main() {
                 let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
                 // println!("[CPU] Sleeping {}ms", milliseconds);
                 thread::sleep(Duration::from_millis(milliseconds as u64));
-                step_zero = now;
+                step_zero = step_zero.checked_add(Duration::from_millis(u64::from(STEP_TIME))).unwrap();
+                
+                if now.checked_duration_since(step_zero).is_some() {
+                    step_zero = now;
+                }
             }
 
             match input_rx.try_recv() {
