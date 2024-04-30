@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use winit::keyboard::Key;
 use crate::components::mode::GBMode;
-use crate::context::Shader;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
@@ -13,7 +12,7 @@ pub struct Config {
     pub audio: Audio,
     pub input: Input,
     pub palette: Palette,
-    pub shader: Shader
+    pub shader_path: String
 }
 
 impl Default for Config {
@@ -58,7 +57,7 @@ impl Default for Config {
                 },
                 light: Color { r: 8, g: 41, b: 85 },
             },
-            shader: Shader::None
+            shader_path: String::default()
         }
     }
 }

@@ -8,10 +8,10 @@ A GameBoy emulator, written in Rust.
 - Input
 - Cycle-Accurate CPU
 - Cross-Platform
-- WGPU-based Backend
+- wgpu-based Backend
+- librashader support
 - Configurable Settings
   - Custom Palettes
-  - Custom Shaders
   - Custom Inputs
 
 ### Partially Complete

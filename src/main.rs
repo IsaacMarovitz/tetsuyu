@@ -58,7 +58,7 @@ impl ApplicationHandler for App {
             ));
         let window = event_loop.create_window(window_attributes).unwrap();
 
-        let context_future = Context::new(Arc::new(window), self.config.clone().shader);
+        let context_future = Context::new(Arc::new(window), self.config.shader_path.clone());
         self.context = Some(Arc::new(Mutex::new(context_future.block_on())));
     }
 
