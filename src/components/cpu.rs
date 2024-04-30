@@ -3,6 +3,7 @@ use std::io::Read;
 use std::process;
 use crate::config::Config;
 use crate::components::prelude::*;
+use crate::Framebuffer;
 
 pub struct CPU {
     pub reg: Registers,
@@ -16,7 +17,9 @@ pub struct CPU {
 unsafe impl Send for CPU {}
 
 impl CPU {
-    pub fn new(rom: Vec<u8>, config: Config) -> Self {
+    pub fn new(rom: Vec<u8>,
+               config: Config,
+               framebuffer: Framebuffer) -> Self {
         let mut boot_rom: [u8; 0x900] = [0; 0x900];
         let booting: bool = match config.boot_rom {
             Some(ref path) => {
@@ -45,7 +48,7 @@ impl CPU {
 
         Self {
             reg: Registers::new(config.clone().mode, booting),
-            mem: MMU::new(rom, config, booting, boot_rom),
+            mem: MMU::new(rom, config, booting, boot_rom, framebuffer),
             halted: false,
             ime: false,
             ime_ask: false

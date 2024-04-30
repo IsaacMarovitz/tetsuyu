@@ -22,6 +22,8 @@ use winit::event_loop::EventLoop;
 use winit::application::ApplicationHandler;
 use winit::window::{Window, WindowId};
 
+type Framebuffer = Arc<RwLock<Vec<u8>>>;
+
 mod config;
 mod context;
 mod components;
@@ -44,7 +46,7 @@ struct App {
     context: Option<Arc<Mutex<Context>>>,
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
-    framebuffer: Arc<RwLock<Vec<u8>>>
+    framebuffer: Framebuffer
 }
 
 impl ApplicationHandler for App {
@@ -105,8 +107,8 @@ impl ApplicationHandler for App {
         let context_arc = Arc::clone(&self.context.as_ref().unwrap());
         let mut context = context_arc.lock().unwrap();
 
-        let framebuffer_arc = Arc::clone(&self.framebuffer);
-        context.update(&*framebuffer_arc.read().unwrap());
+        let framebuffer = Arc::clone(&self.framebuffer);
+        context.update(&*framebuffer.read().unwrap());
 
         let _ = context.render();
     }
@@ -160,19 +162,19 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
-    let framebuffer_rw: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(vec![0; 4 * SCREEN_W * SCREEN_H]));
+    let framebuffer: Framebuffer = Arc::new(RwLock::new(vec![0; 4 * SCREEN_W * SCREEN_H]));
 
     let mut app = App {
         game_name: String::from(game_name),
         context: None,
         config: config.clone(),
         input_tx,
-        framebuffer: framebuffer_rw.clone()
+        framebuffer: framebuffer.clone()
     };
 
     // Start CPU
     thread::spawn(move || {
-        let mut cpu = CPU::new(buffer, config);
+        let mut cpu = CPU::new(buffer, config, framebuffer);
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 
@@ -201,13 +203,7 @@ fn main() {
 
             let cycles = cpu.cycle();
             step_cycles += cycles;
-            let did_draw = cpu.mem.cycle(cycles);
-            if did_draw {
-                let framebuffer = cpu.mem.ppu.frame_buffer.clone();
-
-                let mut framebuffer_w = framebuffer_rw.write().unwrap();
-                *framebuffer_w = framebuffer;
-            }
+            cpu.mem.cycle(cycles);
         }
     });
 

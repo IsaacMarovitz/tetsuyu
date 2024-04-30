@@ -2,6 +2,7 @@ use crate::components::prelude::*;
 use crate::config::Config;
 use crate::mbc::prelude::*;
 use crate::sound::apu::APU;
+use crate::Framebuffer;
 use bitflags::bitflags;
 use num_traits::FromPrimitive;
 
@@ -34,7 +35,11 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(rom: Vec<u8>, config: Config, booting: bool, boot_rom: [u8; 0x900]) -> Self {
+    pub fn new(rom: Vec<u8>,
+               config: Config,
+               booting: bool,
+               boot_rom: [u8; 0x900],
+               framebuffer: Framebuffer) -> Self {
         let cart_type: CartTypes = FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
         let mbc_mode = match cart_type.get_mbc() {
             MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
@@ -56,7 +61,7 @@ impl MMU {
         Self {
             mbc: mbc,
             apu: APU::new(),
-            ppu: PPU::new(config.clone()),
+            ppu: PPU::new(config.clone(), framebuffer),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
             timer: Timer::new(),
@@ -71,7 +76,7 @@ impl MMU {
         }
     }
 
-    pub fn cycle(&mut self, cycles: u32) -> bool {
+    pub fn cycle(&mut self, cycles: u32) {
         self.timer.cycle(cycles);
         self.intf |= self.timer.interrupts;
         self.timer.interrupts = Interrupts::empty();
@@ -79,7 +84,7 @@ impl MMU {
         self.intf |= self.joypad.interrupts;
         self.joypad.interrupts = Interrupts::empty();
 
-        let did_draw = self.ppu.cycle(cycles);
+        self.ppu.cycle(cycles);
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
 
@@ -87,8 +92,6 @@ impl MMU {
 
         self.intf |= self.serial.interrupts;
         self.serial.interrupts = Interrupts::empty();
-
-        did_draw
     }
 
     fn oamdma(&mut self, value: u8) {

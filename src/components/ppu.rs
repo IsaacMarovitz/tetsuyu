@@ -1,5 +1,6 @@
 use crate::components::prelude::*;
 use crate::config::{Color, Config, Palette};
+use crate::Framebuffer;
 use bitflags::bitflags;
 
 pub const SCREEN_W: usize = 160;
@@ -33,7 +34,7 @@ pub struct PPU {
     opri: bool,
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
-    pub frame_buffer: Vec<u8>,
+    pub framebuffer: Framebuffer,
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -130,7 +131,7 @@ impl BGPI {
 }
 
 impl PPU {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, framebuffer: Framebuffer) -> Self {
         Self {
             mode: config.mode,
             palette: config.palette,
@@ -159,13 +160,13 @@ impl PPU {
             opri: true,
             bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
-            frame_buffer: vec![0x00; 4 * SCREEN_W * SCREEN_H],
+            framebuffer,
         }
     }
 
-    pub fn cycle(&mut self, cycles: u32) -> bool {
+    pub fn cycle(&mut self, cycles: u32) {
         if !self.lcdc.contains(LCDC::LCD_ENABLE) {
-            return false;
+            return
         }
 
         self.cycle_count += cycles;
@@ -178,7 +179,6 @@ impl PPU {
                     self.ppu_mode = PPUMode::Draw;
                     // println!("[PPU] Switching to Draw!");
                 }
-                false
             }
             PPUMode::Draw => {
                 // TODO: Allow variable length Mode 3
@@ -194,9 +194,6 @@ impl PPU {
                         self.draw_sprites();
                     }
                     // println!("[PPU] Switching to HBlank!");
-                    false
-                } else {
-                    false
                 }
             }
             PPUMode::HBlank => {
@@ -211,18 +208,15 @@ impl PPU {
                         if self.lcds.contains(LCDS::MODE_1_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
-                        true
                         // println!("[PPU] Switching to VBlank!");
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
                             self.interrupts |= Interrupts::LCD;
                         }
-                        false
                         // println!("[PPU] Switching to OAMScan!");
                     };
                 }
-                false
             }
             PPUMode::VBlank => {
                 if self.cycle_count >= 456 {
@@ -243,7 +237,6 @@ impl PPU {
 
                     self.check_lyc();
                 }
-                false
             }
         };
     }
@@ -309,10 +302,11 @@ impl PPU {
         let horizontal_offset = x * bytes_per_pixel;
         let total_offset = vertical_offset + horizontal_offset;
 
-        self.frame_buffer[total_offset + 0] = r;
-        self.frame_buffer[total_offset + 1] = g;
-        self.frame_buffer[total_offset + 2] = b;
-        self.frame_buffer[total_offset + 3] = 0xFF;
+        let mut framebuffer = self.framebuffer.write().unwrap();
+        framebuffer[total_offset + 0] = r;
+        framebuffer[total_offset + 1] = g;
+        framebuffer[total_offset + 2] = b;
+        framebuffer[total_offset + 3] = 0xFF;
     }
 
     fn draw_bg(&mut self) {
@@ -615,7 +609,9 @@ impl Memory for PPU {
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
                     self.reset_ly();
                     self.ppu_mode = PPUMode::HBlank;
-                    self.frame_buffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
+
+                    let mut framebuffer = self.framebuffer.write().unwrap();
+                    *framebuffer = vec![0x00; 4 * SCREEN_W * SCREEN_H];
                 }
             }
             0xFF41 => {
