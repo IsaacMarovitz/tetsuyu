@@ -1,7 +1,8 @@
+use std::thread;
+use std::time::Duration;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::hacker::*;
-use std::time::Duration;
 
 pub struct Synth {
     pub ch1_freq: Shared<f64>,
@@ -194,7 +195,7 @@ impl Synth {
     ) where
         T: SizedSample + FromSample<f64>,
     {
-        tokio::spawn(async move {
+        thread::spawn(move || {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
@@ -236,7 +237,7 @@ impl Synth {
             stream.play().unwrap();
 
             loop {
-                std::thread::sleep(Duration::from_millis(1));
+                std::thread::sleep(Duration::from_millis(120_000));
             }
         });
     }

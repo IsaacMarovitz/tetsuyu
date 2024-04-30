@@ -7,11 +7,12 @@ use crate::context::Context;
 use clap::Parser;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::process;
+use std::{process, thread};
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::{sleep, Duration, Instant};
+use std::sync::mpsc::{Sender};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+use pollster::FutureExt;
 use wgpu::SurfaceError;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::event_loop::ControlFlow;
@@ -36,8 +37,7 @@ struct Args {
     boot_rom: Option<String>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), impl std::error::Error> {
+fn main() -> Result<(), impl std::error::Error> {
     let config = match File::open("./config.toml") {
         Ok(mut file) => {
             let mut config_data = String::new();
@@ -84,12 +84,6 @@ async fn main() -> Result<(), impl std::error::Error> {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        panic(info);
-        process::exit(1);
-    }));
-
     let window = WindowBuilder::new()
         .with_title(format!("tetsuyu - {:}", game_name))
         .with_inner_size(winit::dpi::LogicalSize::new(
@@ -99,14 +93,16 @@ async fn main() -> Result<(), impl std::error::Error> {
         .build(&event_loop)
         .unwrap();
 
-    let context = Arc::new(Mutex::new(Context::new(Arc::new(window), config.clone().shader).await));
-    let (input_tx, mut input_rx) = mpsc::unbounded_channel::<(JoypadButton, bool)>();
+    let context_future = Context::new(Arc::new(window), config.clone().shader);
+    let context = Arc::new(Mutex::new(context_future.block_on()));
+
+    let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
 
     {
         let config = config.clone();
         let context = Arc::clone(&context);
         // Start CPU
-        tokio::spawn(async move {
+        thread::spawn( move || {
             let mut cpu = CPU::new(buffer, config);
             let mut step_cycles = 0;
             let mut step_zero = Instant::now();
@@ -119,7 +115,7 @@ async fn main() -> Result<(), impl std::error::Error> {
                     let duration = now.duration_since(step_zero);
                     let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
                     // println!("[CPU] Sleeping {}ms", milliseconds);
-                    sleep(Duration::from_millis(milliseconds as u64)).await;
+                    thread::sleep(Duration::from_millis(milliseconds as u64));
                     step_zero = now;
                 }
 
@@ -204,7 +200,7 @@ pub fn send_input(
     key: Key,
     pressed: bool,
     input: Input,
-    input_tx: UnboundedSender<(JoypadButton, bool)>,
+    input_tx: Sender<(JoypadButton, bool)>,
 ) {
     match key {
         key if key == input.up => input_tx.send((JoypadButton::UP, pressed)).unwrap(),
