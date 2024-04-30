@@ -11,11 +11,10 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@nightly
+    - uses: actions/checkout@v4
     - name: Install Alsa
       run: sudo apt-get install libasound2-dev
     - name: Build
