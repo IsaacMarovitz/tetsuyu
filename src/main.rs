@@ -21,6 +21,7 @@ use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::event_loop::EventLoop;
 use winit::application::ApplicationHandler;
 use winit::window::{Window, WindowId};
+use crate::components::prelude::ppu::FRAMEBUFFER_SIZE;
 
 type Framebuffer = Arc<RwLock<[u8; FRAMEBUFFER_SIZE]>>;
 

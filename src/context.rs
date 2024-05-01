@@ -3,9 +3,9 @@ use librashader::presets::ShaderPreset;
 use librashader::runtime::wgpu::FilterChain;
 use librashader::runtime::Viewport;
 use wgpu::PresentMode;
-use crate::components::ppu::{SCREEN_H, SCREEN_W};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+use crate::components::prelude::ppu::{SCREEN_H, SCREEN_W};
 
 pub struct Context {
     pub surface: wgpu::Surface<'static>,

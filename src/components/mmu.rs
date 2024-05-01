@@ -5,6 +5,7 @@ use crate::sound::apu::APU;
 use crate::Framebuffer;
 use bitflags::bitflags;
 use num_traits::FromPrimitive;
+use crate::components::prelude::ppu::PPU;
 
 pub struct MMU {
     mbc: Box<dyn MBC + 'static>,
