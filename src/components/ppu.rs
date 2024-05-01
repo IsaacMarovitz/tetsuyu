@@ -358,7 +358,7 @@ impl PPU {
 
             // Location of Tile Attributes
             let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
-            let tile_index = self.read_ram0(tile_address);
+            let tile_index = self.read_vram(tile_address, 0);
 
             // If we're using the secondary address mode,
             // we need to interpret this tile index as signed
@@ -369,23 +369,26 @@ impl PPU {
             } as u16 * 16;
 
             let tile_data_location = tile_data_base + tile_offset;
-            let tile_attributes = Attributes::from_bits_retain(self.read_ram1(tile_address));
+            let tile_attributes = if self.mode == GBMode::CGB {
+                Attributes::from_bits_retain(self.read_vram(tile_address, 1))
+            } else {
+                // BG Tiles don't get attributes on DMG
+                Attributes::empty()
+            };
 
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
             let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
+            let tile_data_address = tile_data_location + ((tile_y * 2) as u16);
+            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) { 1 } else { 0 };
 
-            let tile_y_data = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
-                let a = self.read_ram1(tile_data_location + ((tile_y * 2) as u16));
-                let b = self.read_ram1(tile_data_location + ((tile_y * 2) as u16) + 1);
-                [a, b]
-            } else {
-                let a = self.read_ram0(tile_data_location + ((tile_y * 2) as u16));
-                let b = self.read_ram0(tile_data_location + ((tile_y * 2) as u16) + 1);
+            let tile_data = {
+                let a = self.read_vram(tile_data_address, bank);
+                let b = self.read_vram(tile_data_address + 1, bank);
                 [a, b]
             };
 
-            let color_l = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
-            let color_h = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+            let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
+            let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
             let color = color_h | color_l;
 
             self.bgprio[x] = if color == 0 {
@@ -461,15 +464,14 @@ impl PPU {
             } else {
                 self.ly.wrapping_sub(py)
             };
-            let tile_y_address: u16 = 0x8000_u16 + tile_number as u16 * 16 + tile_y as u16 * 2;
-            let tile_y_data = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
-                let b1 = self.read_ram1(tile_y_address);
-                let b2 = self.read_ram1(tile_y_address + 1);
-                [b1, b2]
-            } else {
-                let b1 = self.read_ram0(tile_y_address);
-                let b2 = self.read_ram0(tile_y_address + 1);
-                [b1, b2]
+            
+            let tile_data_address = 0x8000_u16 + tile_number as u16 * 16 + tile_y as u16 * 2;
+            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) { 1 } else { 0 };
+            
+            let tile_data = {
+                let a = self.read_vram(tile_data_address, bank);
+                let b = self.read_vram(tile_data_address + 1, bank);
+                [a, b]
             };
 
             object_count += 1;
@@ -483,8 +485,8 @@ impl PPU {
                 }
                 let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - x } else { x };
 
-                let color_low = if tile_y_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
-                let color_high = if tile_y_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+                let color_low = if tile_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
+                let color_high = if tile_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
                 let color = color_high | color_low;
                 if color == 0 {
                     continue;
@@ -528,12 +530,12 @@ impl PPU {
         }
     }
 
-    fn read_ram0(&self, a: u16) -> u8 {
-        self.vram[a as usize - 0x8000]
+    fn read_vram(&self, a: u16, bank: usize) -> u8 {
+        self.vram[(bank * 0x2000) + a as usize - 0x8000]
     }
 
-    fn read_ram1(&self, a: u16) -> u8 {
-        self.vram[a as usize - 0x6000]
+    fn write_vram(&mut self, a: u16, v: u8, bank: usize) {
+        self.vram[(bank * 0x2000) + a as usize - 0x8000] = v;
     }
 }
 
@@ -542,7 +544,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.vram[(self.vram_bank * 0x2000) + a as usize - 0x8000]
+                    self.read_vram(a, self.vram_bank)
                 } else {
                     0xFF
                 }
@@ -606,7 +608,7 @@ impl Memory for PPU {
         match a {
             0x8000..=0x9FFF => {
                 if self.ppu_mode != PPUMode::Draw {
-                    self.vram[(self.vram_bank * 0x2000) + a as usize - 0x8000] = v
+                    self.write_vram(a, v, self.vram_bank);
                 }
             }
             0xFE00..=0xFE9F => {
