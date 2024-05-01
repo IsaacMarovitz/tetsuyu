@@ -60,7 +60,7 @@ impl MMU {
 
         Self {
             mbc: mbc,
-            apu: APU::new(),
+            apu: APU::new(config.audio.clone()),
             ppu: PPU::new(config.clone(), framebuffer),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),

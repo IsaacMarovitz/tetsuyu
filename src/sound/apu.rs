@@ -8,8 +8,10 @@ use bitflags::bitflags;
 use cpal::{SampleFormat, Stream};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::CLOCK_FREQUENCY;
+use crate::config::{Audio, Config};
 
 pub struct APU {
+    config: Audio,
     audio_enabled: bool,
     is_ch_4_on: bool,
     is_ch_3_on: bool,
@@ -42,17 +44,11 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new() -> Self {
+    pub fn new(config: Audio) -> Self {
         let synth = Synth::new();
-        // let host = cpal::default_host();
-        // let device = host.default_output_device().unwrap();
-        // let config = device.default_output_config().unwrap();
-        // let sample_rate = config.sample_rate().0;
-        // let sample_format = config.sample_format();
-        //
-        // println!("Initialising Audio Device: {}, at {} Hz ({})", device.name().unwrap(), sample_rate, sample_format);
 
         Self {
+            config,
             audio_enabled: true,
             is_ch_4_on: false,
             is_ch_3_on: false,
@@ -95,7 +91,7 @@ impl APU {
         }
 
         let ch1_vol = {
-            if self.ch1.dac_enabled {
+            if self.ch1.dac_enabled && self.config.ch1_enabled {
                 self.ch1.volume_envelope.volume as f64 / 0xF as f64
             } else {
                 0.0
@@ -113,7 +109,7 @@ impl APU {
         };
 
         let ch2_vol = {
-            if self.ch2.dac_enabled {
+            if self.ch2.dac_enabled && self.config.ch2_enabled {
                 self.ch2.volume_envelope.volume as f64 / 0xF as f64
             } else {
                 0.0
@@ -131,7 +127,7 @@ impl APU {
         };
 
         let ch3_vol = {
-            if self.ch3.dac_enabled {
+            if self.ch3.dac_enabled && self.config.ch3_enabled {
                 match self.ch3.output_level {
                     OutputLevel::MUTE => 0.0,
                     OutputLevel::QUARTER => 0.25,
@@ -145,7 +141,7 @@ impl APU {
         };
 
         let ch4_vol = {
-            if self.ch4.dac_enabled {
+            if self.ch4.dac_enabled && self.config.ch4_enabled {
                 self.ch4.final_volume as f64 / 0xF as f64
             } else {
                 0.0
