@@ -490,13 +490,19 @@ impl PPU {
                 }
 
                 let prio = self.bgprio[px.wrapping_add(x) as usize];
-                let skip = if self.mode == GBMode::CGB && !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                    prio == Priority::Priority
-                } else if prio == Priority::Priority {
-                    prio != Priority::Color0
-                } else {
-                    tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
+                let skip = match self.mode {
+                    GBMode::CGB => {
+                        if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                            prio == Priority::Priority
+                        } else {
+                            tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
+                        }
+                    },
+                    GBMode::DMG => {
+                        tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
+                    }
                 };
+
                 if skip {
                     continue;
                 }
