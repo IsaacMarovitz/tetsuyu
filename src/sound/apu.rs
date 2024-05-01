@@ -45,8 +45,6 @@ bitflags! {
 
 impl APU {
     pub fn new(config: Audio) -> Self {
-        let synth = Synth::new();
-
         Self {
             config,
             audio_enabled: true,
@@ -61,7 +59,7 @@ impl APU {
             ch2: CH2::new(),
             ch3: CH3::new(),
             ch4: CH4::new(),
-            synth,
+            synth: Synth::new(),
             div_one: false,
             freq: 256.0,
         }
@@ -140,6 +138,8 @@ impl APU {
             }
         };
 
+        let ch3_wave = self.ch3.wave_as_f32();
+
         let ch4_vol = {
             if self.ch4.dac_enabled && self.config.ch4_enabled {
                 self.ch4.final_volume as f64 / 0xF as f64
@@ -179,6 +179,8 @@ impl APU {
 
         self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
         self.synth.ch3_vol.set_value(ch3_vol);
+        let ch3_wave_arc = Arc::clone(&self.synth.ch3_wave);
+        *ch3_wave_arc.write().unwrap() = ch3_wave;
         self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
         self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 

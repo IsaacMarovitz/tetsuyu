@@ -1,8 +1,11 @@
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::hacker::*;
+
+pub type ChannelWave = Arc<RwLock<[f32; 32]>>;
 
 pub struct Synth {
     pub ch1_freq: Shared<f64>,
@@ -19,6 +22,7 @@ pub struct Synth {
 
     pub ch3_freq: Shared<f64>,
     pub ch3_vol: Shared<f64>,
+    pub ch3_wave: ChannelWave,
     pub ch3_l: Shared<f64>,
     pub ch3_r: Shared<f64>,
 
@@ -49,6 +53,7 @@ impl Synth {
 
         let ch3_freq = shared(0.0);
         let ch3_vol = shared(0.0);
+        let ch3_wave = Arc::new(RwLock::new([0.0; 32]));
         let ch3_l = shared(0.0);
         let ch3_r = shared(0.0);
 
@@ -79,6 +84,7 @@ impl Synth {
                 ch2_r.clone(),
                 ch3_freq.clone(),
                 ch3_vol.clone(),
+                ch3_wave.clone(),
                 ch3_l.clone(),
                 ch3_r.clone(),
                 ch4_freq.clone(),
@@ -103,6 +109,7 @@ impl Synth {
                 ch2_r.clone(),
                 ch3_freq.clone(),
                 ch3_vol.clone(),
+                ch3_wave.clone(),
                 ch3_l.clone(),
                 ch3_r.clone(),
                 ch4_freq.clone(),
@@ -127,6 +134,7 @@ impl Synth {
                 ch2_r.clone(),
                 ch3_freq.clone(),
                 ch3_vol.clone(),
+                ch3_wave.clone(),
                 ch3_l.clone(),
                 ch3_r.clone(),
                 ch4_freq.clone(),
@@ -156,6 +164,7 @@ impl Synth {
 
             ch3_freq,
             ch3_vol,
+            ch3_wave,
             ch3_l,
             ch3_r,
 
@@ -182,6 +191,7 @@ impl Synth {
         ch2_r: Shared<f64>,
         ch3_freq: Shared<f64>,
         ch3_vol: Shared<f64>,
+        ch3_wave: ChannelWave,
         ch3_l: Shared<f64>,
         ch3_r: Shared<f64>,
         ch4_freq: Shared<f64>,
@@ -199,13 +209,20 @@ impl Synth {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
+            let mut ch3 = Net64::new(1, 1);
+            // Temporarily use a square to set up the network
+            // Square takes one input and gives one output
+            // This node will be replaced with the WaveSynth
+            let id_wavesynth = ch3.chain(Box::new(square()));
+
             let ch1_mono = ((var(&ch1_freq) | var(&ch1_duty)) >> pulse())
                 * var(&ch1_vol)
                 * constant(0.25);
             let ch2_mono = ((var(&ch2_freq) | var(&ch2_duty)) >> pulse())
                 * var(&ch2_vol)
                 * constant(0.25);
-            let ch3_mono = var(&ch3_freq) >> sine() * var(&ch3_vol) * constant(0.25);
+
+            let ch3_mono = var(&ch3_freq) >> ch3 * var(&ch3_vol) * constant(0.25);
             let ch4_mono = var(&ch4_freq) >> square() * var(&ch4_vol) * constant(0.25);
 
             let ch1_stereo = ch1_mono >> ((pass() * var(&ch1_l)) ^ (pass() * var(&ch1_r)));
@@ -215,12 +232,11 @@ impl Synth {
 
             let total_stereo = ch1_stereo + ch2_stereo + ch3_stereo + ch4_stereo;
 
-            let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
+            let mut net = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
+            net.set_sample_rate(sample_rate);
 
-            c.set_sample_rate(sample_rate);
-            c.allocate();
-
-            let mut next_value = move || c.get_stereo();
+            let mut backend = net.backend();
+            let mut next_value = move || backend.get_stereo();
 
             let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
@@ -237,7 +253,13 @@ impl Synth {
             stream.play().unwrap();
 
             loop {
-                std::thread::sleep(Duration::from_millis(120_000));
+                thread::sleep(Duration::from_millis(1000));
+
+                // TODO: Maybe dont use Box::leak
+                let ch3_wavetable: &'static Wavetable = Box::leak(Box::new(Wavetable::from_wave(20.0, 20_000.0, 1.0, &*ch3_wave.read().unwrap())));
+                let ch3_synth: An<WaveSynth<f64, U1>> = An(WaveSynth::new(sample_rate, &ch3_wavetable));
+                net.replace(id_wavesynth, Box::new(ch3_synth));
+                net.commit();
             }
         });
     }
