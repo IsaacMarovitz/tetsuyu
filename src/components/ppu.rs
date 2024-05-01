@@ -403,6 +403,7 @@ impl PPU {
                 let r = self.bcpd[palette_no_1][color][0];
                 let g = self.bcpd[palette_no_1][color][1];
                 let b = self.bcpd[palette_no_1][color][2];
+
                 self.set_rgb_mapped(x, r, g, b);
             } else {
                 let color = if !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
@@ -429,7 +430,7 @@ impl PPU {
             let py = self.read(sprite_address).wrapping_sub(16);
             let px = self.read(sprite_address + 1).wrapping_sub(8);
             let tile_number = self.read(sprite_address + 2) & if self.lcdc.contains(LCDC::OBJ_SIZE) { 0xFE } else { 0xFF };
-            let tile_attributes = Attributes::from_bits_truncate(self.read(sprite_address + 3));
+            let tile_attributes = Attributes::from_bits_retain(self.read(sprite_address + 3));
 
             if py <= 0xFF - sprite_size + 1 {
                 if self.ly < py || self.ly > py + sprite_size - 1 {
@@ -512,6 +513,7 @@ impl PPU {
                     let r = self.ocpd[palette_no_1][color][0];
                     let g = self.ocpd[palette_no_1][color][1];
                     let b = self.ocpd[palette_no_1][color][2];
+
                     self.set_rgb_mapped(px.wrapping_add(x) as usize, r, g, b);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
