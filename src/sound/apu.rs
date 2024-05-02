@@ -179,8 +179,11 @@ impl APU {
 
         self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
         self.synth.ch3_vol.set_value(ch3_vol);
-        let ch3_wave_arc = Arc::clone(&self.synth.ch3_wave);
-        *ch3_wave_arc.write().unwrap() = ch3_wave;
+
+        for i in 0..ch3_wave.len() {
+            self.synth.ch3_wave.set(i, ch3_wave[i]);
+        }
+
         self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
         self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 
