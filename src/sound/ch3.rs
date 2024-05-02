@@ -50,8 +50,8 @@ impl CH3 {
         let mut wave: [f32; 32] = [0f32; 32];
 
         for i in 0..self.wave_ram.len() {
-            wave[i * 2] = (((self.wave_ram[i] & 0b0000_1111) as f32 / U4_MAX) * 2.0) - 1.0;
-            wave[(i * 2) + 1] = ((((self.wave_ram[i] & 0b1111_0000) >> 4) as f32 / U4_MAX) * 2.0) - 1.0;
+            wave[i * 2] = ((((self.wave_ram[i] & 0b1111_0000) >> 4) as f32 / U4_MAX) * 2.0) - 1.0;
+            wave[(i * 2) + 1] = (((self.wave_ram[i] & 0b0000_1111) as f32 / U4_MAX) * 2.0) - 1.0;
         }
 
         wave

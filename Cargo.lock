@@ -918,7 +918,7 @@ dependencies = [
 [[package]]
 name = "fundsp"
 version = "0.17.1"
-source = "git+https://github.com/SamiPerttu/fundsp.git#d87dffe359e3bfaf812868790a86c7a5c8df9a53"
+source = "git+https://github.com/SamiPerttu/fundsp.git#c2ffcc49e7af5c3c72229ff849c49bf416f2c5d9"
 dependencies = [
  "duplicate",
  "dyn-clone",
