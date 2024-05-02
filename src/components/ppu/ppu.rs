@@ -2,6 +2,7 @@ use crate::components::prelude::*;
 use crate::config::{Color, Config, Palette};
 use crate::Framebuffer;
 use bitflags::bitflags;
+use crate::components::ppu::cc::ColorCorrection;
 
 /// RGBA (4 bytes) per pixel
 pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
@@ -11,6 +12,7 @@ pub const SCREEN_H: usize = 144;
 pub struct PPU {
     mode: GBMode,
     palette: Palette,
+    cc: ColorCorrection,
     ppu_mode: PPUMode,
     cycle_count: u32,
     vblanked_lines: u32,
@@ -27,9 +29,9 @@ pub struct PPU {
     lcdc: LCDC,
     lcds: LCDS,
     bcps: BGPI,
-    bcpd: [[[u8; 3]; 4]; 8],
+    bcpd: [u8; 64],
     ocps: BGPI,
-    ocpd: [[[u8; 3]; 4]; 8],
+    ocpd: [u8; 64],
     vram: [u8; 0x4000],
     vram_bank: usize,
     oam: [u8; 0xA0],
@@ -105,14 +107,14 @@ bitflags! {
 }
 
 struct BGPI {
-    i: u8,
+    address: u8,
     auto_increment: bool
 }
 
 impl BGPI {
     fn new() -> Self {
         Self {
-            i: 0,
+            address: 0,
             auto_increment: false
         }
     }
@@ -123,12 +125,12 @@ impl BGPI {
         } else {
             0x00
         };
-        a | self.i
+        a | self.address
     }
 
     fn write(&mut self, v: u8) {
         self.auto_increment = v & 0x80 != 0x00;
-        self.i = v & 0x3F;
+        self.address = v & 0x3F;
     }
 }
 
@@ -136,6 +138,7 @@ impl PPU {
     pub fn new(config: Config, framebuffer: Framebuffer) -> Self {
         Self {
             mode: config.mode,
+            cc: ColorCorrection::new(),
             palette: config.palette,
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
@@ -153,9 +156,9 @@ impl PPU {
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             bcps: BGPI::new(),
-            bcpd: [[[0; 3]; 4]; 8],
+            bcpd: [0; 64],
             ocps: BGPI::new(),
-            ocpd: [[[0; 3]; 4]; 8],
+            ocpd: [0; 64],
             vram: [0; 0x4000],
             vram_bank: 0,
             oam: [0; 0xA0],
@@ -285,16 +288,10 @@ impl PPU {
         }
     }
 
-    fn set_rgb_mapped(&mut self, x: usize, r: u8, g: u8, b: u8) {
-        let r_init = r as u32;
-        let g_init = g as u32;
-        let b_init = b as u32;
+    fn set_rgb_mapped(&mut self, x: usize, color: u16) {
+        let color = self.cc.cgb_color_lut[color as usize];
 
-        let r = ((r_init * 13 + g_init * 2 + b_init) >> 1) as u8;
-        let g = ((g_init * 3 + b_init) << 1) as u8;
-        let b = ((r_init * 3 + g_init * 2 + b_init * 11) >> 1) as u8;
-
-        self.set_rgb(x, r, g, b);
+        self.set_rgb(x, color[0], color[1], color[2]);
     }
 
     fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
@@ -403,11 +400,11 @@ impl PPU {
 
             if self.mode == GBMode::CGB {
                 let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
-                let r = self.bcpd[palette_no_1][color][0];
-                let g = self.bcpd[palette_no_1][color][1];
-                let b = self.bcpd[palette_no_1][color][2];
+                let palette_address = palette_no_1 * 8 + color * 2;
 
-                self.set_rgb_mapped(x, r, g, b);
+                let color: u16 = (self.bcpd[palette_address] as u16) | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
+
+                self.set_rgb_mapped(x, color);
             } else {
                 let color = if !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
                     Self::grey_to_l(self.palette.clone(), self.bgp, 0)
@@ -512,11 +509,11 @@ impl PPU {
 
                 if self.mode == GBMode::CGB {
                     let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
-                    let r = self.ocpd[palette_no_1][color][0];
-                    let g = self.ocpd[palette_no_1][color][1];
-                    let b = self.ocpd[palette_no_1][color][2];
+                    let palette_address = palette_no_1 * 8 + color * 2;
 
-                    self.set_rgb_mapped(px.wrapping_add(x) as usize, r, g, b);
+                    let color: u16 = (self.ocpd[palette_address] as u16) | ((self.ocpd[palette_address + 1] as u16) << 8) & 0x7FFF;
+
+                    self.set_rgb_mapped(px.wrapping_add(x) as usize, color);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
                         Self::grey_to_l(self.palette.clone(), self.op1, color)
@@ -572,33 +569,9 @@ impl Memory for PPU {
             // TODO: DMA
             0xFF51..=0xFF55 => 0x00,
             0xFF68 => self.bcps.read(),
-            0xFF69 => {
-                let r = self.bcps.i as usize >> 3;
-                let c = self.bcps.i as usize >> 1 & 0x03;
-                if self.bcps.i & 0x01 == 0x00 {
-                    let a = self.bcpd[r][c][0] >> 0;
-                    let b = self.bcpd[r][c][1] << 5;
-                    a | b
-                } else {
-                    let a = self.bcpd[r][c][1] >> 3;
-                    let b = self.bcpd[r][c][2] << 2;
-                    a | b
-                }
-            }
+            0xFF69 => self.bcpd[self.bcps.address as usize],
             0xFF6A => self.ocps.read(),
-            0xFF6B => {
-                let r = self.ocps.i as usize >> 3;
-                let c = self.ocps.i as usize >> 1 & 0x03;
-                if self.ocps.i & 0x01 == 0x00 {
-                    let a = self.ocpd[r][c][0] >> 0;
-                    let b = self.ocpd[r][c][1] << 5;
-                    a | b
-                } else {
-                    let a = self.ocpd[r][c][1] >> 3;
-                    let b = self.ocpd[r][c][2] << 2;
-                    a | b
-                }
-            }
+            0xFF6B => self.ocpd[self.ocps.address as usize],
             0xFF6C => self.opri as u8,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
@@ -651,36 +624,24 @@ impl Memory for PPU {
             0xFF51..=0xFF55 => {}
             0xFF68 => self.bcps.write(v),
             0xFF69 => {
-                let r = self.bcps.i as usize >> 3;
-                let c = self.bcps.i as usize >> 1 & 0x03;
-                if self.bcps.i & 0x01 == 0x00 {
-                    self.bcpd[r][c][0] = v & 0x1F;
-                    self.bcpd[r][c][1] = (self.bcpd[r][c][1] & 0x18) | (v >> 5);
-                } else {
-                    self.bcpd[r][c][1] = (self.bcpd[r][c][1] & 0x07) | ((v & 0x03) << 3);
-                    self.bcpd[r][c][2] = (v >> 2) & 0x1F;
+                if self.ppu_mode != PPUMode::Draw {
+                    self.bcpd[self.bcps.address as usize] = v;
                 }
 
                 if self.bcps.auto_increment {
-                    self.bcps.i += 1;
-                    self.bcps.i &= 0x3F;
+                    self.bcps.address += 1;
+                    self.bcps.address &= 0x3F;
                 }
             }
             0xFF6A => self.ocps.write(v),
             0xFF6B => {
-                let r = self.ocps.i as usize >> 3;
-                let c = self.ocps.i as usize >> 1 & 0x03;
-                if self.ocps.i & 0x01 == 0x00 {
-                    self.ocpd[r][c][0] = v & 0x1F;
-                    self.ocpd[r][c][1] = (self.ocpd[r][c][1] & 0x18) | (v >> 5);
-                } else {
-                    self.ocpd[r][c][1] = (self.ocpd[r][c][1] & 0x07) | ((v & 0x03) << 3);
-                    self.ocpd[r][c][2] = (v >> 2) & 0x1F;
+                if self.ppu_mode != PPUMode::Draw {
+                    self.ocpd[self.ocps.address as usize] = v;
                 }
 
                 if self.ocps.auto_increment {
-                    self.ocps.i += 1;
-                    self.ocps.i &= 0x3F;
+                    self.ocps.address += 1;
+                    self.ocps.address &= 0x3F;
                 }
             }
             // TODO: Object Priority Mode
