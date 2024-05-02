@@ -569,9 +569,21 @@ impl Memory for PPU {
             // TODO: DMA
             0xFF51..=0xFF55 => 0x00,
             0xFF68 => self.bcps.read(),
-            0xFF69 => self.bcpd[self.bcps.address as usize],
+            0xFF69 => {
+                if self.ppu_mode != PPUMode::Draw {
+                    self.bcpd[self.bcps.address as usize]
+                } else {
+                    0xFF
+                }
+            },
             0xFF6A => self.ocps.read(),
-            0xFF6B => self.ocpd[self.ocps.address as usize],
+            0xFF6B => {
+                if self.ppu_mode != PPUMode::Draw {
+                    self.ocpd[self.ocps.address as usize]
+                } else {
+                    0xFF
+                }
+            },
             0xFF6C => self.opri as u8,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
