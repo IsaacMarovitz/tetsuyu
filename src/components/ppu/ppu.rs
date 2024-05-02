@@ -564,7 +564,8 @@ impl Memory for PPU {
             0xFF49 => self.op1,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
-            0xFF4D => 0x00,
+            // TODO: Speed Switch
+            0xFF4D => 0x7E,
             0xFF4F => 0xFE | self.vram_bank as u8,
             // TODO: DMA
             0xFF51..=0xFF55 => 0x00,

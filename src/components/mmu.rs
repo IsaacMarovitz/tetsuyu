@@ -143,7 +143,7 @@ impl Memory for MMU {
             0xFF10..=0xFF3F => self.apu.read(a),
             0xFF0F => self.intf.bits(),
             0xFF51..=0xFF6F => self.ppu.read(a),
-            0xFF70 => self.wram_bank as u8,
+            0xFF70 => 0xF8 | self.wram_bank as u8,
             0xFEA0..=0xFEFF => 0xFF,
             0xFFFF => self.inte.bits(),
             _ => panic!("Read to unsupported address ({:#06x})!", a),
