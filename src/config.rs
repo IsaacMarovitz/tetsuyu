@@ -52,29 +52,41 @@ pub struct Palette {
     pub dark_gray: Color,
     pub light_gray: Color,
     pub light: Color,
+    pub off: Color
 }
 
 impl Palette {
     pub fn new() -> Self {
         Self {
-            dark: Color::new(175, 203, 70),
-            dark_gray: Color::new(121, 170, 109),
-            light_gray: Color::new(34, 111, 95),
-            light: Color::new(8, 41, 95)
+            dark: Color::new(0x081810),
+            dark_gray: Color::new(0x396139),
+            light_gray: Color::new(0x84A563),
+            light: Color::new(0xC6DE8C),
+            off: Color::new(0xD2E6A6)
         }
     }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy)]
 pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
+    pub hex: u32,
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
+    pub fn new(hex: u32) -> Self {
+        Self { hex }
+    }
+
+    pub fn r(&self) -> u8 {
+        ((self.hex & 0xFF0000) >> 16) as u8
+    }
+
+    pub fn g(&self) -> u8 {
+        ((self.hex & 0x00FF00) >> 8) as u8
+    }
+
+    pub fn b(&self) -> u8 {
+        ((self.hex & 0x0000FF) >> 0) as u8
     }
 }
 

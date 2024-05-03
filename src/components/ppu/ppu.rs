@@ -281,10 +281,10 @@ impl PPU {
 
     fn grey_to_l(palette: Palette, v: u8, i: usize) -> Color {
         match v >> (2 * i) & 0x03 {
-            0x00 => palette.dark,
-            0x01 => palette.dark_gray,
-            0x02 => palette.light_gray,
-            _ => palette.light,
+            0x00 => palette.light,
+            0x01 => palette.light_gray,
+            0x02 => palette.dark_gray,
+            _ => palette.dark,
         }
     }
 
@@ -296,21 +296,7 @@ impl PPU {
             CCMode::SGB => self.cc.sgb_color_lut[color as usize],
         };
 
-        self.set_rgb(x, color[0], color[1], color[2]);
-    }
-
-    fn set_rgb(&mut self, x: usize, r: u8, g: u8, b: u8) {
-        let bytes_per_pixel = 4;
-        let bytes_per_row = bytes_per_pixel * SCREEN_W;
-        let vertical_offset = self.ly as usize * bytes_per_row;
-        let horizontal_offset = x * bytes_per_pixel;
-        let total_offset = vertical_offset + horizontal_offset;
-
-        let mut framebuffer = self.framebuffer.write().unwrap();
-        framebuffer[total_offset + 0] = r;
-        framebuffer[total_offset + 1] = g;
-        framebuffer[total_offset + 2] = b;
-        framebuffer[total_offset + 3] = 0xFF;
+        self.write_pixel(color[0], color[1], color[2], x, self.ly);
     }
 
     fn draw_bg(&mut self) {
@@ -417,7 +403,7 @@ impl PPU {
                     Self::grey_to_l(self.ppu_config.palette, self.bgp, color)
                 };
 
-                self.set_rgb(x, color.r, color.g, color.b);
+                self.write_pixel(color.r(), color.g(), color.b(), x, self.ly);
             }
         }
     }
@@ -526,7 +512,7 @@ impl PPU {
                         Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
                     };
 
-                    self.set_rgb(px.wrapping_add(x) as usize, color.r, color.g, color.b);
+                    self.write_pixel(color.r(), color.g(), color.b(), px.wrapping_add(x) as usize, self.ly);
                 }
             }
         }
@@ -538,6 +524,21 @@ impl PPU {
 
     fn write_vram(&mut self, a: u16, v: u8, bank: usize) {
         self.vram[(bank * 0x2000) + a as usize - 0x8000] = v;
+    }
+
+    fn write_pixel(&mut self, r: u8, g: u8, b: u8, x: usize, y: u8) {
+        pub const BYTES_PER_PIXEL: usize = 4;
+        pub const BYTES_PER_ROW: usize = BYTES_PER_PIXEL * SCREEN_W;
+
+        let vertical_offset = y as usize * BYTES_PER_ROW;
+        let horizontal_offset = x as usize * BYTES_PER_PIXEL;
+        let total_offset = vertical_offset + horizontal_offset;
+
+        let mut framebuffer = self.framebuffer.write().unwrap();
+        framebuffer[total_offset + 0] = r;
+        framebuffer[total_offset + 1] = g;
+        framebuffer[total_offset + 2] = b;
+        framebuffer[total_offset + 3] = 0xFF;
     }
 }
 
@@ -613,8 +614,22 @@ impl Memory for PPU {
                     self.reset_ly();
                     self.ppu_mode = PPUMode::HBlank;
 
-                    let mut framebuffer = self.framebuffer.write().unwrap();
-                    *framebuffer = [0xFF; FRAMEBUFFER_SIZE];
+                    match self.mode {
+                        GBMode::DMG => {
+                            let color = self.ppu_config.palette.off;
+                            let (r, g, b) = (color.r(), color.g(), color.b());
+
+                            for y in 0..SCREEN_H {
+                                for x in 0..SCREEN_W {
+                                    self.write_pixel(r, g, b, x, y as u8);
+                                }
+                            }
+                        },
+                        GBMode::CGB => {
+                            let mut framebuffer = self.framebuffer.write().unwrap();
+                            *framebuffer = [0xFF; FRAMEBUFFER_SIZE];
+                        }
+                    }
                 }
             }
             0xFF41 => {
