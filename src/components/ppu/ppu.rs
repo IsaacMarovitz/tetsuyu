@@ -24,8 +24,8 @@ pub struct PPU {
     wx: u8,
     wly: u8,
     bgp: u8,
-    op0: u8,
-    op1: u8,
+    obp0: u8,
+    obp1: u8,
     lcdc: LCDC,
     lcds: LCDS,
     bcps: BGPI,
@@ -151,8 +151,8 @@ impl PPU {
             wx: 0x00,
             wly: 0x00,
             bgp: 0x00,
-            op0: 0x00,
-            op1: 0x01,
+            obp0: 0x00,
+            obp1: 0x01,
             lcdc: LCDC::empty(),
             lcds: LCDS::empty(),
             bcps: BGPI::new(),
@@ -516,9 +516,9 @@ impl PPU {
                     self.set_rgb_mapped(px.wrapping_add(x) as usize, color);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
-                        Self::grey_to_l(self.palette.clone(), self.op1, color)
+                        Self::grey_to_l(self.palette.clone(), self.obp1, color)
                     } else {
-                        Self::grey_to_l(self.palette.clone(), self.op0, color)
+                        Self::grey_to_l(self.palette.clone(), self.obp0, color)
                     };
 
                     self.set_rgb(px.wrapping_add(x) as usize, color.r, color.g, color.b);
@@ -560,8 +560,8 @@ impl Memory for PPU {
             0xFF44 => self.ly,
             0xFF45 => self.lc,
             0xFF47 => self.bgp,
-            0xFF48 => self.op0,
-            0xFF49 => self.op1,
+            0xFF48 => self.obp0,
+            0xFF49 => self.obp1,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
             // TODO: Speed Switch
@@ -625,8 +625,8 @@ impl Memory for PPU {
                 self.check_lyc();
             }
             0xFF47 => self.bgp = v,
-            0xFF48 => self.op0 = v,
-            0xFF49 => self.op1 = v,
+            0xFF48 => self.obp0 = v,
+            0xFF49 => self.obp1 = v,
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
             0xFF4C => {}
