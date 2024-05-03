@@ -1,5 +1,5 @@
 /target
 .idea
 .DS_Store
-/roms/com
+/roms
 /config.toml
