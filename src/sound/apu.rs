@@ -1,14 +1,7 @@
-#![allow(unused)]
-// TODO: Remove this allow
-
-use std::sync::{Arc, Mutex};
 use crate::components::memory::Memory;
 use crate::sound::prelude::*;
+use crate::config::APUConfig;
 use bitflags::bitflags;
-use cpal::{SampleFormat, Stream};
-use cpal::traits::{DeviceTrait, HostTrait};
-use crate::CLOCK_FREQUENCY;
-use crate::config::{APUConfig, Config};
 
 pub struct APU {
     config: APUConfig,
@@ -17,6 +10,7 @@ pub struct APU {
     is_ch_3_on: bool,
     is_ch_2_on: bool,
     is_ch_1_on: bool,
+    div_one: bool,
     left_volume: u8,
     right_volume: u8,
     panning: Panning,
@@ -24,9 +18,7 @@ pub struct APU {
     ch2: CH2,
     ch3: CH3,
     ch4: CH4,
-    synth: Synth,
-    div_one: bool,
-    freq: f64
+    synth: Option<Synth>
 }
 
 bitflags! {
@@ -45,6 +37,12 @@ bitflags! {
 
 impl APU {
     pub fn new(config: APUConfig) -> Self {
+        let synth = if config.master_enabled {
+            Some(Synth::new())
+        } else {
+            None
+        };
+
         Self {
             config,
             audio_enabled: true,
@@ -52,6 +50,7 @@ impl APU {
             is_ch_3_on: false,
             is_ch_2_on: false,
             is_ch_1_on: true,
+            div_one: false,
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),
@@ -59,9 +58,7 @@ impl APU {
             ch2: CH2::new(),
             ch3: CH3::new(),
             ch4: CH4::new(),
-            synth: Synth::new(),
-            div_one: false,
-            freq: 256.0,
+            synth
         }
     }
 
@@ -165,36 +162,40 @@ impl APU {
             }
         };
 
-        self.synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
-        self.synth.ch1_vol.set_value(ch1_vol);
-        self.synth.ch1_duty.set_value(ch1_duty);
-        self.synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
+        match &self.synth {
+            Some(synth) => {
+                synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
+                synth.ch1_vol.set_value(ch1_vol);
+                synth.ch1_duty.set_value(ch1_duty);
+                synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
+                synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
 
-        self.synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
-        self.synth.ch2_vol.set_value(ch2_vol);
-        self.synth.ch2_duty.set_value(ch2_duty);
-        self.synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
+                synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
+                synth.ch2_vol.set_value(ch2_vol);
+                synth.ch2_duty.set_value(ch2_duty);
+                synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
+                synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
 
-        self.synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
-        self.synth.ch3_vol.set_value(ch3_vol);
+                synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
+                synth.ch3_vol.set_value(ch3_vol);
 
-        for i in 0..ch3_wave.len() {
-            self.synth.ch3_wave.set(i, ch3_wave[i]);
+                for i in 0..ch3_wave.len() {
+                    synth.ch3_wave.set(i, ch3_wave[i]);
+                }
+
+                synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
+                synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
+
+                synth.ch4_freq.set_value(self.ch4.frequency as f64);
+                synth.ch4_vol.set_value(ch4_vol);
+                synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
+                synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
+
+                synth.global_l.set_value(global_l);
+                synth.global_r.set_value(global_r);
+            }
+            _ => {}
         }
-
-        self.synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.ch4_freq.set_value(self.ch4.frequency as f64);
-        self.synth.ch4_vol.set_value(ch4_vol);
-        self.synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
-        self.synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
-
-        self.synth.global_l.set_value(global_l);
-        self.synth.global_r.set_value(global_r);
-
     }
 }
 
