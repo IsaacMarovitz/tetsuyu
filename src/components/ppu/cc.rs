@@ -41,7 +41,7 @@ impl ColorCorrection {
         let b = CGB_COLOR_CURVE[b as usize];
 
         if g != b {
-            g = (((g as f32 / 255.0).powf(GAMMA) * 3.0 + (b as f32 / 255.0).powf(GAMMA) / 4.0).powf(1.0 / GAMMA) * 255.0).round() as u8;
+            g = ((((g as f32 / 255.0).powf(GAMMA) * 3.0 + (b as f32 / 255.0).powf(GAMMA)) / 4.0).powf(1.0 / GAMMA) * 255.0).round() as u8;
         }
 
         [r, g, b]
