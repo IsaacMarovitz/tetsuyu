@@ -11,6 +11,7 @@ pub const SCREEN_H: usize = 144;
 
 pub struct PPU {
     mode: GBMode,
+    cc_mode: CCMode,
     palette: Palette,
     cc: ColorCorrection,
     ppu_mode: PPUMode,
@@ -138,6 +139,7 @@ impl PPU {
     pub fn new(config: Config, framebuffer: Framebuffer) -> Self {
         Self {
             mode: config.mode,
+            cc_mode: config.cc_mode,
             cc: ColorCorrection::new(),
             palette: config.palette,
             ppu_mode: PPUMode::OAMScan,
@@ -289,7 +291,12 @@ impl PPU {
     }
 
     fn set_rgb_mapped(&mut self, x: usize, color: u16) {
-        let color = self.cc.cgb_color_lut[color as usize];
+        let color = match self.cc_mode {
+            CCMode::True => self.cc.true_color_lut[color as usize],
+            CCMode::CGB => self.cc.cgb_color_lut[color as usize],
+            CCMode::GBA => self.cc.gba_color_lut[color as usize],
+            CCMode::SGB => self.cc.sgb_color_lut[color as usize],
+        };
 
         self.set_rgb(x, color[0], color[1], color[2]);
     }
