@@ -531,7 +531,7 @@ impl PPU {
         pub const BYTES_PER_ROW: usize = BYTES_PER_PIXEL * SCREEN_W;
 
         let vertical_offset = y as usize * BYTES_PER_ROW;
-        let horizontal_offset = x as usize * BYTES_PER_PIXEL;
+        let horizontal_offset = x * BYTES_PER_PIXEL;
         let total_offset = vertical_offset + horizontal_offset;
 
         let mut framebuffer = self.framebuffer.write().unwrap();

@@ -59,7 +59,7 @@ impl MMU {
         };
 
         Self {
-            mbc: mbc,
+            mbc,
             apu: APU::new(config.apu_config),
             ppu: PPU::new(config.clone(), framebuffer),
             serial: Serial::new(config.print_serial),

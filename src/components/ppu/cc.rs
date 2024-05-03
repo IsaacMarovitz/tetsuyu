@@ -24,10 +24,10 @@ impl ColorCorrection {
             let g = ((i >> 5) & 0x1F) as u8;
             let b = ((i >> 10) & 0x1F) as u8;
 
-            true_color_lut[i] = Self::to_true_color(r, g, b);
-            cgb_color_lut[i] = Self::to_cgb_color(r, g, b);
-            gba_color_lut[i] = Self::to_gba_color(r, g, b);
-            sgb_color_lut[i] = Self::to_sgb_color(r, g, b);
+            true_color_lut[i] = Self::true_color(r, g, b);
+            cgb_color_lut[i] = Self::cgb_color(r, g, b);
+            gba_color_lut[i] = Self::gba_color(r, g, b);
+            sgb_color_lut[i] = Self::sgb_color(r, g, b);
         }
 
         Self {
@@ -38,14 +38,14 @@ impl ColorCorrection {
         }
     }
     
-    fn to_true_color(r: u8, g: u8, b: u8) -> [u8; 3] {
+    fn true_color(r: u8, g: u8, b: u8) -> [u8; 3] {
         let r = (r * 0xFF + 0xF) / 0x1F;
         let g = (g * 0xFF + 0xF) / 0x1F;
         let b = (b * 0xFF + 0xF) / 0x1F;
         [r, g, b]
     }
 
-    fn to_cgb_color(r: u8, g: u8, b: u8) -> [u8; 3] {
+    fn cgb_color(r: u8, g: u8, b: u8) -> [u8; 3] {
         let r = CGB_COLOR_CURVE[r as usize];
         let mut g = CGB_COLOR_CURVE[g as usize];
         let b = CGB_COLOR_CURVE[b as usize];
@@ -57,7 +57,7 @@ impl ColorCorrection {
         [r, g, b]
     }
 
-    fn to_gba_color(r: u8, g: u8, b: u8) -> [u8; 3] {
+    fn gba_color(r: u8, g: u8, b: u8) -> [u8; 3] {
         let r = GBA_COLOR_CURVE[r as usize];
         let mut g = GBA_COLOR_CURVE[g as usize];
         let b = GBA_COLOR_CURVE[b as usize];
@@ -69,7 +69,7 @@ impl ColorCorrection {
         [r, g, b]
     }
 
-    fn to_sgb_color(r: u8, g: u8, b: u8) -> [u8; 3] {
+    fn sgb_color(r: u8, g: u8, b: u8) -> [u8; 3] {
         let r = SGB_COLOR_CURVE[r as usize];
         let g = SGB_COLOR_CURVE[g as usize];
         let b = SGB_COLOR_CURVE[b as usize];
