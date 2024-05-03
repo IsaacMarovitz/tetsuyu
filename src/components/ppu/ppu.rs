@@ -1,5 +1,5 @@
 use crate::components::prelude::*;
-use crate::config::{Color, Config, Palette};
+use crate::config::{Color, Config, Palette, PPUConfig};
 use crate::Framebuffer;
 use bitflags::bitflags;
 use crate::components::ppu::cc::ColorCorrection;
@@ -11,8 +11,7 @@ pub const SCREEN_H: usize = 144;
 
 pub struct PPU {
     mode: GBMode,
-    cc_mode: CCMode,
-    palette: Palette,
+    ppu_config: PPUConfig,
     cc: ColorCorrection,
     ppu_mode: PPUMode,
     cycle_count: u32,
@@ -139,9 +138,8 @@ impl PPU {
     pub fn new(config: Config, framebuffer: Framebuffer) -> Self {
         Self {
             mode: config.mode,
-            cc_mode: config.cc_mode,
+            ppu_config: config.ppu_config,
             cc: ColorCorrection::new(),
-            palette: config.palette,
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
             vblanked_lines: 0,
@@ -291,7 +289,7 @@ impl PPU {
     }
 
     fn set_rgb_mapped(&mut self, x: usize, color: u16) {
-        let color = match self.cc_mode {
+        let color = match self.ppu_config.cc_mode {
             CCMode::True => self.cc.true_color_lut[color as usize],
             CCMode::CGB => self.cc.cgb_color_lut[color as usize],
             CCMode::GBA => self.cc.gba_color_lut[color as usize],
@@ -414,9 +412,9 @@ impl PPU {
                 self.set_rgb_mapped(x, color);
             } else {
                 let color = if !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                    Self::grey_to_l(self.palette.clone(), self.bgp, 0)
+                    Self::grey_to_l(self.ppu_config.palette, self.bgp, 0)
                 } else {
-                    Self::grey_to_l(self.palette.clone(), self.bgp, color)
+                    Self::grey_to_l(self.ppu_config.palette, self.bgp, color)
                 };
 
                 self.set_rgb(x, color.r, color.g, color.b);
@@ -523,9 +521,9 @@ impl PPU {
                     self.set_rgb_mapped(px.wrapping_add(x) as usize, color);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
-                        Self::grey_to_l(self.palette.clone(), self.obp1, color)
+                        Self::grey_to_l(self.ppu_config.palette, self.obp1, color)
                     } else {
-                        Self::grey_to_l(self.palette.clone(), self.obp0, color)
+                        Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
                     };
 
                     self.set_rgb(px.wrapping_add(x) as usize, color.r, color.g, color.b);

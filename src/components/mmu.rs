@@ -38,7 +38,6 @@ bitflags! {
 impl MMU {
     pub fn new(rom: Vec<u8>,
                config: Config,
-               booting: bool,
                boot_rom: [u8; 0x900],
                framebuffer: Framebuffer) -> Self {
         let cart_type: CartTypes = FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
@@ -61,7 +60,7 @@ impl MMU {
 
         Self {
             mbc: mbc,
-            apu: APU::new(config.audio.clone()),
+            apu: APU::new(config.apu_config),
             ppu: PPU::new(config.clone(), framebuffer),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
@@ -72,7 +71,7 @@ impl MMU {
             inte: Interrupts::empty(),
             wram_bank: 0x01,
             boot_rom,
-            boot_rom_enabled: booting,
+            boot_rom_enabled: true,
             mode: config.mode
         }
     }

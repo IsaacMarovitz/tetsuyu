@@ -81,7 +81,7 @@ impl Registers {
         }
     }
 
-    pub fn new(mode: GBMode, booting: bool) -> Registers {
+    pub fn new(mode: GBMode) -> Registers {
         match mode {
             GBMode::DMG => Registers {
                 a: 0x01,
@@ -92,7 +92,7 @@ impl Registers {
                 e: 0xD8,
                 h: 0x01,
                 l: 0x4D,
-                pc: if booting { 0x0000 } else { 0x0100 },
+                pc: 0x0000,
                 sp: 0xFFFE,
             },
             GBMode::CGB => Registers {
@@ -104,7 +104,7 @@ impl Registers {
                 e: 0x56,
                 h: 0x00,
                 l: 0x0D,
-                pc: if booting { 0x0000 } else { 0x0100 },
+                pc: 0x0000,
                 sp: 0xFFFE,
             },
         }

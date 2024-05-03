@@ -21,34 +21,27 @@ impl CPU {
                config: Config,
                framebuffer: Framebuffer) -> Self {
         let mut boot_rom: [u8; 0x900] = [0; 0x900];
-        let booting: bool = match config.boot_rom {
-            Some(ref path) => {
-                let mut boot_rom_vec = Vec::new();
-                let mut boot = match File::open(path.clone()) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        eprintln!("Failed to open Boot ROM at \"{}\": {}", path.clone(), err);
-                        process::exit(1);
-                    }
-                };
-                boot.read_to_end(&mut boot_rom_vec)
-                    .expect("Failed to read Boot ROM!");
-
-                // Copy Boot ROM
-                if config.mode == GBMode::DMG {
-                    boot_rom[0..=0x00FF].copy_from_slice(boot_rom_vec.as_slice());
-                } else if config.mode == GBMode::CGB {
-                    boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
-                }
-
-                true
+        let mut boot_rom_vec = Vec::new();
+        let mut boot = match File::open(config.boot_rom.clone()) {
+            Ok(file) => file,
+            Err(err) => {
+                eprintln!("Failed to open Boot ROM at \"{}\": {}", config.boot_rom, err);
+                process::exit(1);
             }
-            None => false,
         };
+        boot.read_to_end(&mut boot_rom_vec)
+            .expect("Failed to read Boot ROM!");
+
+        // Copy Boot ROM
+        if config.mode == GBMode::DMG {
+            boot_rom[0..=0x00FF].copy_from_slice(boot_rom_vec.as_slice());
+        } else if config.mode == GBMode::CGB {
+            boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
+        }
 
         Self {
-            reg: Registers::new(config.clone().mode, booting),
-            mem: MMU::new(rom, config, booting, boot_rom, framebuffer),
+            reg: Registers::new(config.mode),
+            mem: MMU::new(rom, config, boot_rom, framebuffer),
             halted: false,
             ime: false,
             ime_ask: false

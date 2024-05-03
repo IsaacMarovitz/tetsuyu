@@ -64,7 +64,7 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-        let context_arc = Arc::clone(&self.context.as_ref().unwrap());
+        let context_arc = &self.context.as_ref().unwrap();
         let mut context = context_arc.lock().unwrap();
         let size = context.size;
 
@@ -86,14 +86,14 @@ impl ApplicationHandler for App {
                         send_input(
                             event.key_without_modifiers(),
                             true,
-                            self.config.clone().input,
+                            self.config.input.clone(),
                             self.input_tx.clone(),
                         );
                     } else if event.state == ElementState::Released {
                         send_input(
                             event.key_without_modifiers(),
                             false,
-                            self.config.clone().input,
+                            self.config.input.clone(),
                             self.input_tx.clone(),
                         );
                     }
@@ -104,10 +104,10 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let context_arc = Arc::clone(&self.context.as_ref().unwrap());
+        let context_arc = &self.context.as_ref().unwrap();
         let mut context = context_arc.lock().unwrap();
 
-        let framebuffer = Arc::clone(&self.framebuffer);
+        let framebuffer = &self.framebuffer;
         context.update(&*framebuffer.read().unwrap());
 
         let _ = context.render();

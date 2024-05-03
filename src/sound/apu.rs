@@ -8,10 +8,10 @@ use bitflags::bitflags;
 use cpal::{SampleFormat, Stream};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::CLOCK_FREQUENCY;
-use crate::config::{Audio, Config};
+use crate::config::{APUConfig, Config};
 
 pub struct APU {
-    config: Audio,
+    config: APUConfig,
     audio_enabled: bool,
     is_ch_4_on: bool,
     is_ch_3_on: bool,
@@ -44,7 +44,7 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new(config: Audio) -> Self {
+    pub fn new(config: APUConfig) -> Self {
         Self {
             config,
             audio_enabled: true,
