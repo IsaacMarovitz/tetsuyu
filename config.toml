@@ -1,0 +1,33 @@
+window_w = 640
+window_h = 576
+print_serial = false
+boot_rom = ""
+shader_path = "./slang-shaders/nearest.slangp"
+mode = "DMG"
+
+[ppu_config]
+cc_mode = "CGB"
+
+[ppu_config.palette]
+dark.hex = 0x081810
+dark_gray.hex = 0x396139
+light_gray.hex = 0x84A563
+light.hex = 0xC6DE8C
+off.hex = 0xD2E6A6
+
+[apu_config]
+master_enabled = true
+ch1_enabled = true
+ch2_enabled = true
+ch3_enabled = true
+ch4_enabled = true
+
+[input]
+up.Character = "w"
+left.Character = "a"
+down.Character = "s"
+right.Character = "d"
+a.Character = "z"
+b.Character = "x"
+select.Character = "c"
+start.Character = "v"
