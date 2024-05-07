@@ -167,7 +167,10 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.write(a, v),
             0xFF10..=0xFF3F => self.apu.write(a, v),
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
-            0xFF50 => self.boot_rom_enabled = false,
+            0xFF50 => {
+                self.boot_rom_enabled = false;
+                self.ppu.clear_vram();
+            },
             // TODO: RP
             0xFF56 => { },
             0xFF51..=0xFF6F => self.ppu.write(a, v),

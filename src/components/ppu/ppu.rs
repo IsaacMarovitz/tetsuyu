@@ -445,6 +445,10 @@ impl PPU {
         }
     }
 
+    pub fn clear_vram(&mut self) {
+        self.vram = [0; 0x4000];
+    }
+
     fn read_vram(&self, a: u16, bank: usize) -> u8 {
         self.vram[(bank * 0x2000) + a as usize - 0x8000]
     }
