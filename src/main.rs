@@ -22,6 +22,7 @@ use winit::event_loop::EventLoop;
 use winit::application::ApplicationHandler;
 use winit::window::{Window, WindowId};
 use crate::components::prelude::ppu::FRAMEBUFFER_SIZE;
+use crate::mbc::header::{CGBFlag, Header};
 
 type Framebuffer = Arc<RwLock<[u8; FRAMEBUFFER_SIZE]>>;
 
@@ -42,7 +43,7 @@ struct Args {
 }
 
 struct App {
-    game_name: String,
+    header: Header,
     context: Option<Arc<Mutex<Context>>>,
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
@@ -52,7 +53,7 @@ struct App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
-            .with_title(format!("tetsuyu - {:}", self.game_name))
+            .with_title(format!("tetsuyu - {:}", self.header.title))
             .with_inner_size(winit::dpi::LogicalSize::new(
                 self.config.window_w,
                 self.config.window_h,
@@ -152,9 +153,12 @@ fn main() {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).expect("Failed to read ROM!");
 
-    // Get game name
-    let game_name = String::from_utf8_lossy(&buffer[0x0134..=0x0143]);
-    println!("Starting \"{}\" in {:?} Mode...", game_name, config.mode);
+    let header = Header::new(buffer.clone());
+    println!("{}", header);
+
+    assert!((header.cgb_flag != CGBFlag::CGBOnly) || (config.mode != GBMode::DMG), "Cannot run CGB only game in DMG Mode!");
+    // TODO: DMG-on-CGB Compat Mode
+    assert!((header.cgb_flag != CGBFlag::DMGOnly) || (config.mode != GBMode::CGB), "Cannot run DMG only game in CGB Mode!");
 
     let panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -169,7 +173,7 @@ fn main() {
     let framebuffer: Framebuffer = Arc::new(RwLock::new([0xFF; FRAMEBUFFER_SIZE]));
 
     let mut app = App {
-        game_name: String::from(game_name),
+        header: header.clone(),
         context: None,
         config: config.clone(),
         input_tx,
@@ -178,7 +182,7 @@ fn main() {
 
     // Start CPU
     thread::spawn(move || {
-        let mut cpu = CPU::new(buffer, config, framebuffer);
+        let mut cpu = CPU::new(buffer, header, config, framebuffer);
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 

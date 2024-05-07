@@ -4,8 +4,8 @@ use crate::mbc::prelude::*;
 use crate::sound::apu::APU;
 use crate::Framebuffer;
 use bitflags::bitflags;
-use num_traits::FromPrimitive;
 use crate::components::prelude::ppu::PPU;
+use crate::mbc::header::Header;
 
 pub struct MMU {
     mbc: Box<dyn MBC + 'static>,
@@ -37,16 +37,13 @@ bitflags! {
 
 impl MMU {
     pub fn new(rom: Vec<u8>,
+               header: Header,
                config: Config,
                boot_rom: [u8; 0x900],
                framebuffer: Framebuffer) -> Self {
-        let cart_type: CartTypes = FromPrimitive::from_u8(rom[0x0147]).expect("Failed to get Cart Type!");
-        let mbc_mode = match cart_type.get_mbc() {
-            MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", cart_type),
-            v => {
-                println!("Cart Type: {:}, MBC Type: {:}", cart_type, v);
-                v
-            }
+        let mbc_mode = match header.cart_type.get_mbc() {
+            MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", header.cart_type),
+            v => v
         };
 
         let mbc: Box<dyn MBC> = match mbc_mode {

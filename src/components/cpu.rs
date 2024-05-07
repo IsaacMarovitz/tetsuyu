@@ -4,6 +4,7 @@ use std::process;
 use crate::config::Config;
 use crate::components::prelude::*;
 use crate::Framebuffer;
+use crate::mbc::header::Header;
 
 pub struct CPU {
     pub reg: Registers,
@@ -18,6 +19,7 @@ unsafe impl Send for CPU {}
 
 impl CPU {
     pub fn new(rom: Vec<u8>,
+               header: Header,
                config: Config,
                framebuffer: Framebuffer) -> Self {
         let mut boot_rom: [u8; 0x900] = [0; 0x900];
@@ -41,7 +43,7 @@ impl CPU {
 
         Self {
             reg: Registers::new(config.mode),
-            mem: MMU::new(rom, config, boot_rom, framebuffer),
+            mem: MMU::new(rom, header, config, boot_rom, framebuffer),
             halted: false,
             ime: false,
             ime_ask: false

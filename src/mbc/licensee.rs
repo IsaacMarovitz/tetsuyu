@@ -1,7 +1,9 @@
 use std::fmt::{Display, Formatter};
 
+#[derive(Clone)]
 pub enum Licensee {
     None,
+    Unknown,
     Capcom,
     ElectronicArts,
     HudsonSoft,
@@ -134,6 +136,8 @@ pub enum Licensee {
     IGS,
     AWave,
     ExtremeEntertainment,
+    MTO,
+    Kodansha
 }
 
 impl Licensee {
@@ -201,7 +205,9 @@ impl Licensee {
             "99" => Licensee::PackInSoft,
             "9H" => Licensee::BottomUp,
             "A4" => Licensee::KonamiYuGiOh,
-            _ => Licensee::None,
+            "BL" => Licensee::MTO,
+            "DK" => Licensee::Kodansha,
+            _ => Licensee::Unknown,
         }
     }
 
@@ -355,7 +361,7 @@ impl Licensee {
             0xF0 => Some(Licensee::AWave),
             0xF3 => Some(Licensee::ExtremeEntertainment),
             0xFF => Some(Licensee::LJN),
-            _ => Some(Licensee::None)
+            _ => Some(Licensee::Unknown)
         }
     }
 }
@@ -364,6 +370,7 @@ impl Display for Licensee {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             Licensee::None => "None",
+            Licensee::Unknown => "Unknown",
             Licensee::Capcom => "Capcom",
             Licensee::ElectronicArts => "EA (Electronic Arts)",
             Licensee::HudsonSoft => "Hudson Soft",
@@ -495,10 +502,12 @@ impl Display for Licensee {
             Licensee::Epic => "Epic",
             Licensee::IGS => "IGS",
             Licensee::AWave => "A Wave",
-            Licensee::ExtremeEntertainment => "Extreme Entertainment"
+            Licensee::ExtremeEntertainment => "Extreme Entertainment",
+            Licensee::MTO => "MTO",
+            Licensee::Kodansha => "Kodansha"
         };
 
-        writeln!(f, "{}", name)?;
+        write!(f, "{}", name)?;
         Ok(())
     }
 }
