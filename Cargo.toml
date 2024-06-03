@@ -11,7 +11,7 @@ clap = { version = "4.5", features = ["derive"] }
 bitflags = "2.5"
 log = "0.4"
 wgpu = "0.20"
-bytemuck = { version = "1.15", features = ["derive"] }
+bytemuck = { version = "1.16", features = ["derive"] }
 num-traits = "0.2"
 num-derive = "0.4"
 serde = { version = "1.0", features = ["derive"] }
