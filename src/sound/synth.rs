@@ -6,31 +6,31 @@ use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::hacker::*;
 
 pub struct Synth {
-    pub ch1_freq: Shared<f64>,
-    pub ch1_vol: Shared<f64>,
-    pub ch1_duty: Shared<f64>,
-    pub ch1_l: Shared<f64>,
-    pub ch1_r: Shared<f64>,
+    pub ch1_freq: Shared,
+    pub ch1_vol: Shared,
+    pub ch1_duty: Shared,
+    pub ch1_l: Shared,
+    pub ch1_r: Shared,
 
-    pub ch2_freq: Shared<f64>,
-    pub ch2_vol: Shared<f64>,
-    pub ch2_duty: Shared<f64>,
-    pub ch2_l: Shared<f64>,
-    pub ch2_r: Shared<f64>,
+    pub ch2_freq: Shared,
+    pub ch2_vol: Shared,
+    pub ch2_duty: Shared,
+    pub ch2_l: Shared,
+    pub ch2_r: Shared,
 
-    pub ch3_freq: Shared<f64>,
-    pub ch3_vol: Shared<f64>,
+    pub ch3_freq: Shared,
+    pub ch3_vol: Shared,
     pub ch3_wave: Arc<AtomicTable>,
-    pub ch3_l: Shared<f64>,
-    pub ch3_r: Shared<f64>,
+    pub ch3_l: Shared,
+    pub ch3_r: Shared,
 
-    pub ch4_freq: Shared<f64>,
-    pub ch4_vol: Shared<f64>,
-    pub ch4_l: Shared<f64>,
-    pub ch4_r: Shared<f64>,
+    pub ch4_freq: Shared,
+    pub ch4_vol: Shared,
+    pub ch4_l: Shared,
+    pub ch4_r: Shared,
 
-    pub global_l: Shared<f64>,
-    pub global_r: Shared<f64>,
+    pub global_l: Shared,
+    pub global_r: Shared,
 }
 
 impl Synth {
@@ -177,31 +177,31 @@ impl Synth {
     }
 
     fn run_audio<T>(
-        ch1_freq: Shared<f64>,
-        ch1_vol: Shared<f64>,
-        ch1_duty: Shared<f64>,
-        ch1_l: Shared<f64>,
-        ch1_r: Shared<f64>,
-        ch2_freq: Shared<f64>,
-        ch2_vol: Shared<f64>,
-        ch2_duty: Shared<f64>,
-        ch2_l: Shared<f64>,
-        ch2_r: Shared<f64>,
-        ch3_freq: Shared<f64>,
-        ch3_vol: Shared<f64>,
+        ch1_freq: Shared,
+        ch1_vol: Shared,
+        ch1_duty: Shared,
+        ch1_l: Shared,
+        ch1_r: Shared,
+        ch2_freq: Shared,
+        ch2_vol: Shared,
+        ch2_duty: Shared,
+        ch2_l: Shared,
+        ch2_r: Shared,
+        ch3_freq: Shared,
+        ch3_vol: Shared,
         ch3_wave: Arc<AtomicTable>,
-        ch3_l: Shared<f64>,
-        ch3_r: Shared<f64>,
-        ch4_freq: Shared<f64>,
-        ch4_vol: Shared<f64>,
-        ch4_l: Shared<f64>,
-        ch4_r: Shared<f64>,
-        global_l: Shared<f64>,
-        global_r: Shared<f64>,
+        ch3_l: Shared,
+        ch3_r: Shared,
+        ch4_freq: Shared,
+        ch4_vol: Shared,
+        ch4_l: Shared,
+        ch4_r: Shared,
+        global_l: Shared,
+        global_r: Shared,
         device: Device,
         config: StreamConfig,
     ) where
-        T: SizedSample + FromSample<f64>,
+        T: SizedSample + FromSample<f32>,
     {
         thread::spawn(move || {
             let sample_rate = config.sample_rate.0 as f64;
@@ -214,7 +214,7 @@ impl Synth {
                 * var(&ch2_vol)
                 * constant(0.25);
 
-            let ch3_synth = AtomicSynth::new(ch3_wave);
+            let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3_wave);
             let ch3_mono = var(&ch3_freq) >> An(ch3_synth) * var(&ch3_vol) * constant(0.25);
             let ch4_mono = var(&ch4_freq) >> square() * var(&ch4_vol) * constant(0.25);
 
@@ -250,9 +250,9 @@ impl Synth {
         });
     }
 
-    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f64, f64))
+    fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
         where
-            T: SizedSample + FromSample<f64>,
+            T: SizedSample + FromSample<f32>,
     {
         for frame in output.chunks_mut(channels) {
             let sample = next_sample();

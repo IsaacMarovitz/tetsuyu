@@ -87,7 +87,7 @@ impl APU {
 
         let ch1_vol = {
             if self.ch1.dac_enabled && self.config.ch1_enabled {
-                self.ch1.volume_envelope.volume as f64 / 0xF as f64
+                self.ch1.volume_envelope.volume as f32 / 0xF as f32
             } else {
                 0.0
             }
@@ -105,7 +105,7 @@ impl APU {
 
         let ch2_vol = {
             if self.ch2.dac_enabled && self.config.ch2_enabled {
-                self.ch2.volume_envelope.volume as f64 / 0xF as f64
+                self.ch2.volume_envelope.volume as f32 / 0xF as f32
             } else {
                 0.0
             }
@@ -139,7 +139,7 @@ impl APU {
 
         let ch4_vol = {
             if self.ch4.dac_enabled && self.config.ch4_enabled {
-                self.ch4.final_volume as f64 / 0xF as f64
+                self.ch4.final_volume as f32 / 0xF as f32
             } else {
                 0.0
             }
@@ -148,7 +148,7 @@ impl APU {
         // TODO: Amplifier on original hardware NEVER completely mutes non-silent input
         let global_l = {
             if self.audio_enabled {
-                self.left_volume as f64 / 0xF as f64
+                self.left_volume as f32 / 0xF as f32
             } else {
                 0.0
             }
@@ -156,7 +156,7 @@ impl APU {
 
         let global_r = {
             if self.audio_enabled {
-                self.right_volume as f64 / 0xF as f64
+                self.right_volume as f32 / 0xF as f32
             } else {
                 0.0
             }
@@ -164,19 +164,19 @@ impl APU {
 
         match &self.synth {
             Some(synth) => {
-                synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f64));
+                synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f32));
                 synth.ch1_vol.set_value(ch1_vol);
                 synth.ch1_duty.set_value(ch1_duty);
                 synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
                 synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
 
-                synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f64));
+                synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f32));
                 synth.ch2_vol.set_value(ch2_vol);
                 synth.ch2_duty.set_value(ch2_duty);
                 synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
                 synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
 
-                synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f64));
+                synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f32));
                 synth.ch3_vol.set_value(ch3_vol);
 
                 for i in 0..ch3_wave.len() {
@@ -186,7 +186,7 @@ impl APU {
                 synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
                 synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
 
-                synth.ch4_freq.set_value(self.ch4.frequency as f64);
+                synth.ch4_freq.set_value(self.ch4.frequency as f32);
                 synth.ch4_vol.set_value(ch4_vol);
                 synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
                 synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
