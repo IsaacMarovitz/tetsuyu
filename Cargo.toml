@@ -8,9 +8,9 @@ winit = { version = "0.30", features = ["serde"] }
 cpal = "0.15"
 fundsp = { version = "0.17.1", default-features = false, git = "https://github.com/SamiPerttu/fundsp.git" }
 clap = { version = "4.5", features = ["derive"] }
-bitflags = "2.5"
+bitflags = "2.6"
 log = "0.4"
-wgpu = "0.20"
+wgpu = "22.0"
 bytemuck = { version = "1.16", features = ["derive"] }
 num-traits = "0.2"
 num-derive = "0.4"
