@@ -2,7 +2,7 @@ use std::sync::Arc;
 use librashader::presets::ShaderPreset;
 use librashader::runtime::wgpu::FilterChain;
 use librashader::runtime::Viewport;
-use wgpu::PresentMode;
+use wgpu::{MemoryHints, PresentMode};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 use crate::components::prelude::ppu::{SCREEN_H, SCREEN_W};
@@ -42,6 +42,7 @@ impl Context {
                     required_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                     required_limits: wgpu::Limits::default(),
                     label: None,
+                    memory_hints: MemoryHints::Performance
                 },
                 None,
             )
