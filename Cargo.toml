@@ -6,15 +6,15 @@ edition = "2021"
 [dependencies]
 winit = { version = "0.30", features = ["serde"] }
 cpal = "0.15"
-fundsp = { version = "0.18", default-features = false }
+fundsp = { version = "0.19", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
 bitflags = "2.6"
 log = "0.4"
 wgpu = "22.1.0"
-bytemuck = { version = "1.16", features = ["derive"] }
+bytemuck = { version = "1.18", features = ["derive"] }
 num-traits = "0.2"
 num-derive = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 pollster = "0.3"
-librashader = { version = "0.3", default-features = false, features = ["runtime-wgpu", "presets"] }
+librashader = { version = "0.4", default-features = false, features = ["runtime-wgpu", "presets"] }
