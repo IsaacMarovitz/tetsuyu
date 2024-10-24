@@ -84,7 +84,7 @@ impl PPU {
 
         self.cycle_count += cycles;
 
-        return match self.ppu_mode {
+        match self.ppu_mode {
             PPUMode::OAMScan => {
                 self.check_lyc();
 
@@ -151,7 +151,7 @@ impl PPU {
                     self.check_lyc();
                 }
             }
-        };
+        }
     }
 
     fn check_lyc(&mut self) {
@@ -411,7 +411,13 @@ impl PPU {
                 let skip = match self.mode {
                     GBMode::CGB => {
                         if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                            prio == Priority::Priority
+                            if prio == Priority::Color0 {
+                                false
+                            } else if !tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Priority {
+                                false
+                            } else {
+                                true
+                            }
                         } else {
                             tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
                         }
