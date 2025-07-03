@@ -9,7 +9,7 @@ impl VolumeEnvelope {
         Self {
             volume: 0f32,
             period: 0,
-            positive: false
+            positive: false,
         }
     }
 

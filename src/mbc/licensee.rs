@@ -137,7 +137,7 @@ pub enum Licensee {
     AWave,
     ExtremeEntertainment,
     MTO,
-    Kodansha
+    Kodansha,
 }
 
 impl Licensee {
@@ -361,7 +361,7 @@ impl Licensee {
             0xF0 => Some(Licensee::AWave),
             0xF3 => Some(Licensee::ExtremeEntertainment),
             0xFF => Some(Licensee::LJN),
-            _ => Some(Licensee::Unknown)
+            _ => Some(Licensee::Unknown),
         }
     }
 }
@@ -504,7 +504,7 @@ impl Display for Licensee {
             Licensee::AWave => "A Wave",
             Licensee::ExtremeEntertainment => "Extreme Entertainment",
             Licensee::MTO => "MTO",
-            Licensee::Kodansha => "Kodansha"
+            Licensee::Kodansha => "Kodansha",
         };
 
         write!(f, "{}", name)?;

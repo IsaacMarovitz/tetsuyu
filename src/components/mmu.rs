@@ -1,11 +1,11 @@
+use crate::Framebuffer;
+use crate::components::prelude::ppu::PPU;
 use crate::components::prelude::*;
 use crate::config::Config;
+use crate::mbc::header::Header;
 use crate::mbc::prelude::*;
 use crate::sound::apu::APU;
-use crate::Framebuffer;
 use bitflags::bitflags;
-use crate::components::prelude::ppu::PPU;
-use crate::mbc::header::Header;
 
 pub struct MMU {
     mbc: Box<dyn MBC + 'static>,
@@ -21,7 +21,7 @@ pub struct MMU {
     wram_bank: usize,
     boot_rom: [u8; 0x900],
     boot_rom_enabled: bool,
-    mode: GBMode
+    mode: GBMode,
 }
 
 bitflags! {
@@ -36,14 +36,16 @@ bitflags! {
 }
 
 impl MMU {
-    pub fn new(rom: Vec<u8>,
-               header: Header,
-               config: Config,
-               boot_rom: [u8; 0x900],
-               framebuffer: Framebuffer) -> Self {
+    pub fn new(
+        rom: Vec<u8>,
+        header: Header,
+        config: Config,
+        boot_rom: [u8; 0x900],
+        framebuffer: Framebuffer,
+    ) -> Self {
         let mbc_mode = match header.cart_type.get_mbc() {
             MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", header.cart_type),
-            v => v
+            v => v,
         };
 
         let mbc: Box<dyn MBC> = match mbc_mode {
@@ -69,7 +71,7 @@ impl MMU {
             wram_bank: 0x01,
             boot_rom,
             boot_rom_enabled: true,
-            mode: config.mode
+            mode: config.mode,
         }
     }
 
@@ -170,9 +172,9 @@ impl Memory for MMU {
             0xFF50 => {
                 self.boot_rom_enabled = false;
                 self.ppu.clear_vram();
-            },
+            }
             // TODO: RP
-            0xFF56 => { },
+            0xFF56 => {}
             0xFF51..=0xFF6F => self.ppu.write(a, v),
             0xFF70 => {
                 self.wram_bank = match v & 0x07 {

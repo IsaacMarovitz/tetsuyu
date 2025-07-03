@@ -1,13 +1,13 @@
 use crate::components::memory::Memory;
-use bitflags::bitflags;
 use crate::sound::length_counter::LengthCounter;
+use bitflags::bitflags;
 
 pub struct CH3 {
     pub dac_enabled: bool,
     pub output_level: OutputLevel,
     pub period: u16,
     wave_ram: [u8; 16],
-    length_counter: LengthCounter
+    length_counter: LengthCounter,
 }
 
 bitflags! {
@@ -27,7 +27,7 @@ impl CH3 {
             output_level: OutputLevel::MUTE,
             period: 0,
             wave_ram: [0; 16],
-            length_counter: LengthCounter::new()
+            length_counter: LengthCounter::new(),
         }
     }
 

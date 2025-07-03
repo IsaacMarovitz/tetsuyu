@@ -34,10 +34,10 @@ impl ColorCorrection {
             true_color_lut,
             cgb_color_lut,
             gba_color_lut,
-            sgb_color_lut
+            sgb_color_lut,
         }
     }
-    
+
     fn true_color(r: u8, g: u8, b: u8) -> [u8; 3] {
         let r = (r * 0xFF + 0xF) / 0x1F;
         let g = (g * 0xFF + 0xF) / 0x1F;
@@ -51,7 +51,10 @@ impl ColorCorrection {
         let b = CGB_COLOR_CURVE[b as usize];
 
         if g != b {
-            g = ((((g as f32 / 255.0).powf(GAMMA) * 3.0 + (b as f32 / 255.0).powf(GAMMA)) / 4.0).powf(1.0 / GAMMA) * 255.0).round() as u8;
+            g = ((((g as f32 / 255.0).powf(GAMMA) * 3.0 + (b as f32 / 255.0).powf(GAMMA)) / 4.0)
+                .powf(1.0 / GAMMA)
+                * 255.0)
+                .round() as u8;
         }
 
         [r, g, b]
@@ -63,7 +66,10 @@ impl ColorCorrection {
         let b = GBA_COLOR_CURVE[b as usize];
 
         if g != b {
-            g = ((((g as f32 / 255.0).powf(GAMMA) * 5.0 + (b as f32 / 255.0).powf(GAMMA)) / 6.0).powf(1.0 / GAMMA) * 255.0).round() as u8;
+            g = ((((g as f32 / 255.0).powf(GAMMA) * 5.0 + (b as f32 / 255.0).powf(GAMMA)) / 6.0)
+                .powf(1.0 / GAMMA)
+                * 255.0)
+                .round() as u8;
         }
 
         [r, g, b]

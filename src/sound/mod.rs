@@ -4,8 +4,8 @@ mod ch2;
 mod ch3;
 mod ch4;
 mod length_counter;
-mod volume_envelope;
 mod synth;
+mod volume_envelope;
 
 #[allow(unused_imports)]
 mod prelude {

@@ -1,11 +1,11 @@
+pub mod header;
+pub mod licensee;
 pub mod mbc1;
 pub mod mbc2;
 pub mod mbc3;
 pub mod mbc5;
 pub mod mode;
 pub mod rom_only;
-pub mod header;
-pub mod licensee;
 
 #[allow(unused_imports)]
 pub mod prelude {

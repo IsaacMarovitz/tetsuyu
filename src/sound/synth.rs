@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::hacker::*;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 pub struct Synth {
     pub ch1_freq: Shared,
@@ -207,12 +207,10 @@ impl Synth {
             let sample_rate = config.sample_rate.0 as f64;
             let channels = config.channels as usize;
 
-            let ch1_mono = ((var(&ch1_freq) | var(&ch1_duty)) >> pulse())
-                * var(&ch1_vol)
-                * constant(0.25);
-            let ch2_mono = ((var(&ch2_freq) | var(&ch2_duty)) >> pulse())
-                * var(&ch2_vol)
-                * constant(0.25);
+            let ch1_mono =
+                ((var(&ch1_freq) | var(&ch1_duty)) >> pulse()) * var(&ch1_vol) * constant(0.25);
+            let ch2_mono =
+                ((var(&ch2_freq) | var(&ch2_duty)) >> pulse()) * var(&ch2_vol) * constant(0.25);
 
             let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3_wave);
             let ch3_mono = var(&ch3_freq) >> An(ch3_synth) * var(&ch3_vol) * constant(0.25);
@@ -251,8 +249,8 @@ impl Synth {
     }
 
     fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
-        where
-            T: SizedSample + FromSample<f32>,
+    where
+        T: SizedSample + FromSample<f32>,
     {
         for frame in output.chunks_mut(channels) {
             let sample = next_sample();

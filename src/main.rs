@@ -1,34 +1,34 @@
 #[macro_use]
 extern crate num_derive;
 
+use crate::components::prelude::ppu::FRAMEBUFFER_SIZE;
 use crate::components::prelude::*;
 use crate::config::{Config, Input};
 use crate::context::Context;
+use crate::mbc::header::{CGBFlag, Header};
 use clap::Parser;
+use pollster::FutureExt;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::{process, thread};
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::Sender;
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
-use pollster::FutureExt;
+use std::{process, thread};
 use wgpu::SurfaceError;
+use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
+use winit::event_loop::EventLoop;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
-use winit::event_loop::EventLoop;
-use winit::application::ApplicationHandler;
 use winit::window::{Window, WindowId};
-use crate::components::prelude::ppu::FRAMEBUFFER_SIZE;
-use crate::mbc::header::{CGBFlag, Header};
 
 type Framebuffer = Arc<RwLock<[u8; FRAMEBUFFER_SIZE]>>;
 
+mod components;
 mod config;
 mod context;
-mod components;
 mod mbc;
 mod sound;
 
@@ -39,7 +39,7 @@ pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as 
 #[derive(Parser)]
 struct Args {
     rom_path: String,
-    boot_rom: Option<String>
+    boot_rom: Option<String>,
 }
 
 struct App {
@@ -47,7 +47,7 @@ struct App {
     context: Option<Arc<Mutex<Context>>>,
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
-    framebuffer: Framebuffer
+    framebuffer: Framebuffer,
 }
 
 impl ApplicationHandler for App {
@@ -64,7 +64,12 @@ impl ApplicationHandler for App {
         self.context = Some(Arc::new(Mutex::new(context_future.block_on())));
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
         let context_arc = &self.context.as_ref().unwrap();
         let mut context = context_arc.lock().unwrap();
         let size = context.size;
@@ -177,7 +182,7 @@ fn main() {
         context: None,
         config: config.clone(),
         input_tx,
-        framebuffer: framebuffer.clone()
+        framebuffer: framebuffer.clone(),
     };
 
     // Start CPU
@@ -195,8 +200,10 @@ fn main() {
                 let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
                 // println!("[CPU] Sleeping {}ms", milliseconds);
                 thread::sleep(Duration::from_millis(milliseconds as u64));
-                step_zero = step_zero.checked_add(Duration::from_millis(u64::from(STEP_TIME))).unwrap();
-                
+                step_zero = step_zero
+                    .checked_add(Duration::from_millis(u64::from(STEP_TIME)))
+                    .unwrap();
+
                 if now.checked_duration_since(step_zero).is_some() {
                     step_zero = now;
                 }
@@ -222,12 +229,7 @@ fn main() {
     let _ = event_loop.run_app(&mut app);
 }
 
-pub fn send_input(
-    key: Key,
-    pressed: bool,
-    input: Input,
-    input_tx: Sender<(JoypadButton, bool)>,
-) {
+pub fn send_input(key: Key, pressed: bool, input: Input, input_tx: Sender<(JoypadButton, bool)>) {
     match key {
         key if key == input.up => input_tx.send((JoypadButton::UP, pressed)).unwrap(),
         key if key == input.left => input_tx.send((JoypadButton::LEFT, pressed)).unwrap(),

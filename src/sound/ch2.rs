@@ -8,7 +8,7 @@ pub struct CH2 {
     pub duty_cycle: DutyCycle,
     pub period: u16,
     length_counter: LengthCounter,
-    pub volume_envelope: VolumeEnvelope
+    pub volume_envelope: VolumeEnvelope,
 }
 
 impl CH2 {
@@ -18,7 +18,7 @@ impl CH2 {
             duty_cycle: DutyCycle::EIGHTH,
             period: 0,
             length_counter: LengthCounter::new(),
-            volume_envelope: VolumeEnvelope::new()
+            volume_envelope: VolumeEnvelope::new(),
         }
     }
 
@@ -80,7 +80,7 @@ impl Memory for CH2 {
             }
             // NR24: Period High & Control
             0xFF19 => {
-                self.length_counter.trigger= ((v & 0b1000_0000) >> 7) != 0;
+                self.length_counter.trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_counter.enabled = ((v & 0b0100_0000) >> 6) != 0;
                 self.period &= 0b0000_0000_1111_1111;
                 self.period |= ((v & 0b0000_0111) as u16) << 8;

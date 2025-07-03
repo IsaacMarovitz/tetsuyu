@@ -1,6 +1,6 @@
+use crate::components::mode::{CCMode, GBMode};
 use serde::{Deserialize, Serialize};
 use winit::keyboard::{Key, SmolStr};
-use crate::components::mode::{CCMode, GBMode};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
@@ -26,7 +26,7 @@ impl Default for Config {
             mode: GBMode::DMG,
             ppu_config: PPUConfig::new(),
             apu_config: APUConfig::new(),
-            input: Input::new()
+            input: Input::new(),
         }
     }
 }
@@ -41,7 +41,7 @@ impl PPUConfig {
     pub fn new() -> Self {
         Self {
             palette: Palette::new(),
-            cc_mode: CCMode::CGB
+            cc_mode: CCMode::CGB,
         }
     }
 }
@@ -52,7 +52,7 @@ pub struct Palette {
     pub dark_gray: Color,
     pub light_gray: Color,
     pub light: Color,
-    pub off: Color
+    pub off: Color,
 }
 
 impl Palette {
@@ -62,7 +62,7 @@ impl Palette {
             dark_gray: Color::new(0x396139),
             light_gray: Color::new(0x84A563),
             light: Color::new(0xC6DE8C),
-            off: Color::new(0xD2E6A6)
+            off: Color::new(0xD2E6A6),
         }
     }
 }
@@ -106,7 +106,7 @@ impl APUConfig {
             ch1_enabled: true,
             ch2_enabled: true,
             ch3_enabled: true,
-            ch4_enabled: true
+            ch4_enabled: true,
         }
     }
 }

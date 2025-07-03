@@ -12,7 +12,7 @@ pub struct CH1 {
     pub period: u16,
     sweep_cycle_count: u32,
     length_counter: LengthCounter,
-    pub volume_envelope: VolumeEnvelope
+    pub volume_envelope: VolumeEnvelope,
 }
 
 impl CH1 {
@@ -26,7 +26,7 @@ impl CH1 {
             period: 0,
             sweep_cycle_count: 0,
             length_counter: LengthCounter::new(),
-            volume_envelope: VolumeEnvelope::new()
+            volume_envelope: VolumeEnvelope::new(),
         }
     }
 

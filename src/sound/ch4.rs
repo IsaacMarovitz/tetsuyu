@@ -14,7 +14,7 @@ pub struct CH4 {
     pub final_volume: u8,
     clock_cycle_count: u32,
     length_counter: LengthCounter,
-    volume_envelope: VolumeEnvelope
+    volume_envelope: VolumeEnvelope,
 }
 
 impl CH4 {
@@ -30,7 +30,7 @@ impl CH4 {
             final_volume: 0,
             clock_cycle_count: 0,
             length_counter: LengthCounter::new(),
-            volume_envelope: VolumeEnvelope::new()
+            volume_envelope: VolumeEnvelope::new(),
         }
     }
 
@@ -52,17 +52,13 @@ impl CH4 {
         let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
         let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
 
-        if self.clock_cycle_count >= divisor*4 {
+        if self.clock_cycle_count >= divisor * 4 {
             self.clock_cycle_count = 0;
 
             self.bit = {
                 let bit_0 = (self.lfsr & 0b0000_0000_0000_0001) >> 0;
                 let bit_1 = (self.lfsr & 0b0000_0000_0000_0010) >> 1;
-                if bit_0 == bit_1 {
-                    1
-                } else {
-                    0
-                }
+                if bit_0 == bit_1 { 1 } else { 0 }
             };
 
             self.lfsr |= self.bit << 15;

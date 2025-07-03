@@ -1,9 +1,9 @@
-use crate::components::prelude::*;
-use crate::config::{Color, Config, Palette, PPUConfig};
 use crate::Framebuffer;
 use crate::components::ppu::bgpi::BGPI;
 use crate::components::ppu::cc::ColorCorrection;
 use crate::components::ppu::structs::*;
+use crate::components::prelude::*;
+use crate::config::{Color, Config, PPUConfig, Palette};
 
 /// RGBA (4 bytes) per pixel
 pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
@@ -79,7 +79,7 @@ impl PPU {
 
     pub fn cycle(&mut self, cycles: u32) {
         if !self.lcdc.contains(LCDC::LCD_ENABLE) {
-            return
+            return;
         }
 
         self.cycle_count += cycles;
@@ -281,7 +281,8 @@ impl PPU {
                 tile_index as i16
             } else {
                 (tile_index as i8) as i16 + 128
-            } as u16 * 16;
+            } as u16
+                * 16;
 
             let tile_data_location = tile_data_base + tile_offset;
             let tile_attributes = if self.mode == GBMode::CGB {
@@ -291,10 +292,22 @@ impl PPU {
                 Attributes::empty()
             };
 
-            let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) { 7 - py % 8 } else { py % 8 };
-            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - px % 8 } else { px % 8 };
+            let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
+                7 - py % 8
+            } else {
+                py % 8
+            };
+            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
+                7 - px % 8
+            } else {
+                px % 8
+            };
             let tile_data_address = tile_data_location + ((tile_y * 2) as u16);
-            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) { 1 } else { 0 };
+            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
+                1
+            } else {
+                0
+            };
 
             let tile_data = {
                 let a = self.read_vram(tile_data_address, bank);
@@ -302,8 +315,16 @@ impl PPU {
                 [a, b]
             };
 
-            let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
-            let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+            let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 {
+                1
+            } else {
+                0
+            };
+            let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 {
+                2
+            } else {
+                0
+            };
             let color = color_h | color_l;
 
             self.bgprio[x] = if color == 0 {
@@ -320,7 +341,8 @@ impl PPU {
                 let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
                 let palette_address = palette_no_1 * 8 + color * 2;
 
-                let color: u16 = (self.bcpd[palette_address] as u16) | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
+                let color: u16 = (self.bcpd[palette_address] as u16)
+                    | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
 
                 self.set_rgb_mapped(x, color);
             } else {
@@ -336,7 +358,11 @@ impl PPU {
     }
 
     fn draw_sprites(&mut self) {
-        let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
+        let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) {
+            16
+        } else {
+            8
+        };
         let mut object_count: u8 = 0;
         let mut previous_px: u8 = 0;
         // Start this with max value, otherwise first
@@ -347,12 +373,17 @@ impl PPU {
             let sprite_address = 0xFE00 + (i as u16) * 4;
             let py = self.read(sprite_address).wrapping_sub(16);
             let px = self.read(sprite_address + 1).wrapping_sub(8);
-            let tile_number = self.read(sprite_address + 2) & if self.lcdc.contains(LCDC::OBJ_SIZE) { 0xFE } else { 0xFF };
+            let tile_number = self.read(sprite_address + 2)
+                & if self.lcdc.contains(LCDC::OBJ_SIZE) {
+                    0xFE
+                } else {
+                    0xFF
+                };
             let tile_attributes = Attributes::from_bits_retain(self.read(sprite_address + 3));
 
             if py <= 0xFF - sprite_size + 1 {
                 if self.ly < py || self.ly > py + sprite_size - 1 {
-                    continue
+                    continue;
                 }
             } else {
                 if self.ly > py.wrapping_add(sprite_size) - 1 {
@@ -379,10 +410,14 @@ impl PPU {
             } else {
                 self.ly.wrapping_sub(py)
             };
-            
+
             let tile_data_address = 0x8000_u16 + tile_number as u16 * 16 + tile_y as u16 * 2;
-            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) { 1 } else { 0 };
-            
+            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
+                1
+            } else {
+                0
+            };
+
             let tile_data = {
                 let a = self.read_vram(tile_data_address, bank);
                 let b = self.read_vram(tile_data_address + 1, bank);
@@ -398,10 +433,22 @@ impl PPU {
                 if px.wrapping_add(x) >= (SCREEN_W as u8) {
                     continue;
                 }
-                let tile_x = if tile_attributes.contains(Attributes::X_FLIP) { 7 - x } else { x };
+                let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
+                    7 - x
+                } else {
+                    x
+                };
 
-                let color_low = if tile_data[0] & (0x80 >> tile_x) != 0 { 1 } else { 0 };
-                let color_high = if tile_data[1] & (0x80 >> tile_x) != 0 { 2 } else { 0 };
+                let color_low = if tile_data[0] & (0x80 >> tile_x) != 0 {
+                    1
+                } else {
+                    0
+                };
+                let color_high = if tile_data[1] & (0x80 >> tile_x) != 0 {
+                    2
+                } else {
+                    0
+                };
                 let color = color_high | color_low;
                 if color == 0 {
                     continue;
@@ -413,15 +460,18 @@ impl PPU {
                         if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
                             if prio == Priority::Color0 {
                                 false
-                            } else if !tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Priority {
+                            } else if !tile_attributes.contains(Attributes::PRIORITY)
+                                && prio != Priority::Priority
+                            {
                                 false
                             } else {
                                 true
                             }
                         } else {
-                            tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
+                            tile_attributes.contains(Attributes::PRIORITY)
+                                && prio != Priority::Color0
                         }
-                    },
+                    }
                     GBMode::DMG => {
                         tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
                     }
@@ -435,7 +485,8 @@ impl PPU {
                     let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
                     let palette_address = palette_no_1 * 8 + color * 2;
 
-                    let color: u16 = (self.ocpd[palette_address] as u16) | ((self.ocpd[palette_address + 1] as u16) << 8) & 0x7FFF;
+                    let color: u16 = (self.ocpd[palette_address] as u16)
+                        | ((self.ocpd[palette_address + 1] as u16) << 8) & 0x7FFF;
 
                     self.set_rgb_mapped(px.wrapping_add(x) as usize, color);
                 } else {
@@ -445,7 +496,13 @@ impl PPU {
                         Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
                     };
 
-                    self.set_pixel(color.r(), color.g(), color.b(), px.wrapping_add(x) as usize, self.ly);
+                    self.set_pixel(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        px.wrapping_add(x) as usize,
+                        self.ly,
+                    );
                 }
             }
         }
@@ -504,7 +561,7 @@ impl Memory for PPU {
                 } else {
                     0xFF
                 }
-            },
+            }
             0xFF6A => self.ocps.read(),
             0xFF6B => {
                 if self.ppu_mode != PPUMode::Draw {
@@ -512,7 +569,7 @@ impl Memory for PPU {
                 } else {
                     0xFF
                 }
-            },
+            }
             0xFF6C => self.opri as u8,
             _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
         }
@@ -546,7 +603,7 @@ impl Memory for PPU {
                                     self.set_pixel(r, g, b, x, y as u8);
                                 }
                             }
-                        },
+                        }
                         GBMode::CGB => {
                             let mut framebuffer = self.framebuffer.write().unwrap();
                             *framebuffer = [0xFF; FRAMEBUFFER_SIZE];

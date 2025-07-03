@@ -29,7 +29,9 @@ impl Memory for MBC5 {
         match a {
             0x0000..=0x1FFF => self.ram_enabled = v & 0x0F == 0x0A,
             0x2000..=0x2FFF => self.rom_bank = (self.rom_bank & 0x100) | (v as usize),
-            0x3000..=0x3FFF => self.rom_bank = (self.rom_bank & 0x0ff) | (((v & 0x01) as usize) << 8),
+            0x3000..=0x3FFF => {
+                self.rom_bank = (self.rom_bank & 0x0ff) | (((v & 0x01) as usize) << 8)
+            }
             0x4000..=0x5FFF => self.ram_bank = (v & 0x0f) as usize,
             // Unknown writes
             0x6000..=0x7FFF => {}

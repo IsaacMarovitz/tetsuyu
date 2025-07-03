@@ -1,17 +1,17 @@
-use std::sync::Arc;
-use librashader::presets::ShaderPreset;
-use librashader::runtime::wgpu::FilterChain;
+use crate::components::prelude::ppu::{SCREEN_H, SCREEN_W};
+use librashader::presets::{ShaderFeatures, ShaderPreset};
 use librashader::runtime::Viewport;
-use wgpu::{MemoryHints, PresentMode};
+use librashader::runtime::wgpu::FilterChain;
+use std::sync::Arc;
+use wgpu::{MemoryHints, PresentMode, Trace};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
-use crate::components::prelude::ppu::{SCREEN_H, SCREEN_W};
 
 pub struct Context {
     pub surface: wgpu::Surface<'static>,
-    pub device: Arc<wgpu::Device>,
-    pub queue: Arc<wgpu::Queue>,
-    render_output: Arc<wgpu::Texture>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    render_output: wgpu::Texture,
     pub config: wgpu::SurfaceConfiguration,
     pub size: PhysicalSize<u32>,
     window: Arc<Window>,
@@ -37,15 +37,13 @@ impl Context {
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
-                    required_limits: wgpu::Limits::default(),
-                    label: None,
-                    memory_hints: MemoryHints::Performance
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                required_limits: wgpu::Limits::default(),
+                label: None,
+                memory_hints: MemoryHints::Performance,
+                trace: Trace::Off,
+            })
             .await
             .unwrap();
 
@@ -64,18 +62,10 @@ impl Context {
         };
         surface.configure(&device, &config);
 
-        let device = Arc::new(device);
-        let queue = Arc::new(queue);
+        let preset = ShaderPreset::try_parse(shader_path, ShaderFeatures::NONE).unwrap();
+        let chain = FilterChain::load_from_preset(preset, &device, &queue, None).unwrap();
 
-        let preset = ShaderPreset::try_parse(shader_path).unwrap();
-        let chain = FilterChain::load_from_preset(
-            preset,
-            Arc::clone(&device),
-            Arc::clone(&queue),
-            None,
-        ).unwrap();
-
-        let render_output = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
+        let render_output = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rendertexture"),
             size: wgpu::Extent3d {
                 width: SCREEN_W as u32,
@@ -91,7 +81,7 @@ impl Context {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
-        }));
+        });
 
         Self {
             surface,
@@ -170,7 +160,7 @@ impl Context {
 
         self.chain
             .frame(
-                Arc::clone(&self.render_output),
+                &self.render_output,
                 &Viewport {
                     x: 0.0,
                     y: 0.0,
@@ -180,11 +170,13 @@ impl Context {
                         filter_output.size().into(),
                         filter_output.format(),
                     ),
+                    size: filter_output.size().into(),
                 },
                 &mut encoder,
                 self.frame_count,
                 None,
-            ).expect("Failed to draw frame!");
+            )
+            .expect("Failed to draw frame!");
 
         encoder.copy_texture_to_texture(
             filter_output.as_image_copy(),

@@ -1,6 +1,6 @@
 use crate::components::memory::Memory;
-use crate::sound::prelude::*;
 use crate::config::APUConfig;
+use crate::sound::prelude::*;
 use bitflags::bitflags;
 
 pub struct APU {
@@ -18,7 +18,7 @@ pub struct APU {
     ch2: CH2,
     ch3: CH3,
     ch4: CH4,
-    synth: Option<Synth>
+    synth: Option<Synth>,
 }
 
 bitflags! {
@@ -58,7 +58,7 @@ impl APU {
             ch2: CH2::new(),
             ch3: CH3::new(),
             ch4: CH4::new(),
-            synth
+            synth,
         }
     }
 
@@ -164,32 +164,86 @@ impl APU {
 
         match &self.synth {
             Some(synth) => {
-                synth.ch1_freq.set_value(131072.0 / (2048.0 - self.ch1.period as f32));
+                synth
+                    .ch1_freq
+                    .set_value(131072.0 / (2048.0 - self.ch1.period as f32));
                 synth.ch1_vol.set_value(ch1_vol);
                 synth.ch1_duty.set_value(ch1_duty);
-                synth.ch1_l.set_value(if self.panning.contains(Panning::CH1_LEFT) { 1.0 } else { 0.0 });
-                synth.ch1_r.set_value(if self.panning.contains(Panning::CH1_RIGHT) { 1.0 } else { 0.0 });
+                synth
+                    .ch1_l
+                    .set_value(if self.panning.contains(Panning::CH1_LEFT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
+                synth
+                    .ch1_r
+                    .set_value(if self.panning.contains(Panning::CH1_RIGHT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
 
-                synth.ch2_freq.set_value(131072.0 / (2048.0 - self.ch2.period as f32));
+                synth
+                    .ch2_freq
+                    .set_value(131072.0 / (2048.0 - self.ch2.period as f32));
                 synth.ch2_vol.set_value(ch2_vol);
                 synth.ch2_duty.set_value(ch2_duty);
-                synth.ch2_l.set_value(if self.panning.contains(Panning::CH2_LEFT) { 1.0 } else { 0.0 });
-                synth.ch2_r.set_value(if self.panning.contains(Panning::CH2_RIGHT) { 1.0 } else { 0.0 });
+                synth
+                    .ch2_l
+                    .set_value(if self.panning.contains(Panning::CH2_LEFT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
+                synth
+                    .ch2_r
+                    .set_value(if self.panning.contains(Panning::CH2_RIGHT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
 
-                synth.ch3_freq.set_value(65536.0 / (2048.0 - self.ch3.period as f32));
+                synth
+                    .ch3_freq
+                    .set_value(65536.0 / (2048.0 - self.ch3.period as f32));
                 synth.ch3_vol.set_value(ch3_vol);
 
                 for i in 0..ch3_wave.len() {
                     synth.ch3_wave.set(i, ch3_wave[i]);
                 }
 
-                synth.ch3_l.set_value(if self.panning.contains(Panning::CH3_LEFT) { 1.0 } else { 0.0 });
-                synth.ch3_r.set_value(if self.panning.contains(Panning::CH3_RIGHT) { 1.0 } else { 0.0 });
+                synth
+                    .ch3_l
+                    .set_value(if self.panning.contains(Panning::CH3_LEFT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
+                synth
+                    .ch3_r
+                    .set_value(if self.panning.contains(Panning::CH3_RIGHT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
 
                 synth.ch4_freq.set_value(self.ch4.frequency as f32);
                 synth.ch4_vol.set_value(ch4_vol);
-                synth.ch4_l.set_value(if self.panning.contains(Panning::CH4_LEFT) { 1.0 } else { 0.0 });
-                synth.ch4_r.set_value(if self.panning.contains(Panning::CH4_RIGHT) { 1.0 } else { 0.0 });
+                synth
+                    .ch4_l
+                    .set_value(if self.panning.contains(Panning::CH4_LEFT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
+                synth
+                    .ch4_r
+                    .set_value(if self.panning.contains(Panning::CH4_RIGHT) {
+                        1.0
+                    } else {
+                        0.0
+                    });
 
                 synth.global_l.set_value(global_l);
                 synth.global_r.set_value(global_r);

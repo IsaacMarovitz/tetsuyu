@@ -1,7 +1,7 @@
 pub struct LengthCounter {
     pub enabled: bool,
     pub trigger: bool,
-    pub counter: u16
+    pub counter: u16,
 }
 
 impl LengthCounter {
@@ -9,7 +9,7 @@ impl LengthCounter {
         Self {
             enabled: false,
             trigger: false,
-            counter: 0
+            counter: 0,
         }
     }
 

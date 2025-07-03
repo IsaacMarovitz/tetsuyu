@@ -11,5 +11,5 @@ pub enum CCMode {
     True,
     CGB,
     GBA,
-    SGB
+    SGB,
 }
