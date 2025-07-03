@@ -113,14 +113,14 @@ impl Context {
 
     pub fn update(&mut self, rgba: &[u8]) {
         self.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 aspect: wgpu::TextureAspect::All,
                 texture: &self.render_output,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
             &rgba,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * SCREEN_W as u32),
                 rows_per_image: Some(SCREEN_H as u32),
