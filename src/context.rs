@@ -43,6 +43,7 @@ impl Context {
                 label: None,
                 memory_hints: MemoryHints::Performance,
                 trace: Trace::Off,
+                experimental_features: Default::default(),
             })
             .await
             .unwrap();
