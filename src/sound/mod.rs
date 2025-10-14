@@ -4,6 +4,7 @@ mod ch2;
 mod ch3;
 mod ch4;
 mod length_counter;
+mod lfsr_noise;
 mod synth;
 mod volume_envelope;
 

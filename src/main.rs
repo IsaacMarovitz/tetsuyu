@@ -161,8 +161,11 @@ fn main() {
     let header = Header::new(buffer.clone());
     println!("{}", header);
 
-    assert!((header.cgb_flag != CGBFlag::CGBOnly) || (config.mode != GBMode::DMG), "Cannot run CGB only game in DMG Mode!");
-    
+    assert!(
+        (header.cgb_flag != CGBFlag::CGBOnly) || (config.mode != GBMode::DMG),
+        "Cannot run CGB only game in DMG Mode!"
+    );
+
     let panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         panic(info);

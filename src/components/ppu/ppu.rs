@@ -361,7 +361,9 @@ impl PPU {
             if self.mode == GBMode::CGB {
                 let palette_no_1 = if self.use_cgb_mode() {
                     (tile_attributes.bits() & 0b0000_0111) as usize
-                } else { 0 };
+                } else {
+                    0
+                };
 
                 let final_color = if !self.use_cgb_mode() {
                     ((self.bgp >> (color * 2)) & 0x03) as usize
@@ -527,7 +529,11 @@ impl PPU {
                     let palette_no = if self.use_cgb_mode() {
                         (tile_attributes.bits() & 0b0000_0111) as usize
                     } else {
-                        if tile_attributes.contains(Attributes::PALETTE_NO_0) { 1 } else { 0 }
+                        if tile_attributes.contains(Attributes::PALETTE_NO_0) {
+                            1
+                        } else {
+                            0
+                        }
                     };
 
                     let final_color = if !self.use_cgb_mode() {
@@ -555,13 +561,7 @@ impl PPU {
                         Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
                     };
 
-                    self.set_pixel(
-                        color.r(),
-                        color.g(),
-                        color.b(),
-                        screen_x as usize,
-                        self.ly,
-                    );
+                    self.set_pixel(color.r(), color.g(), color.b(), screen_x as usize, self.ly);
                 }
             }
         }

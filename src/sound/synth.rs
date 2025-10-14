@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::sound::lfsr_noise::lfsr_noise_controlled;
+
 pub struct Synth {
     pub ch1_freq: Shared,
     pub ch1_vol: Shared,
@@ -26,6 +28,7 @@ pub struct Synth {
 
     pub ch4_freq: Shared,
     pub ch4_vol: Shared,
+    pub ch4_width: Shared,
     pub ch4_l: Shared,
     pub ch4_r: Shared,
 
@@ -57,6 +60,7 @@ impl Synth {
 
         let ch4_freq = shared(0.0);
         let ch4_vol = shared(0.0);
+        let ch4_width = shared(0.0);
         let ch4_l = shared(0.0);
         let ch4_r = shared(0.0);
 
@@ -87,6 +91,7 @@ impl Synth {
                 ch3_r.clone(),
                 ch4_freq.clone(),
                 ch4_vol.clone(),
+                ch4_width.clone(),
                 ch4_l.clone(),
                 ch4_r.clone(),
                 global_l.clone(),
@@ -112,6 +117,7 @@ impl Synth {
                 ch3_r.clone(),
                 ch4_freq.clone(),
                 ch4_vol.clone(),
+                ch4_width.clone(),
                 ch4_l.clone(),
                 ch4_r.clone(),
                 global_l.clone(),
@@ -137,6 +143,7 @@ impl Synth {
                 ch3_r.clone(),
                 ch4_freq.clone(),
                 ch4_vol.clone(),
+                ch4_width.clone(),
                 ch4_l.clone(),
                 ch4_r.clone(),
                 global_l.clone(),
@@ -168,6 +175,7 @@ impl Synth {
 
             ch4_freq,
             ch4_vol,
+            ch4_width,
             ch4_l,
             ch4_r,
 
@@ -194,6 +202,7 @@ impl Synth {
         ch3_r: Shared,
         ch4_freq: Shared,
         ch4_vol: Shared,
+        ch4_width: Shared,
         ch4_l: Shared,
         ch4_r: Shared,
         global_l: Shared,
@@ -214,7 +223,9 @@ impl Synth {
 
             let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3_wave);
             let ch3_mono = var(&ch3_freq) >> An(ch3_synth) * var(&ch3_vol) * constant(0.25);
-            let ch4_mono = var(&ch4_freq) >> square() * var(&ch4_vol) * constant(0.25);
+
+            let ch4_mono = (var(&ch4_freq) | var(&ch4_width))
+                >> lfsr_noise_controlled() * var(&ch4_vol) * constant(0.25);
 
             let ch1_stereo = ch1_mono >> ((pass() * var(&ch1_l)) ^ (pass() * var(&ch1_r)));
             let ch2_stereo = ch2_mono >> ((pass() * var(&ch2_l)) ^ (pass() * var(&ch2_r)));

@@ -4,31 +4,24 @@ use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH4 {
     pub dac_enabled: bool,
-    clock: u8,
-    pub bit: u16,
-    // False = 15-bit, True = 7-bit
+    clock_shift: u8,
     lfsr_width: bool,
-    clock_divider: u8,
-    pub frequency: u32,
+    divisor_code: u8,
     pub lfsr: u16,
-    pub final_volume: u8,
-    clock_cycle_count: u32,
-    length_counter: LengthCounter,
-    volume_envelope: VolumeEnvelope,
+    pub final_volume: f32,
+    pub length_counter: LengthCounter,
+    pub volume_envelope: VolumeEnvelope,
 }
 
 impl CH4 {
     pub fn new() -> Self {
         Self {
             dac_enabled: false,
-            clock: 0,
-            bit: 0,
+            clock_shift: 0,
             lfsr_width: false,
-            clock_divider: 0,
-            frequency: 0,
-            lfsr: 0,
-            final_volume: 0,
-            clock_cycle_count: 0,
+            divisor_code: 0,
+            lfsr: 0x0000,
+            final_volume: 0.0,
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
         }
@@ -36,48 +29,50 @@ impl CH4 {
 
     pub fn clear(&mut self) {
         self.dac_enabled = false;
-        self.clock = 0;
+        self.clock_shift = 0;
         self.lfsr_width = false;
-        self.clock_divider = 0;
-        self.frequency = 0;
-        self.lfsr = 0;
-        self.final_volume = 0;
-        self.clock_cycle_count = 0;
+        self.divisor_code = 0;
+        self.lfsr = 0x0000;
+        self.final_volume = 0.0;
         self.length_counter.clear();
         self.volume_envelope.clear();
     }
 
-    pub fn cycle(&mut self) {
-        self.clock_cycle_count += 1;
-        let final_divider = if self.clock_divider == 0 { 1 } else { 2 };
-        let divisor = (final_divider as i64 ^ self.clock as i64) as u32;
-
-        if self.clock_cycle_count >= divisor * 4 {
-            self.clock_cycle_count = 0;
-
-            self.bit = {
-                let bit_0 = (self.lfsr & 0b0000_0000_0000_0001) >> 0;
-                let bit_1 = (self.lfsr & 0b0000_0000_0000_0010) >> 1;
-                if bit_0 == bit_1 { 1 } else { 0 }
-            };
-
-            self.lfsr |= self.bit << 15;
-
-            if self.lfsr_width {
-                self.lfsr &= 0b1111_1111_1011_1111;
-                self.lfsr |= self.bit << 7;
-            }
-
-            self.lfsr >>= 1;
-
-            if self.lfsr & 0b0000_0000_0000_0001 == 0 {
-                self.final_volume = 0;
-            } else {
-                self.final_volume = 0; // self.volume_envelope.volume;
-            }
+    fn get_divisor(&self) -> u32 {
+        match self.divisor_code {
+            0 => 8,
+            n => (n as u32) * 16,
         }
+    }
 
-        self.length_counter.cycle();
+    pub fn tick_lfsr(&mut self) {
+        self.final_volume = self.volume_envelope.volume;
+    }
+
+    pub fn trigger(&mut self) {
+        self.lfsr = 0x7FFF;
+        self.volume_envelope.reload();
+        self.length_counter.reload_if_zero(64);
+        self.final_volume = self.volume_envelope.volume;
+    }
+
+    pub fn get_frequency(&self) -> f32 {
+        let divisor = self.get_divisor() as f32;
+
+        // Game Boy noise frequency formula:
+        // Base clock is 524288 Hz (4.194304 MHz / 8)
+        // Frequency = 524288 / divisor / 2^shift
+        let base_clock = 524288.0;
+        let shift_divisor = (1 << self.clock_shift) as f32;
+
+        let frequency = base_clock / divisor / shift_divisor;
+
+        // Clamp to prevent aliasing and ensure audible range
+        frequency.max(50.0).min(22000.0)
+    }
+
+    pub fn is_width_7bit(&self) -> bool {
+        self.lfsr_width
     }
 }
 
@@ -94,9 +89,9 @@ impl Memory for CH4 {
             }
             // NR43: Frequency & Randomness
             0xFF22 => {
-                (self.clock & 0b0000_1111 << 4)
-                    | (self.lfsr_width as u8) << 3
-                    | (self.clock_divider & 0b0000_0111)
+                ((self.clock_shift & 0b0000_1111) << 4)
+                    | ((self.lfsr_width as u8) << 3)
+                    | (self.divisor_code & 0b0000_0111)
             }
             // NR44: Control
             0xFF23 => (self.length_counter.enabled as u8) << 6 | 0xBF,
@@ -108,33 +103,34 @@ impl Memory for CH4 {
         match a {
             0xFF1F => {}
             // NR41: Length Timer
-            0xFF20 => self.length_counter.counter = (v & 0b0011_1111) as u16,
+            0xFF20 => {
+                self.length_counter.load((v & 0x3F) as u16, 64);
+            }
             // NR42: Volume & Envelope
             0xFF21 => {
-                self.volume_envelope.volume = ((v & 0b1111_0000) >> 4) as f32;
+                let initial_vol = ((v & 0b1111_0000) >> 4) as f32;
+                self.volume_envelope.set_initial_volume(initial_vol);
                 self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
                 self.volume_envelope.period = (v & 0b0000_0111) as u16;
 
-                if self.read(0xFF21) & 0xF8 != 0 {
-                    self.dac_enabled = true;
-                }
+                self.dac_enabled = (v & 0xF8) != 0;
             }
             // NR43: Frequency & Randomness
             0xFF22 => {
-                self.clock = (v & 0b1111_0000) >> 4;
+                self.clock_shift = (v & 0b1111_0000) >> 4;
                 self.lfsr_width = ((v & 0b0000_1000) >> 3) != 0;
-                self.clock_divider = v & 0b0000_0111;
+                self.divisor_code = v & 0b0000_0111;
             }
             // NR44: Control
             0xFF23 => {
-                self.length_counter.trigger = ((v & 0b1000_0000) >> 7) != 0;
+                let trigger = ((v & 0b1000_0000) >> 7) != 0;
                 self.length_counter.enabled = ((v & 0b0100_0000) >> 6) != 0;
 
-                if self.length_counter.trigger {
-                    self.length_counter.reload(1 << 6);
+                if trigger {
+                    self.trigger();
                 }
             }
-            _ => panic!("Write to unsupported SC4 address ({:#06x})!", a),
+            _ => panic!("Write to unsupported CH4 address ({:#06x})!", a),
         }
     }
 }

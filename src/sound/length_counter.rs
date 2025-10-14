@@ -1,6 +1,5 @@
 pub struct LengthCounter {
     pub enabled: bool,
-    pub trigger: bool,
     pub counter: u16,
 }
 
@@ -8,29 +7,32 @@ impl LengthCounter {
     pub fn new() -> Self {
         Self {
             enabled: false,
-            trigger: false,
             counter: 0,
         }
     }
 
-    pub fn cycle(&mut self) {
-        if self.enabled && self.counter != 0 {
+    pub fn tick(&mut self) -> bool {
+        if self.enabled && self.counter > 0 {
             self.counter -= 1;
             if self.counter == 0 {
-                self.trigger = false;
+                return true;
             }
         }
+        false
     }
 
-    pub fn reload(&mut self, length: u16) {
+    pub fn load(&mut self, value: u16, max_length: u16) {
+        self.counter = max_length - value;
+    }
+
+    pub fn reload_if_zero(&mut self, max_length: u16) {
         if self.counter == 0 {
-            self.counter = length;
+            self.counter = max_length;
         }
     }
 
     pub fn clear(&mut self) {
         self.enabled = false;
-        self.trigger = false;
         self.counter = 0;
     }
 }

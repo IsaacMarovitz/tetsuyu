@@ -42,7 +42,7 @@ impl MMU {
         config: Config,
         boot_rom: [u8; 0x900],
         framebuffer: Framebuffer,
-        rom_is_cgb: bool
+        rom_is_cgb: bool,
     ) -> Self {
         let mbc_mode = match header.cart_type.get_mbc() {
             MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", header.cart_type),

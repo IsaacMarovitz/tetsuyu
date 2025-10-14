@@ -6,11 +6,12 @@ use bitflags::bitflags;
 pub struct APU {
     config: APUConfig,
     audio_enabled: bool,
-    is_ch_4_on: bool,
-    is_ch_3_on: bool,
-    is_ch_2_on: bool,
-    is_ch_1_on: bool,
-    div_one: bool,
+    is_ch_1_active: bool,
+    is_ch_2_active: bool,
+    is_ch_3_active: bool,
+    is_ch_4_active: bool,
+    div_apu: u8,
+    frame_sequencer: u8,
     left_volume: u8,
     right_volume: u8,
     panning: Panning,
@@ -46,11 +47,12 @@ impl APU {
         Self {
             config,
             audio_enabled: true,
-            is_ch_4_on: false,
-            is_ch_3_on: false,
-            is_ch_2_on: false,
-            is_ch_1_on: true,
-            div_one: false,
+            is_ch_1_active: false,
+            is_ch_2_active: false,
+            is_ch_3_active: false,
+            is_ch_4_active: false,
+            div_apu: 0,
+            frame_sequencer: 0,
             left_volume: 0,
             right_volume: 0,
             panning: Panning::empty(),
@@ -62,32 +64,70 @@ impl APU {
         }
     }
 
-    pub fn cycle(&mut self, div: u8) {
-        let mut div_tick = false;
+    fn on_div_apu_tick(&mut self) {
+        if !self.audio_enabled {
+            return;
+        }
 
-        if self.div_one {
-            // TODO: Double-speed mode
-            if div & (0b000_1000) == 0 {
-                // Bit moved from 1 -> 0
-                div_tick = true;
-                self.div_one = false;
+        self.frame_sequencer = (self.frame_sequencer + 1) & 7;
+
+        // Clock length counters (256Hz)
+        if self.frame_sequencer & 1 == 0 {
+            if self.ch1.length_counter.tick() {
+                self.is_ch_1_active = false;
             }
-        } else {
-            if div & (0b000_1000) >> 3 == 1 {
-                self.div_one = true;
+            if self.ch2.length_counter.tick() {
+                self.is_ch_2_active = false;
+            }
+            if self.ch3.length_counter.tick() {
+                self.is_ch_3_active = false;
+            }
+            if self.ch4.length_counter.tick() {
+                self.is_ch_4_active = false;
             }
         }
 
-        if div_tick {
-            self.ch1.cycle();
-            self.ch2.cycle();
-            self.ch3.cycle();
-            self.ch4.cycle();
+        // Clock volume envelopes (64Hz)
+        if self.frame_sequencer == 7 {
+            self.ch1.volume_envelope.tick();
+            self.ch2.volume_envelope.tick();
+            self.ch4.volume_envelope.tick();
+        }
+
+        // Clock sweep (128Hz)
+        if self.frame_sequencer == 2 || self.frame_sequencer == 6 {
+            self.ch1.tick_sweep();
+        }
+    }
+
+    pub fn cycle(&mut self, div: u8) {
+        // Detect DIV bit 4 falling edge (1→0)
+        let div_bit = (div >> 4) & 1;
+        let old_div_bit = (self.div_apu >> 4) & 1;
+
+        if old_div_bit == 1 && div_bit == 0 {
+            self.on_div_apu_tick();
+        }
+
+        self.div_apu = div;
+
+        // Tick frequency timers (runs every APU cycle)
+        if self.is_ch_1_active {
+            self.ch1.tick_frequency();
+        }
+        if self.is_ch_2_active {
+            self.ch2.tick_frequency();
+        }
+        if self.is_ch_3_active {
+            self.ch3.tick_frequency();
+        }
+        if self.is_ch_4_active {
+            self.ch4.tick_lfsr();
         }
 
         let ch1_vol = {
-            if self.ch1.dac_enabled && self.config.ch1_enabled {
-                self.ch1.volume_envelope.volume as f32 / 0xF as f32
+            if self.is_ch_1_active && self.ch1.dac_enabled && self.config.ch1_enabled {
+                self.ch1.volume_envelope.volume / 15.0
             } else {
                 0.0
             }
@@ -104,8 +144,8 @@ impl APU {
         };
 
         let ch2_vol = {
-            if self.ch2.dac_enabled && self.config.ch2_enabled {
-                self.ch2.volume_envelope.volume as f32 / 0xF as f32
+            if self.is_ch_2_active && self.ch2.dac_enabled && self.config.ch2_enabled {
+                self.ch2.volume_envelope.volume / 15.0
             } else {
                 0.0
             }
@@ -122,13 +162,18 @@ impl APU {
         };
 
         let ch3_vol = {
-            if self.ch3.dac_enabled && self.config.ch3_enabled {
-                match self.ch3.output_level {
-                    OutputLevel::MUTE => 0.0,
-                    OutputLevel::QUARTER => 0.25,
-                    OutputLevel::HALF => 0.5,
-                    OutputLevel::MAX => 1.0,
+            if self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled {
+                let max_sample = match self.ch3.get_volume_shift() {
+                    0 => 15.0,
+                    1 => 7.0,
+                    2 => 3.0,
                     _ => 0.0,
+                };
+
+                if max_sample > 0.0 {
+                    max_sample / 15.0
+                } else {
+                    0.0
                 }
             } else {
                 0.0
@@ -138,17 +183,16 @@ impl APU {
         let ch3_wave = self.ch3.wave_as_f32();
 
         let ch4_vol = {
-            if self.ch4.dac_enabled && self.config.ch4_enabled {
-                self.ch4.final_volume as f32 / 0xF as f32
+            if self.is_ch_4_active && self.ch4.dac_enabled && self.config.ch4_enabled {
+                self.ch4.final_volume / 15.0
             } else {
                 0.0
             }
         };
 
-        // TODO: Amplifier on original hardware NEVER completely mutes non-silent input
         let global_l = {
             if self.audio_enabled {
-                self.left_volume as f32 / 0xF as f32
+                self.left_volume as f32 / 7.0
             } else {
                 0.0
             }
@@ -156,7 +200,7 @@ impl APU {
 
         let global_r = {
             if self.audio_enabled {
-                self.right_volume as f32 / 0xF as f32
+                self.right_volume as f32 / 7.0
             } else {
                 0.0
             }
@@ -228,8 +272,11 @@ impl APU {
                         0.0
                     });
 
-                synth.ch4_freq.set_value(self.ch4.frequency as f32);
+                synth.ch4_freq.set_value(self.ch4.get_frequency());
                 synth.ch4_vol.set_value(ch4_vol);
+                synth
+                    .ch4_width
+                    .set_value(if self.ch4.is_width_7bit() { 1.0 } else { 0.0 });
                 synth
                     .ch4_l
                     .set_value(if self.panning.contains(Panning::CH4_LEFT) {
@@ -267,10 +314,10 @@ impl Memory for APU {
             // NR52: Audio Master Control
             0xFF26 => {
                 ((self.audio_enabled as u8) << 7)
-                    | ((self.is_ch_4_on as u8) << 3)
-                    | ((self.is_ch_3_on as u8) << 2)
-                    | ((self.is_ch_2_on as u8) << 1)
-                    | ((self.is_ch_1_on as u8) << 0)
+                    | ((self.is_ch_4_active as u8) << 3)
+                    | ((self.is_ch_3_active as u8) << 2)
+                    | ((self.is_ch_2_active as u8) << 1)
+                    | ((self.is_ch_1_active as u8) << 0)
                     | 0x70
             }
             0xFF30..=0xFF3F => self.ch3.read(a),
@@ -281,8 +328,7 @@ impl Memory for APU {
     fn write(&mut self, a: u16, v: u8) {
         let mut set_apu_control = false;
 
-        // Ignore writes from 0xFF10-0xFF25
-        // When APU is disabled
+        // Ignore writes to 0xFF10-0xFF25 when APU is disabled
         if a >= 0xFF10 && a <= 0xFF25 {
             if !self.audio_enabled {
                 return;
@@ -290,10 +336,66 @@ impl Memory for APU {
         }
 
         match a {
-            0xFF10..=0xFF14 => self.ch1.write(a, v),
-            0xFF15..=0xFF19 => self.ch2.write(a, v),
-            0xFF1A..=0xFF1E => self.ch3.write(a, v),
-            0xFF1F..=0xFF23 => self.ch4.write(a, v),
+            0xFF10..=0xFF14 => {
+                self.ch1.write(a, v);
+
+                // Handle trigger
+                if a == 0xFF14 && (v & 0x80) != 0 {
+                    if self.ch1.dac_enabled {
+                        self.is_ch_1_active = true;
+                    }
+                }
+
+                // Handle DAC disable
+                if a == 0xFF12 && (v & 0xF8) == 0 {
+                    self.is_ch_1_active = false;
+                }
+            }
+            0xFF15..=0xFF19 => {
+                self.ch2.write(a, v);
+
+                // Handle trigger
+                if a == 0xFF19 && (v & 0x80) != 0 {
+                    if self.ch2.dac_enabled {
+                        self.is_ch_2_active = true;
+                    }
+                }
+
+                // Handle DAC disable
+                if a == 0xFF17 && (v & 0xF8) == 0 {
+                    self.is_ch_2_active = false;
+                }
+            }
+            0xFF1A..=0xFF1E => {
+                self.ch3.write(a, v);
+
+                // Handle trigger
+                if a == 0xFF1E && (v & 0x80) != 0 {
+                    if self.ch3.dac_enabled {
+                        self.is_ch_3_active = true;
+                    }
+                }
+
+                // Handle DAC disable
+                if a == 0xFF1A && (v & 0x80) == 0 {
+                    self.is_ch_3_active = false;
+                }
+            }
+            0xFF1F..=0xFF23 => {
+                self.ch4.write(a, v);
+
+                // Handle trigger
+                if a == 0xFF23 && (v & 0x80) != 0 {
+                    if self.ch4.dac_enabled {
+                        self.is_ch_4_active = true;
+                    }
+                }
+
+                // Handle DAC disable
+                if a == 0xFF21 && (v & 0xF8) == 0 {
+                    self.is_ch_4_active = false;
+                }
+            }
             // NR50: Master Volume & VIN
             0xFF24 => {
                 if self.audio_enabled {
@@ -318,13 +420,12 @@ impl Memory for APU {
 
         if set_apu_control {
             if !self.audio_enabled {
-                self.is_ch_1_on = false;
-                self.is_ch_2_on = false;
-                self.is_ch_3_on = false;
-                self.is_ch_4_on = false;
+                self.is_ch_1_active = false;
+                self.is_ch_2_active = false;
+                self.is_ch_3_active = false;
+                self.is_ch_4_active = false;
                 self.left_volume = 0;
                 self.right_volume = 0;
-
                 self.panning = Panning::empty();
 
                 self.ch1.clear();
@@ -341,7 +442,7 @@ bitflags! {
     pub struct DutyCycle: u8 {
         const EIGHTH = 0b0000_0000;
         const QUARTER = 0b0000_0001;
-        const HALF = 0b0000_00010;
+        const HALF = 0b0000_0010;
         const THREE_QUARTERS = 0b0000_0011;
     }
 }
