@@ -7,7 +7,6 @@ pub struct CH4 {
     clock_shift: u8,
     lfsr_width: bool,
     divisor_code: u8,
-    pub lfsr: u16,
     pub final_volume: f32,
     pub length_counter: LengthCounter,
     pub volume_envelope: VolumeEnvelope,
@@ -20,7 +19,6 @@ impl CH4 {
             clock_shift: 0,
             lfsr_width: false,
             divisor_code: 0,
-            lfsr: 0x0000,
             final_volume: 0.0,
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
@@ -32,7 +30,6 @@ impl CH4 {
         self.clock_shift = 0;
         self.lfsr_width = false;
         self.divisor_code = 0;
-        self.lfsr = 0x0000;
         self.final_volume = 0.0;
         self.length_counter.clear();
         self.volume_envelope.clear();
@@ -50,7 +47,6 @@ impl CH4 {
     }
 
     pub fn trigger(&mut self) {
-        self.lfsr = 0x7FFF;
         self.volume_envelope.reload();
         self.length_counter.reload_if_zero(64);
         self.final_volume = self.volume_envelope.volume;
