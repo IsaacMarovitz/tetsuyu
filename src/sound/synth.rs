@@ -7,65 +7,134 @@ use std::time::Duration;
 
 use crate::sound::lfsr_noise::lfsr_noise_controlled;
 
+#[derive(Clone)]
+pub struct PulseChannel {
+    pub freq: Shared,
+    pub vol: Shared,
+    pub duty: Shared,
+    pub l: Shared,
+    pub r: Shared,
+}
+
+impl PulseChannel {
+    fn new() -> Self {
+        Self {
+            freq: shared(0.0),
+            vol: shared(0.0),
+            duty: shared(0.0),
+            l: shared(0.0),
+            r: shared(0.0),
+        }
+    }
+
+    pub fn update(&self, freq: f32, vol: f32, duty: f32, pan_left: bool, pan_right: bool) {
+        self.freq.set_value(freq);
+        self.vol.set_value(vol);
+        self.duty.set_value(duty);
+        self.l.set_value(if pan_left { 1.0 } else { 0.0 });
+        self.r.set_value(if pan_right { 1.0 } else { 0.0 });
+    }
+}
+
+#[derive(Clone)]
+pub struct WaveChannel {
+    pub freq: Shared,
+    pub vol: Shared,
+    pub wave: Arc<AtomicTable>,
+    pub l: Shared,
+    pub r: Shared,
+}
+
+impl WaveChannel {
+    fn new() -> Self {
+        Self {
+            freq: shared(0.0),
+            vol: shared(0.0),
+            wave: Arc::new(AtomicTable::new(&[0.0; 32])),
+            l: shared(0.0),
+            r: shared(0.0),
+        }
+    }
+
+    pub fn update(&self, freq: f32, vol: f32, wave: &[f32], pan_left: bool, pan_right: bool) {
+        self.freq.set_value(freq);
+        self.vol.set_value(vol);
+
+        for i in 0..wave.len() {
+            self.wave.set(i, wave[i]);
+        }
+
+        self.l.set_value(if pan_left { 1.0 } else { 0.0 });
+        self.r.set_value(if pan_right { 1.0 } else { 0.0 });
+    }
+}
+
+#[derive(Clone)]
+pub struct NoiseChannel {
+    pub freq: Shared,
+    pub vol: Shared,
+    pub width: Shared,
+    pub l: Shared,
+    pub r: Shared,
+}
+
+impl NoiseChannel {
+    fn new() -> Self {
+        Self {
+            freq: shared(0.0),
+            vol: shared(0.0),
+            width: shared(0.0),
+            l: shared(0.0),
+            r: shared(0.0),
+        }
+    }
+
+    pub fn update(&self, freq: f32, vol: f32, width_7bit: bool, pan_left: bool, pan_right: bool) {
+        self.freq.set_value(freq);
+        self.vol.set_value(vol);
+        self.width.set_value(if width_7bit { 1.0 } else { 0.0 });
+        self.l.set_value(if pan_left { 1.0 } else { 0.0 });
+        self.r.set_value(if pan_right { 1.0 } else { 0.0 });
+    }
+}
+
+#[derive(Clone)]
+pub struct GlobalMix {
+    pub l: Shared,
+    pub r: Shared,
+}
+
+impl GlobalMix {
+    fn new() -> Self {
+        Self {
+            l: shared(0.0),
+            r: shared(0.0),
+        }
+    }
+
+    pub fn update(&self, left: f32, right: f32) {
+        self.l.set_value(left);
+        self.r.set_value(right);
+    }
+}
+
 pub struct Synth {
-    pub ch1_freq: Shared,
-    pub ch1_vol: Shared,
-    pub ch1_duty: Shared,
-    pub ch1_l: Shared,
-    pub ch1_r: Shared,
-
-    pub ch2_freq: Shared,
-    pub ch2_vol: Shared,
-    pub ch2_duty: Shared,
-    pub ch2_l: Shared,
-    pub ch2_r: Shared,
-
-    pub ch3_freq: Shared,
-    pub ch3_vol: Shared,
-    pub ch3_wave: Arc<AtomicTable>,
-    pub ch3_l: Shared,
-    pub ch3_r: Shared,
-
-    pub ch4_freq: Shared,
-    pub ch4_vol: Shared,
-    pub ch4_width: Shared,
-    pub ch4_l: Shared,
-    pub ch4_r: Shared,
-
-    pub global_l: Shared,
-    pub global_r: Shared,
+    pub ch1: PulseChannel,
+    pub ch2: PulseChannel,
+    pub ch3: WaveChannel,
+    pub ch4: NoiseChannel,
+    pub global: GlobalMix,
 }
 
 impl Synth {
     pub fn new() -> Self {
         let host = cpal::default_host();
 
-        let ch1_freq = shared(0.0);
-        let ch1_vol = shared(0.0);
-        let ch1_duty = shared(0.0);
-        let ch1_l = shared(0.0);
-        let ch1_r = shared(0.0);
-
-        let ch2_freq = shared(0.0);
-        let ch2_vol = shared(0.0);
-        let ch2_duty = shared(0.0);
-        let ch2_l = shared(0.0);
-        let ch2_r = shared(0.0);
-
-        let ch3_freq = shared(0.0);
-        let ch3_vol = shared(0.0);
-        let ch3_wave = Arc::new(AtomicTable::new(&[0.0; 32]));
-        let ch3_l = shared(0.0);
-        let ch3_r = shared(0.0);
-
-        let ch4_freq = shared(0.0);
-        let ch4_vol = shared(0.0);
-        let ch4_width = shared(0.0);
-        let ch4_l = shared(0.0);
-        let ch4_r = shared(0.0);
-
-        let global_l = shared(0.0);
-        let global_r = shared(0.0);
+        let ch1 = PulseChannel::new();
+        let ch2 = PulseChannel::new();
+        let ch3 = WaveChannel::new();
+        let ch4 = NoiseChannel::new();
+        let global = GlobalMix::new();
 
         let device = host
             .default_output_device()
@@ -74,80 +143,29 @@ impl Synth {
 
         match config.sample_format() {
             cpal::SampleFormat::F32 => Synth::run_audio::<f32>(
-                ch1_freq.clone(),
-                ch1_vol.clone(),
-                ch1_duty.clone(),
-                ch1_l.clone(),
-                ch1_r.clone(),
-                ch2_freq.clone(),
-                ch2_vol.clone(),
-                ch2_duty.clone(),
-                ch2_l.clone(),
-                ch2_r.clone(),
-                ch3_freq.clone(),
-                ch3_vol.clone(),
-                ch3_wave.clone(),
-                ch3_l.clone(),
-                ch3_r.clone(),
-                ch4_freq.clone(),
-                ch4_vol.clone(),
-                ch4_width.clone(),
-                ch4_l.clone(),
-                ch4_r.clone(),
-                global_l.clone(),
-                global_r.clone(),
+                ch1.clone(),
+                ch2.clone(),
+                ch3.clone(),
+                ch4.clone(),
+                global.clone(),
                 device,
                 config.into(),
             ),
             cpal::SampleFormat::I16 => Synth::run_audio::<i16>(
-                ch1_freq.clone(),
-                ch1_vol.clone(),
-                ch1_duty.clone(),
-                ch1_l.clone(),
-                ch1_r.clone(),
-                ch2_freq.clone(),
-                ch2_vol.clone(),
-                ch2_duty.clone(),
-                ch2_l.clone(),
-                ch2_r.clone(),
-                ch3_freq.clone(),
-                ch3_vol.clone(),
-                ch3_wave.clone(),
-                ch3_l.clone(),
-                ch3_r.clone(),
-                ch4_freq.clone(),
-                ch4_vol.clone(),
-                ch4_width.clone(),
-                ch4_l.clone(),
-                ch4_r.clone(),
-                global_l.clone(),
-                global_r.clone(),
+                ch1.clone(),
+                ch2.clone(),
+                ch3.clone(),
+                ch4.clone(),
+                global.clone(),
                 device,
                 config.into(),
             ),
             cpal::SampleFormat::U16 => Synth::run_audio::<u16>(
-                ch1_freq.clone(),
-                ch1_vol.clone(),
-                ch1_duty.clone(),
-                ch1_l.clone(),
-                ch1_r.clone(),
-                ch2_freq.clone(),
-                ch2_vol.clone(),
-                ch2_duty.clone(),
-                ch2_l.clone(),
-                ch2_r.clone(),
-                ch3_freq.clone(),
-                ch3_vol.clone(),
-                ch3_wave.clone(),
-                ch3_l.clone(),
-                ch3_r.clone(),
-                ch4_freq.clone(),
-                ch4_vol.clone(),
-                ch4_width.clone(),
-                ch4_l.clone(),
-                ch4_r.clone(),
-                global_l.clone(),
-                global_r.clone(),
+                ch1.clone(),
+                ch2.clone(),
+                ch3.clone(),
+                ch4.clone(),
+                global.clone(),
                 device,
                 config.into(),
             ),
@@ -155,58 +173,20 @@ impl Synth {
         }
 
         Self {
-            ch1_freq,
-            ch1_vol,
-            ch1_duty,
-            ch1_l,
-            ch1_r,
-
-            ch2_freq,
-            ch2_vol,
-            ch2_duty,
-            ch2_l,
-            ch2_r,
-
-            ch3_freq,
-            ch3_vol,
-            ch3_wave,
-            ch3_l,
-            ch3_r,
-
-            ch4_freq,
-            ch4_vol,
-            ch4_width,
-            ch4_l,
-            ch4_r,
-
-            global_l,
-            global_r,
+            ch1,
+            ch2,
+            ch3,
+            ch4,
+            global,
         }
     }
 
     fn run_audio<T>(
-        ch1_freq: Shared,
-        ch1_vol: Shared,
-        ch1_duty: Shared,
-        ch1_l: Shared,
-        ch1_r: Shared,
-        ch2_freq: Shared,
-        ch2_vol: Shared,
-        ch2_duty: Shared,
-        ch2_l: Shared,
-        ch2_r: Shared,
-        ch3_freq: Shared,
-        ch3_vol: Shared,
-        ch3_wave: Arc<AtomicTable>,
-        ch3_l: Shared,
-        ch3_r: Shared,
-        ch4_freq: Shared,
-        ch4_vol: Shared,
-        ch4_width: Shared,
-        ch4_l: Shared,
-        ch4_r: Shared,
-        global_l: Shared,
-        global_r: Shared,
+        ch1: PulseChannel,
+        ch2: PulseChannel,
+        ch3: WaveChannel,
+        ch4: NoiseChannel,
+        global: GlobalMix,
         device: Device,
         config: StreamConfig,
     ) where
@@ -217,24 +197,24 @@ impl Synth {
             let channels = config.channels as usize;
 
             let ch1_mono =
-                ((var(&ch1_freq) | var(&ch1_duty)) >> pulse()) * var(&ch1_vol) * constant(0.25);
+                ((var(&ch1.freq) | var(&ch1.duty)) >> pulse()) * var(&ch1.vol) * constant(0.25);
             let ch2_mono =
-                ((var(&ch2_freq) | var(&ch2_duty)) >> pulse()) * var(&ch2_vol) * constant(0.25);
+                ((var(&ch2.freq) | var(&ch2.duty)) >> pulse()) * var(&ch2.vol) * constant(0.25);
 
-            let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3_wave);
-            let ch3_mono = var(&ch3_freq) >> An(ch3_synth) * var(&ch3_vol) * constant(0.25);
+            let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3.wave);
+            let ch3_mono = var(&ch3.freq) >> An(ch3_synth) * var(&ch3.vol) * constant(0.25);
 
-            let ch4_mono = (var(&ch4_freq) | var(&ch4_width))
-                >> lfsr_noise_controlled() * var(&ch4_vol) * constant(0.25);
+            let ch4_mono = (var(&ch4.freq) | var(&ch4.width))
+                >> lfsr_noise_controlled() * var(&ch4.vol) * constant(0.25);
 
-            let ch1_stereo = ch1_mono >> ((pass() * var(&ch1_l)) ^ (pass() * var(&ch1_r)));
-            let ch2_stereo = ch2_mono >> ((pass() * var(&ch2_l)) ^ (pass() * var(&ch2_r)));
-            let ch3_stereo = ch3_mono >> ((pass() * var(&ch3_l)) ^ (pass() * var(&ch3_r)));
-            let ch4_stereo = ch4_mono >> ((pass() * var(&ch4_l)) ^ (pass() * var(&ch4_r)));
+            let ch1_stereo = ch1_mono >> ((pass() * var(&ch1.l)) ^ (pass() * var(&ch1.r)));
+            let ch2_stereo = ch2_mono >> ((pass() * var(&ch2.l)) ^ (pass() * var(&ch2.r)));
+            let ch3_stereo = ch3_mono >> ((pass() * var(&ch3.l)) ^ (pass() * var(&ch3.r)));
+            let ch4_stereo = ch4_mono >> ((pass() * var(&ch4.l)) ^ (pass() * var(&ch4.r)));
 
             let total_stereo = ch1_stereo + ch2_stereo + ch3_stereo + ch4_stereo;
 
-            let mut c = total_stereo >> (pass() * var(&global_l) | pass() * var(&global_r));
+            let mut c = total_stereo >> (pass() * var(&global.l) | pass() * var(&global.r));
             c.set_sample_rate(sample_rate);
 
             let mut next_value = move || c.get_stereo();

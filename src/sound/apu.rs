@@ -36,6 +36,16 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    pub struct DutyCycle: u8 {
+        const EIGHTH = 0b0000_0000;
+        const QUARTER = 0b0000_0001;
+        const HALF = 0b0000_0010;
+        const THREE_QUARTERS = 0b0000_0011;
+    }
+}
+
 impl APU {
     pub fn new(config: APUConfig) -> Self {
         let synth = if config.master_enabled {
@@ -101,7 +111,6 @@ impl APU {
     }
 
     pub fn cycle(&mut self, div: u8) {
-        // Detect DIV bit 4 falling edge (1→0)
         let div_bit = (div >> 4) & 1;
         let old_div_bit = (self.div_apu >> 4) & 1;
 
@@ -125,178 +134,122 @@ impl APU {
             self.ch4.tick_lfsr();
         }
 
-        let ch1_vol = {
-            if self.is_ch_1_active && self.ch1.dac_enabled && self.config.ch1_enabled {
-                self.ch1.volume_envelope.volume / 15.0
-            } else {
-                0.0
-            }
-        };
-
-        let ch1_duty = {
-            match self.ch1.duty_cycle {
-                DutyCycle::EIGHTH => 0.125,
-                DutyCycle::QUARTER => 0.25,
-                DutyCycle::HALF => 0.5,
-                DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0,
-            }
-        };
-
-        let ch2_vol = {
-            if self.is_ch_2_active && self.ch2.dac_enabled && self.config.ch2_enabled {
-                self.ch2.volume_envelope.volume / 15.0
-            } else {
-                0.0
-            }
-        };
-
-        let ch2_duty = {
-            match self.ch2.duty_cycle {
-                DutyCycle::EIGHTH => 0.125,
-                DutyCycle::QUARTER => 0.25,
-                DutyCycle::HALF => 0.5,
-                DutyCycle::THREE_QUARTERS => 0.75,
-                _ => 0.0,
-            }
-        };
-
-        let ch3_vol = {
-            if self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled {
-                let max_sample = match self.ch3.get_volume_shift() {
-                    0 => 15.0,
-                    1 => 7.0,
-                    2 => 3.0,
-                    _ => 0.0,
-                };
-
-                if max_sample > 0.0 {
-                    max_sample / 15.0
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
-            }
-        };
-
-        let ch3_wave = self.ch3.wave_as_f32();
-
-        let ch4_vol = {
-            if self.is_ch_4_active && self.ch4.dac_enabled && self.config.ch4_enabled {
-                self.ch4.final_volume / 15.0
-            } else {
-                0.0
-            }
-        };
-
-        let global_l = {
-            if self.audio_enabled {
-                self.left_volume as f32 / 7.0
-            } else {
-                0.0
-            }
-        };
-
-        let global_r = {
-            if self.audio_enabled {
-                self.right_volume as f32 / 7.0
-            } else {
-                0.0
-            }
-        };
-
-        match &self.synth {
-            Some(synth) => {
-                synth
-                    .ch1_freq
-                    .set_value(131072.0 / (2048.0 - self.ch1.period as f32));
-                synth.ch1_vol.set_value(ch1_vol);
-                synth.ch1_duty.set_value(ch1_duty);
-                synth
-                    .ch1_l
-                    .set_value(if self.panning.contains(Panning::CH1_LEFT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-                synth
-                    .ch1_r
-                    .set_value(if self.panning.contains(Panning::CH1_RIGHT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-
-                synth
-                    .ch2_freq
-                    .set_value(131072.0 / (2048.0 - self.ch2.period as f32));
-                synth.ch2_vol.set_value(ch2_vol);
-                synth.ch2_duty.set_value(ch2_duty);
-                synth
-                    .ch2_l
-                    .set_value(if self.panning.contains(Panning::CH2_LEFT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-                synth
-                    .ch2_r
-                    .set_value(if self.panning.contains(Panning::CH2_RIGHT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-
-                synth
-                    .ch3_freq
-                    .set_value(65536.0 / (2048.0 - self.ch3.period as f32));
-                synth.ch3_vol.set_value(ch3_vol);
-
-                for i in 0..ch3_wave.len() {
-                    synth.ch3_wave.set(i, ch3_wave[i]);
-                }
-
-                synth
-                    .ch3_l
-                    .set_value(if self.panning.contains(Panning::CH3_LEFT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-                synth
-                    .ch3_r
-                    .set_value(if self.panning.contains(Panning::CH3_RIGHT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-
-                synth.ch4_freq.set_value(self.ch4.get_frequency());
-                synth.ch4_vol.set_value(ch4_vol);
-                synth
-                    .ch4_width
-                    .set_value(if self.ch4.is_width_7bit() { 1.0 } else { 0.0 });
-                synth
-                    .ch4_l
-                    .set_value(if self.panning.contains(Panning::CH4_LEFT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-                synth
-                    .ch4_r
-                    .set_value(if self.panning.contains(Panning::CH4_RIGHT) {
-                        1.0
-                    } else {
-                        0.0
-                    });
-
-                synth.global_l.set_value(global_l);
-                synth.global_r.set_value(global_r);
-            }
-            _ => {}
+        if let Some(synth) = &self.synth {
+            self.update_channel_1(synth);
+            self.update_channel_2(synth);
+            self.update_channel_3(synth);
+            self.update_channel_4(synth);
+            self.update_global_mix(synth);
         }
+    }
+
+    fn update_channel_1(&self, synth: &Synth) {
+        let vol = if self.is_ch_1_active && self.ch1.dac_enabled && self.config.ch1_enabled {
+            self.ch1.volume_envelope.volume / 15.0
+        } else {
+            0.0
+        };
+
+        let duty = match self.ch1.duty_cycle {
+            DutyCycle::EIGHTH => 0.125,
+            DutyCycle::QUARTER => 0.25,
+            DutyCycle::HALF => 0.5,
+            DutyCycle::THREE_QUARTERS => 0.75,
+            _ => 0.0,
+        };
+
+        synth.ch1.update(
+            131072.0 / (2048.0 - self.ch1.period as f32),
+            vol,
+            duty,
+            self.panning.contains(Panning::CH1_LEFT),
+            self.panning.contains(Panning::CH1_RIGHT),
+        );
+    }
+
+    fn update_channel_2(&self, synth: &Synth) {
+        let vol = if self.is_ch_2_active && self.ch2.dac_enabled && self.config.ch2_enabled {
+            self.ch2.volume_envelope.volume / 15.0
+        } else {
+            0.0
+        };
+
+        let duty = match self.ch2.duty_cycle {
+            DutyCycle::EIGHTH => 0.125,
+            DutyCycle::QUARTER => 0.25,
+            DutyCycle::HALF => 0.5,
+            DutyCycle::THREE_QUARTERS => 0.75,
+            _ => 0.0,
+        };
+
+        synth.ch2.update(
+            131072.0 / (2048.0 - self.ch2.period as f32),
+            vol,
+            duty,
+            self.panning.contains(Panning::CH2_LEFT),
+            self.panning.contains(Panning::CH2_RIGHT),
+        );
+    }
+
+    fn update_channel_3(&self, synth: &Synth) {
+        let vol = if self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled {
+            let max_sample = match self.ch3.get_volume_shift() {
+                0 => 15.0,
+                1 => 7.0,
+                2 => 3.0,
+                _ => 0.0,
+            };
+
+            if max_sample > 0.0 {
+                max_sample / 15.0
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        let wave = self.ch3.wave_as_f32();
+
+        synth.ch3.update(
+            65536.0 / (2048.0 - self.ch3.period as f32),
+            vol,
+            &wave,
+            self.panning.contains(Panning::CH3_LEFT),
+            self.panning.contains(Panning::CH3_RIGHT),
+        );
+    }
+
+    fn update_channel_4(&self, synth: &Synth) {
+        let vol = if self.is_ch_4_active && self.ch4.dac_enabled && self.config.ch4_enabled {
+            self.ch4.final_volume / 15.0
+        } else {
+            0.0
+        };
+
+        synth.ch4.update(
+            self.ch4.get_frequency(),
+            vol,
+            self.ch4.is_width_7bit(),
+            self.panning.contains(Panning::CH4_LEFT),
+            self.panning.contains(Panning::CH4_RIGHT),
+        );
+    }
+
+    fn update_global_mix(&self, synth: &Synth) {
+        let global_l = if self.audio_enabled {
+            self.left_volume as f32 / 7.0
+        } else {
+            0.0
+        };
+
+        let global_r = if self.audio_enabled {
+            self.right_volume as f32 / 7.0
+        } else {
+            0.0
+        };
+
+        synth.global.update(global_l, global_r);
     }
 }
 
@@ -434,15 +387,5 @@ impl Memory for APU {
                 self.ch4.clear();
             }
         }
-    }
-}
-
-bitflags! {
-    #[derive(Copy, Clone, PartialEq, Eq)]
-    pub struct DutyCycle: u8 {
-        const EIGHTH = 0b0000_0000;
-        const QUARTER = 0b0000_0001;
-        const HALF = 0b0000_0010;
-        const THREE_QUARTERS = 0b0000_0011;
     }
 }
