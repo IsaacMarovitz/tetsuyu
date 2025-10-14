@@ -22,12 +22,18 @@ impl CPU {
                header: Header,
                config: Config,
                framebuffer: Framebuffer) -> Self {
+        let boot_file = match config.mode {
+            GBMode::DMG => config.dmg_boot_rom.clone(),
+            GBMode::CGB => config.cgb_boot_rom.clone(),
+        };
+
         let mut boot_rom: [u8; 0x900] = [0; 0x900];
         let mut boot_rom_vec = Vec::new();
-        let mut boot = match File::open(config.boot_rom.clone()) {
+
+        let mut boot = match File::open(boot_file.clone()) {
             Ok(file) => file,
             Err(err) => {
-                eprintln!("Failed to open Boot ROM at \"{}\": {}", config.boot_rom, err);
+                eprintln!("Failed to open Boot ROM at \"{}\": {}", boot_file, err);
                 process::exit(1);
             }
         };
