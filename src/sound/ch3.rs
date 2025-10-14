@@ -77,40 +77,6 @@ impl CH3 {
         }
     }
 
-    pub fn get_current_sample(&self) -> u8 {
-        let byte_index = (self.sample_index / 2) as usize;
-        let byte = self.wave_ram[byte_index];
-
-        // High nibble for even indices, low nibble for odd
-        let sample = if self.sample_index & 1 == 0 {
-            (byte >> 4) & 0x0F
-        } else {
-            byte & 0x0F
-        };
-
-        // Apply output level shift
-        sample >> self.get_volume_shift()
-    }
-
-    pub fn get_current_sample_f32(&self) -> f32 {
-        let sample = self.get_current_sample();
-        // Normalize to -1.0 to 1.0
-        // After shifting, max value depends on shift amount:
-        // shift 0: 0-15, shift 1: 0-7, shift 2: 0-3, shift 4: 0
-        let max_value = match self.get_volume_shift() {
-            0 => 15.0,
-            1 => 7.0,
-            2 => 3.0,
-            _ => 0.0,
-        };
-
-        if max_value > 0.0 {
-            ((sample as f32 / max_value) * 2.0) - 1.0
-        } else {
-            0.0
-        }
-    }
-
     pub fn wave_as_f32(&self) -> [f32; 32] {
         const U4_MAX: f32 = 0b1111 as f32;
         let mut wave: [f32; 32] = [0f32; 32];
