@@ -12,6 +12,8 @@ pub const SCREEN_H: usize = 144;
 
 pub struct PPU {
     mode: GBMode,
+    rom_is_cgb: bool,
+    boot_rom_enabled: bool,
     ppu_config: PPUConfig,
     cc: ColorCorrection,
     ppu_mode: PPUMode,
@@ -43,9 +45,11 @@ pub struct PPU {
 }
 
 impl PPU {
-    pub fn new(config: Config, framebuffer: Framebuffer) -> Self {
+    pub fn new(config: Config, framebuffer: Framebuffer, rom_is_cgb: bool) -> Self {
         Self {
             mode: config.mode,
+            rom_is_cgb,
+            boot_rom_enabled: true,
             ppu_config: config.ppu_config,
             cc: ColorCorrection::new(),
             ppu_mode: PPUMode::OAMScan,
@@ -255,6 +259,23 @@ impl PPU {
                 (px, py)
             };
 
+            // Check if BG/Window is disabled (DMG game with LCDC bit 0 off)
+            let bg_disabled = !self.use_cgb_mode() && !self.lcdc.contains(LCDC::WINDOW_PRIORITY);
+
+            if bg_disabled {
+                // BG is disabled: draw color 0 from BGP and set priority to Color0
+                self.bgprio[x] = Priority::Color0;
+
+                if self.mode == GBMode::CGB {
+                    // In CGB mode, use white when BG is disabled
+                    self.set_rgb_mapped(x, 0x7FFF);
+                } else {
+                    let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, 0);
+                    self.set_pixel(color.r(), color.g(), color.b(), x, self.ly);
+                }
+                continue; // Skip all the tile reading logic
+            }
+
             // Tile Map Base Address
             let tile_map_base = if in_window_y && in_window_x {
                 if self.lcdc.contains(LCDC::WINDOW_AREA) {
@@ -338,20 +359,24 @@ impl PPU {
             };
 
             if self.mode == GBMode::CGB {
-                let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
-                let palette_address = palette_no_1 * 8 + color * 2;
+                let palette_no_1 = if self.use_cgb_mode() {
+                    (tile_attributes.bits() & 0b0000_0111) as usize
+                } else { 0 };
+
+                let final_color = if !self.use_cgb_mode() {
+                    ((self.bgp >> (color * 2)) & 0x03) as usize
+                } else {
+                    color
+                };
+
+                let palette_address = palette_no_1 * 8 + final_color * 2;
 
                 let color: u16 = (self.bcpd[palette_address] as u16)
                     | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
 
                 self.set_rgb_mapped(x, color);
             } else {
-                let color = if !self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                    Self::grey_to_l(self.ppu_config.palette, self.bgp, 0)
-                } else {
-                    Self::grey_to_l(self.ppu_config.palette, self.bgp, color)
-                };
-
+                let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, color);
                 self.set_pixel(color.r(), color.g(), color.b(), x, self.ly);
             }
         }
@@ -364,10 +389,9 @@ impl PPU {
             8
         };
         let mut object_count: u8 = 0;
-        let mut previous_px: u8 = 0;
-        // Start this with max value, otherwise first
-        // sprite will always be skipped
-        let mut previous_address: u16 = u16::MAX;
+
+        // Track which sprite has "claimed" each pixel position (regardless of whether it actually drew)
+        let mut sprite_pixels: [(Option<u16>, Option<u8>); SCREEN_W] = [(None, None); SCREEN_W];
 
         for i in 0..40 {
             let sprite_address = 0xFE00 + (i as u16) * 4;
@@ -395,16 +419,6 @@ impl PPU {
                 continue;
             }
 
-            // TODO: Respect OPRI
-            if previous_px == px {
-                if previous_address < sprite_address {
-                    continue;
-                }
-            }
-
-            previous_px = px;
-            previous_address = sprite_address;
-
             let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
                 sprite_size - 1 - self.ly.wrapping_sub(py)
             } else {
@@ -430,9 +444,11 @@ impl PPU {
             }
 
             for x in 0..8 {
-                if px.wrapping_add(x) >= (SCREEN_W as u8) {
+                let screen_x = px.wrapping_add(x);
+                if screen_x >= (SCREEN_W as u8) {
                     continue;
                 }
+
                 let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
                     7 - x
                 } else {
@@ -454,7 +470,33 @@ impl PPU {
                     continue;
                 }
 
-                let prio = self.bgprio[px.wrapping_add(x) as usize];
+                // Check sprite-to-sprite priority
+                let screen_x_usize = screen_x as usize;
+                if let (Some(prev_addr), Some(prev_px)) = sprite_pixels[screen_x_usize] {
+                    let skip = if self.use_cgb_mode() {
+                        // CGB ROM: respect OPRI register
+                        if self.opri {
+                            // OAM priority
+                            prev_addr < sprite_address
+                        } else {
+                            // X-coordinate priority
+                            prev_px < px || (prev_px == px && prev_addr < sprite_address)
+                        }
+                    } else {
+                        // DMG ROM: always use X-coordinate priority
+                        prev_px < px || (prev_px == px && prev_addr < sprite_address)
+                    };
+
+                    if skip {
+                        continue;
+                    }
+                }
+
+                // Mark this pixel as claimed BEFORE checking BG priority
+                // This prevents lower-priority sprites from drawing even if this one is blocked
+                sprite_pixels[screen_x_usize] = (Some(sprite_address), Some(px));
+
+                let prio = self.bgprio[screen_x as usize];
                 let skip = match self.mode {
                     GBMode::CGB => {
                         if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
@@ -482,13 +524,30 @@ impl PPU {
                 }
 
                 if self.mode == GBMode::CGB {
-                    let palette_no_1 = (tile_attributes.bits() & 0b0000_0111) as usize;
-                    let palette_address = palette_no_1 * 8 + color * 2;
+                    let palette_no = if self.use_cgb_mode() {
+                        (tile_attributes.bits() & 0b0000_0111) as usize
+                    } else {
+                        if tile_attributes.contains(Attributes::PALETTE_NO_0) { 1 } else { 0 }
+                    };
+
+                    let final_color = if !self.use_cgb_mode() {
+                        // DMG game: remap color through OBP0/OBP1
+                        let obp = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
+                            self.obp1
+                        } else {
+                            self.obp0
+                        };
+                        ((obp >> (color * 2)) & 0x03) as usize
+                    } else {
+                        color
+                    };
+
+                    let palette_address = palette_no * 8 + final_color * 2;
 
                     let color: u16 = (self.ocpd[palette_address] as u16)
                         | ((self.ocpd[palette_address + 1] as u16) << 8) & 0x7FFF;
 
-                    self.set_rgb_mapped(px.wrapping_add(x) as usize, color);
+                    self.set_rgb_mapped(screen_x as usize, color);
                 } else {
                     let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
                         Self::grey_to_l(self.ppu_config.palette, self.obp1, color)
@@ -500,7 +559,7 @@ impl PPU {
                         color.r(),
                         color.g(),
                         color.b(),
-                        px.wrapping_add(x) as usize,
+                        screen_x as usize,
                         self.ly,
                     );
                 }
@@ -510,6 +569,18 @@ impl PPU {
 
     pub fn clear_vram(&mut self) {
         self.vram = [0; 0x4000];
+    }
+
+    pub fn disable_boot_rom(&mut self) {
+        self.boot_rom_enabled = false;
+    }
+
+    fn use_cgb_mode(&self) -> bool {
+        if self.boot_rom_enabled {
+            true
+        } else {
+            self.rom_is_cgb
+        }
     }
 
     fn read_vram(&self, a: u16, bank: usize) -> u8 {

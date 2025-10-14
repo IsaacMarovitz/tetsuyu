@@ -42,6 +42,7 @@ impl MMU {
         config: Config,
         boot_rom: [u8; 0x900],
         framebuffer: Framebuffer,
+        rom_is_cgb: bool
     ) -> Self {
         let mbc_mode = match header.cart_type.get_mbc() {
             MBCMode::Unsupported => panic!("Unsupported Cart Type! {:}", header.cart_type),
@@ -60,7 +61,7 @@ impl MMU {
         Self {
             mbc,
             apu: APU::new(config.apu_config),
-            ppu: PPU::new(config.clone(), framebuffer),
+            ppu: PPU::new(config.clone(), framebuffer, rom_is_cgb),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
             timer: Timer::new(),
@@ -172,6 +173,7 @@ impl Memory for MMU {
             0xFF50 => {
                 self.boot_rom_enabled = false;
                 self.ppu.clear_vram();
+                self.ppu.disable_boot_rom();
             }
             // TODO: RP
             0xFF56 => {}

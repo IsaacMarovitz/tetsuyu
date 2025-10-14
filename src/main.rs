@@ -162,9 +162,7 @@ fn main() {
     println!("{}", header);
 
     assert!((header.cgb_flag != CGBFlag::CGBOnly) || (config.mode != GBMode::DMG), "Cannot run CGB only game in DMG Mode!");
-    // TODO: DMG-on-CGB Compat Mode
-    assert!((header.cgb_flag != CGBFlag::DMGOnly) || (config.mode != GBMode::CGB), "Cannot run DMG only game in CGB Mode!");
-
+    
     let panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         panic(info);

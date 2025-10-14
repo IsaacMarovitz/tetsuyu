@@ -4,7 +4,7 @@ use std::process;
 use crate::config::Config;
 use crate::components::prelude::*;
 use crate::Framebuffer;
-use crate::mbc::header::Header;
+use crate::mbc::header::{CGBFlag, Header};
 
 pub struct CPU {
     pub reg: Registers,
@@ -41,9 +41,11 @@ impl CPU {
             boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
         }
 
+        let rom_is_cgb = header.cgb_flag == CGBFlag::CGBOnly || header.cgb_flag == CGBFlag::BackwardsCompatible;
+
         Self {
             reg: Registers::new(config.mode),
-            mem: MMU::new(rom, header, config, boot_rom, framebuffer),
+            mem: MMU::new(rom, header, config, boot_rom, framebuffer, rom_is_cgb),
             halted: false,
             ime: false,
             ime_ask: false
