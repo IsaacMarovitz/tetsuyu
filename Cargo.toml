@@ -8,7 +8,7 @@ winit = { version = "0.30", features = ["serde"] }
 cpal = "0.16"
 fundsp = { version = "0.20", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
-bitflags = "2.9"
+bitflags = "2.10"
 wgpu = "27.0"
 num-traits = "0.2"
 num-derive = "0.4"
