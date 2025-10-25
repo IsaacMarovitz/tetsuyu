@@ -44,7 +44,7 @@ struct Args {
 
 struct App {
     header: Header,
-    context: Option<Arc<Mutex<Context>>>,
+    context: Option<Context>,
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
     framebuffer: Framebuffer,
@@ -61,7 +61,7 @@ impl ApplicationHandler for App {
         let window = event_loop.create_window(window_attributes).unwrap();
 
         let context_future = Context::new(Arc::new(window), self.config.shader_path.clone());
-        self.context = Some(Arc::new(Mutex::new(context_future.block_on())));
+        self.context = Some(context_future.block_on());
     }
 
     fn window_event(
@@ -70,8 +70,7 @@ impl ApplicationHandler for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let context_arc = &self.context.as_ref().unwrap();
-        let mut context = context_arc.lock().unwrap();
+        let mut context = &mut self.context.as_mut().unwrap();
         let size = context.size;
 
         match event {
@@ -110,12 +109,10 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let context_arc = &self.context.as_ref().unwrap();
-        let mut context = context_arc.lock().unwrap();
-
+        let mut context = &mut self.context.as_mut().unwrap();
         let framebuffer = &self.framebuffer;
-        context.update(&*framebuffer.read().unwrap());
 
+        context.update(&*framebuffer.read().unwrap());
         let _ = context.render();
     }
 }
