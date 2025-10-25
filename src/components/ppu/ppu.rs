@@ -720,7 +720,6 @@ impl Memory for PPU {
                     self.ocps.address &= 0x3F;
                 }
             }
-            // TODO: Object Priority Mode
             0xFF6C => self.opri = v != 0,
             _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
         }
