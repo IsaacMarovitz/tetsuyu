@@ -1,9 +1,9 @@
-use crate::Framebuffer;
 use crate::components::ppu::bgpi::BGPI;
 use crate::components::ppu::cc::ColorCorrection;
 use crate::components::ppu::structs::*;
 use crate::components::prelude::*;
 use crate::config::{Color, Config, PPUConfig, Palette};
+use crate::framebuffer::FramebufferWriter;
 
 /// RGBA (4 bytes) per pixel
 pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
@@ -41,11 +41,11 @@ pub struct PPU {
     opri: bool,
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
-    pub framebuffer: Framebuffer,
+    framebuffer: FramebufferWriter,
 }
 
 impl PPU {
-    pub fn new(config: Config, framebuffer: Framebuffer, rom_is_cgb: bool) -> Self {
+    pub fn new(config: Config, framebuffer: FramebufferWriter, rom_is_cgb: bool) -> Self {
         Self {
             mode: config.mode,
             rom_is_cgb,
@@ -126,6 +126,7 @@ impl PPU {
                             self.interrupts |= Interrupts::LCD;
                         }
                         // println!("[PPU] Switching to VBlank!");
+                        self.framebuffer.submit_frame();
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
                         if self.lcds.contains(LCDS::MODE_2_SELECT) {
@@ -208,22 +209,8 @@ impl PPU {
             CCMode::SGB => self.cc.sgb_color_lut[color as usize],
         };
 
-        self.set_pixel(color[0], color[1], color[2], x, self.ly);
-    }
-
-    fn set_pixel(&mut self, r: u8, g: u8, b: u8, x: usize, y: u8) {
-        pub const BYTES_PER_PIXEL: usize = 4;
-        pub const BYTES_PER_ROW: usize = BYTES_PER_PIXEL * SCREEN_W;
-
-        let vertical_offset = y as usize * BYTES_PER_ROW;
-        let horizontal_offset = x * BYTES_PER_PIXEL;
-        let total_offset = vertical_offset + horizontal_offset;
-
-        let mut framebuffer = self.framebuffer.write().unwrap();
-        framebuffer[total_offset + 0] = r;
-        framebuffer[total_offset + 1] = g;
-        framebuffer[total_offset + 2] = b;
-        framebuffer[total_offset + 3] = 0xFF;
+        self.framebuffer
+            .set_pixel(color[0], color[1], color[2], x, self.ly as usize);
     }
 
     fn draw_bg(&mut self) {
@@ -271,7 +258,13 @@ impl PPU {
                     self.set_rgb_mapped(x, 0x7FFF);
                 } else {
                     let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, 0);
-                    self.set_pixel(color.r(), color.g(), color.b(), x, self.ly);
+                    self.framebuffer.set_pixel(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        x,
+                        self.ly as usize,
+                    );
                 }
                 continue; // Skip all the tile reading logic
             }
@@ -379,7 +372,8 @@ impl PPU {
                 self.set_rgb_mapped(x, color);
             } else {
                 let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, color);
-                self.set_pixel(color.r(), color.g(), color.b(), x, self.ly);
+                self.framebuffer
+                    .set_pixel(color.r(), color.g(), color.b(), x, self.ly as usize);
             }
         }
     }
@@ -561,7 +555,13 @@ impl PPU {
                         Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
                     };
 
-                    self.set_pixel(color.r(), color.g(), color.b(), screen_x as usize, self.ly);
+                    self.framebuffer.set_pixel(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        screen_x as usize,
+                        self.ly as usize,
+                    );
                 }
             }
         }
@@ -667,17 +667,10 @@ impl Memory for PPU {
                     match self.mode {
                         GBMode::DMG => {
                             let color = self.ppu_config.palette.off;
-                            let (r, g, b) = (color.r(), color.g(), color.b());
-
-                            for y in 0..SCREEN_H {
-                                for x in 0..SCREEN_W {
-                                    self.set_pixel(r, g, b, x, y as u8);
-                                }
-                            }
+                            self.framebuffer.fill(color.r(), color.g(), color.b());
                         }
                         GBMode::CGB => {
-                            let mut framebuffer = self.framebuffer.write().unwrap();
-                            *framebuffer = [0xFF; FRAMEBUFFER_SIZE];
+                            self.framebuffer.clear();
                         }
                     }
                 }

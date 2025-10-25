@@ -1,7 +1,7 @@
-use crate::Framebuffer;
 use crate::components::prelude::ppu::PPU;
 use crate::components::prelude::*;
 use crate::config::Config;
+use crate::framebuffer::FramebufferWriter;
 use crate::mbc::header::Header;
 use crate::mbc::prelude::*;
 use crate::sound::apu::APU;
@@ -41,7 +41,7 @@ impl MMU {
         header: Header,
         config: Config,
         boot_rom: [u8; 0x900],
-        framebuffer: Framebuffer,
+        framebuffer: FramebufferWriter,
         rom_is_cgb: bool,
     ) -> Self {
         let mbc_mode = match header.cart_type.get_mbc() {

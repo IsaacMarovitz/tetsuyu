@@ -1,10 +1,10 @@
+use crate::components::prelude::*;
+use crate::config::Config;
+use crate::framebuffer::FramebufferWriter;
+use crate::mbc::header::{CGBFlag, Header};
 use std::fs::File;
 use std::io::Read;
 use std::process;
-use crate::config::Config;
-use crate::components::prelude::*;
-use crate::Framebuffer;
-use crate::mbc::header::{CGBFlag, Header};
 
 pub struct CPU {
     pub reg: Registers,
@@ -12,16 +12,18 @@ pub struct CPU {
     halted: bool,
     // Enabled Interrupts
     ime: bool,
-    ime_ask: bool
+    ime_ask: bool,
 }
 
 unsafe impl Send for CPU {}
 
 impl CPU {
-    pub fn new(rom: Vec<u8>,
-               header: Header,
-               config: Config,
-               framebuffer: Framebuffer) -> Self {
+    pub fn new(
+        rom: Vec<u8>,
+        header: Header,
+        config: Config,
+        framebuffer: FramebufferWriter,
+    ) -> Self {
         let boot_file = match config.mode {
             GBMode::DMG => config.dmg_boot_rom.clone(),
             GBMode::CGB => config.cgb_boot_rom.clone(),
@@ -47,14 +49,15 @@ impl CPU {
             boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
         }
 
-        let rom_is_cgb = header.cgb_flag == CGBFlag::CGBOnly || header.cgb_flag == CGBFlag::BackwardsCompatible;
+        let rom_is_cgb =
+            header.cgb_flag == CGBFlag::CGBOnly || header.cgb_flag == CGBFlag::BackwardsCompatible;
 
         Self {
             reg: Registers::new(config.mode),
             mem: MMU::new(rom, header, config, boot_rom, framebuffer, rom_is_cgb),
             halted: false,
             ime: false,
-            ime_ask: false
+            ime_ask: false,
         }
     }
 
@@ -123,6 +126,7 @@ impl CPU {
         word
     }
 
+    #[rustfmt::skip]
     pub fn op_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
@@ -436,6 +440,7 @@ impl CPU {
         }
     }
 
+    #[rustfmt::skip]
     pub fn cb_call(&mut self) -> u32 {
         let opcode = self.read_byte();
         match opcode {
@@ -811,7 +816,8 @@ impl CPU {
     fn alu_add(&mut self, x: u8) {
         let a = self.reg.a;
         let r = a.wrapping_add(x);
-        self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) > u16::from(u8::MAX));
+        self.reg
+            .set_flag(Flags::C, u16::from(a) + u16::from(x) > u16::from(u8::MAX));
         self.reg.set_flag(Flags::H, (a & 0x0F) + (x & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
@@ -822,8 +828,12 @@ impl CPU {
         let a = self.reg.a;
         let c = u8::from(self.reg.get_flag(Flags::C));
         let r = a.wrapping_add(x).wrapping_add(c);
-        self.reg.set_flag(Flags::C, u16::from(a) + u16::from(x) + u16::from(c) > u16::from(u8::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0F) + (x & 0x0F)  + (c & 0x0F) > 0x0F);
+        self.reg.set_flag(
+            Flags::C,
+            u16::from(a) + u16::from(x) + u16::from(c) > u16::from(u8::MAX),
+        );
+        self.reg
+            .set_flag(Flags::H, (a & 0x0F) + (x & 0x0F) + (c & 0x0F) > 0x0F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         self.reg.a = r;
@@ -832,16 +842,20 @@ impl CPU {
     fn alu_add_16(&mut self, x: u16) {
         let a = self.reg.get_hl();
         let r = a.wrapping_add(x);
-        self.reg.set_flag(Flags::C, u32::from(a) + u32::from(x) > u32::from(u16::MAX));
-        self.reg.set_flag(Flags::H, (a & 0x0FFF) + (x & 0x0FFF) > 0x0FFF);
+        self.reg
+            .set_flag(Flags::C, u32::from(a) + u32::from(x) > u32::from(u16::MAX));
+        self.reg
+            .set_flag(Flags::H, (a & 0x0FFF) + (x & 0x0FFF) > 0x0FFF);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_hl(r);
     }
 
     fn alu_add_16_imm(&mut self, a: u16) -> u16 {
         let b = self.read_byte() as i8 as i16 as u16;
-        self.reg.set_flag(Flags::C, (a & 0x00FF) + (b & 0x00FF) > 0x00FF);
-        self.reg.set_flag(Flags::H, (a & 0x000F) + (b & 0x000F) > 0x000F);
+        self.reg
+            .set_flag(Flags::C, (a & 0x00FF) + (b & 0x00FF) > 0x00FF);
+        self.reg
+            .set_flag(Flags::H, (a & 0x000F) + (b & 0x000F) > 0x000F);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, false);
         a.wrapping_add(b)
@@ -861,7 +875,8 @@ impl CPU {
         let a = self.reg.a;
         let c = u8::from(self.reg.get_flag(Flags::C));
         let r = a.wrapping_sub(x).wrapping_sub(c);
-        self.reg.set_flag(Flags::C, u16::from(a) < u16::from(x) + u16::from(c));
+        self.reg
+            .set_flag(Flags::C, u16::from(a) < u16::from(x) + u16::from(c));
         self.reg.set_flag(Flags::H, (a & 0xF) < (x & 0xF) + c);
         self.reg.set_flag(Flags::N, true);
         self.reg.set_flag(Flags::Z, r == 0);
@@ -906,7 +921,8 @@ impl CPU {
 
     fn alu_inc(&mut self, x: u8) -> u8 {
         let r = x.wrapping_add(1);
-        self.reg.set_flag(Flags::H, (x & 0b0000_1111) + 0b0000_0001 > 0b0000_1111);
+        self.reg
+            .set_flag(Flags::H, (x & 0b0000_1111) + 0b0000_0001 > 0b0000_1111);
         self.reg.set_flag(Flags::N, false);
         self.reg.set_flag(Flags::Z, r == 0);
         r

@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate num_derive;
 
-use crate::components::prelude::ppu::FRAMEBUFFER_SIZE;
 use crate::components::prelude::*;
 use crate::config::{Config, Input};
 use crate::context::Context;
+use crate::framebuffer::{create_framebuffer_pair, FramebufferReader};
 use crate::mbc::header::{CGBFlag, Header};
 use clap::Parser;
 use pollster::FutureExt;
@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{process, thread};
 use wgpu::SurfaceError;
@@ -24,11 +24,10 @@ use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{Window, WindowId};
 
-type Framebuffer = Arc<RwLock<[u8; FRAMEBUFFER_SIZE]>>;
-
 mod components;
 mod config;
 mod context;
+mod framebuffer;
 mod mbc;
 mod sound;
 
@@ -47,7 +46,7 @@ struct App {
     context: Option<Context>,
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
-    framebuffer: Framebuffer,
+    framebuffer_reader: FramebufferReader,
 }
 
 impl ApplicationHandler for App {
@@ -70,11 +69,14 @@ impl ApplicationHandler for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let mut context = &mut self.context.as_mut().unwrap();
+        let context = self.context.as_mut().unwrap();
         let size = context.size;
 
         match event {
             WindowEvent::RedrawRequested if window_id == context.window().id() => {
+                let frame_data = self.framebuffer_reader.get_latest_frame();
+                context.update(frame_data);
+
                 match context.render() {
                     Ok(_) => {}
                     Err(SurfaceError::Lost) => context.resize(size),
@@ -109,11 +111,9 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let mut context = &mut self.context.as_mut().unwrap();
-        let framebuffer = &self.framebuffer;
-
-        context.update(&*framebuffer.read().unwrap());
-        let _ = context.render();
+        if let Some(context) = &self.context {
+            context.window().request_redraw();
+        }
     }
 }
 
@@ -173,19 +173,19 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let (input_tx, input_rx) = mpsc::channel::<(JoypadButton, bool)>();
-    let framebuffer: Framebuffer = Arc::new(RwLock::new([0xFF; FRAMEBUFFER_SIZE]));
+    let (framebuffer_writer, framebuffer_reader) = create_framebuffer_pair();
 
     let mut app = App {
         header: header.clone(),
         context: None,
         config: config.clone(),
         input_tx,
-        framebuffer: framebuffer.clone(),
+        framebuffer_reader,
     };
 
     // Start CPU
     thread::spawn(move || {
-        let mut cpu = CPU::new(buffer, header, config, framebuffer);
+        let mut cpu = CPU::new(buffer, header, config, framebuffer_writer);
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 
