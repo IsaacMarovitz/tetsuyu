@@ -193,7 +193,7 @@ impl Synth {
         T: SizedSample + FromSample<f32>,
     {
         thread::spawn(move || {
-            let sample_rate = config.sample_rate.0 as f64;
+            let sample_rate = config.sample_rate as f64;
             let channels = config.channels as usize;
 
             let ch1_mono =
