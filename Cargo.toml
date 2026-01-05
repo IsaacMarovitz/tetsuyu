@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 winit = { version = "0.30", features = ["serde"] }
 cpal = "0.17"
-fundsp = { version = "0.20", default-features = false, features = ["std"] }
+fundsp = { version = "0.21", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
 bitflags = "2.10"
 wgpu = "27.0"
