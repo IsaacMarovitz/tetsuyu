@@ -53,7 +53,7 @@ impl Context {
         let surface_format = surface_caps.formats[0];
 
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             color_space: SurfaceColorSpace::Srgb,
             width: size.width,
@@ -154,21 +154,7 @@ impl Context {
             | CurrentSurfaceTexture::Validation => return,
         };
 
-        let filter_output = Arc::new(self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("filteroutput"),
-            size: output.texture.size(),
-            mip_level_count: output.texture.mip_level_count(),
-            sample_count: output.texture.sample_count(),
-            dimension: output.texture.dimension(),
-            format: output.texture.format(),
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[output.texture.format()],
-        }));
-
-        let filter_view = filter_output.create_view(&wgpu::TextureViewDescriptor::default());
+        let output_view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
@@ -184,23 +170,17 @@ impl Context {
                     y: 0.0,
                     mvp: None,
                     output: librashader::runtime::wgpu::WgpuOutputView::new_from_raw(
-                        &filter_view,
-                        filter_output.size().into(),
-                        filter_output.format(),
+                        &output_view,
+                        output.texture.size().into(),
+                        output.texture.format(),
                     ),
-                    size: filter_output.size().into(),
+                    size: output.texture.size().into(),
                 },
                 &mut encoder,
                 self.frame_count,
                 None,
             )
             .expect("Failed to draw frame!");
-
-        encoder.copy_texture_to_texture(
-            filter_output.as_image_copy(),
-            output.texture.as_image_copy(),
-            output.texture.size(),
-        );
 
         self.queue.submit(std::iter::once(encoder.finish()));
         self.window.pre_present_notify();
