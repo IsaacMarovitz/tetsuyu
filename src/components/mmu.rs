@@ -116,6 +116,11 @@ impl MMU {
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
 
+        if self.ppu.entered_hblank {
+            self.ppu.entered_hblank = false;
+            self.step_hdma();
+        }
+
         self.apu.cycle(self.timer.div);
 
         self.intf |= self.serial.interrupts;
@@ -158,13 +163,22 @@ impl MMU {
         self.hdma_hblank = (v & 0x80) != 0;
 
         if !self.hdma_hblank {
-            // GPDMA: copy everything at once.
+            // GPDMA: copy everything at once, halting the CPU. The bus still
+            // advances 8 M-cycles per 16-byte block (16 in double speed).
             let blocks = (self.hdma_len as u16) + 1;
             for _ in 0..blocks {
                 self.hdma_copy_block();
+                self.cycle(32 << self.double_speed as u32);
             }
             self.hdma_len = 0xFF;
         }
+    }
+
+    fn step_hdma(&mut self) {
+        if self.hdma_len == 0xFF || !self.hdma_hblank {
+            return;
+        }
+        self.hdma_copy_block();
     }
 
     fn hdma_copy_block(&mut self) {

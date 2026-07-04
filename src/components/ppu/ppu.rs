@@ -45,6 +45,7 @@ pub struct PPU {
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
     framebuffer: FramebufferWriter,
+    pub entered_hblank: bool
 }
 
 impl PPU {
@@ -84,6 +85,7 @@ impl PPU {
             bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
             framebuffer,
+            entered_hblank: false,
         }
     }
 
@@ -118,6 +120,7 @@ impl PPU {
 
                 if self.cycle_count >= 80 + self.mode3_len {
                     self.ppu_mode = PPUMode::HBlank;
+                    self.entered_hblank = true;
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
                     }
