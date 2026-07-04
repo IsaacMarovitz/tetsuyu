@@ -107,6 +107,10 @@ impl APU {
         // Clock sweep (128Hz)
         if self.frame_sequencer == 2 || self.frame_sequencer == 6 {
             self.ch1.tick_sweep();
+            if self.ch1.sweep_overflow {
+                self.is_ch_1_active = false;
+                self.ch1.sweep_overflow = false;
+            }
         }
     }
 
@@ -289,6 +293,12 @@ impl Memory for APU {
                 // Handle DAC disable
                 if a == 0xFF12 && (v & 0xF8) == 0 {
                     self.is_ch_1_active = false;
+                }
+
+                // A sweep overflow during trigger disables the channel at once.
+                if self.ch1.sweep_overflow {
+                    self.is_ch_1_active = false;
+                    self.ch1.sweep_overflow = false;
                 }
             }
             0xFF15..=0xFF19 => {

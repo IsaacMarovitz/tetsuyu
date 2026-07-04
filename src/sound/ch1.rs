@@ -17,6 +17,7 @@ pub struct CH1 {
     pub sample_index: u8,
     pub length_counter: LengthCounter,
     pub volume_envelope: VolumeEnvelope,
+    pub sweep_overflow: bool,
 }
 
 impl CH1 {
@@ -35,6 +36,7 @@ impl CH1 {
             sample_index: 0,
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
+            sweep_overflow: false,
         }
     }
 
@@ -52,6 +54,7 @@ impl CH1 {
         self.sample_index = 0;
         self.length_counter.clear();
         self.volume_envelope.clear();
+        self.sweep_overflow = false;
     }
 
     pub fn tick_frequency(&mut self) {
@@ -107,9 +110,10 @@ impl CH1 {
             self.shadow_frequency + offset
         };
 
-        // If overflow, disable channel (APU will handle this)
+        // If overflow, the channel (not the DAC) is disabled; the APU owns
+        // the NR52 active flag, so just raise a flag it can consume.
         if new_freq > 0x7FF {
-            self.dac_enabled = false;
+            self.sweep_overflow = true;
         }
 
         new_freq
