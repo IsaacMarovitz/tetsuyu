@@ -2,9 +2,11 @@ use crate::components::memory::Memory;
 use crate::config::APUConfig;
 use crate::sound::prelude::*;
 use bitflags::bitflags;
+use crate::components::mode::GBMode;
 
 pub struct APU {
     config: APUConfig,
+    mode: GBMode,
     audio_enabled: bool,
     is_ch_1_active: bool,
     is_ch_2_active: bool,
@@ -47,7 +49,7 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new(config: APUConfig) -> Self {
+    pub fn new(config: APUConfig, mode: GBMode) -> Self {
         let synth = if config.master_enabled {
             Some(Synth::new())
         } else {
@@ -56,6 +58,7 @@ impl APU {
 
         Self {
             config,
+            mode,
             audio_enabled: true,
             is_ch_1_active: false,
             is_ch_2_active: false,
@@ -275,7 +278,12 @@ impl Memory for APU {
         // Ignore writes to 0xFF10-0xFF25 when APU is disabled
         if a >= 0xFF10 && a <= 0xFF25 {
             if !self.audio_enabled {
-                return;
+                // DMG still lets length data through while powered off; the
+                // length registers are the low 6 bits of NRx1.
+                let is_length = matches!(a, 0xFF11 | 0xFF16 | 0xFF1B | 0xFF20);
+                if !(self.mode == GBMode::DMG && is_length) {
+                    return;
+                }
             }
         }
 

@@ -74,7 +74,7 @@ impl MMU {
 
         Self {
             mbc,
-            apu: APU::new(config.apu_config),
+            apu: APU::new(config.apu_config, config.mode),
             ppu: PPU::new(config.clone(), framebuffer, rom_is_cgb),
             serial: Serial::new(config.print_serial),
             joypad: Joypad::new(),
@@ -236,8 +236,12 @@ impl Memory for MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank.max(1)],
             0xFE00..=0xFE9F => self.ppu.read(a),
             0xFF4D => {
-                0x7E | if self.double_speed { 0x80 } else { 0x00 }
-                    | if self.key1_armed { 0x01 } else { 0x00 }
+                if self.mode == GBMode::DMG {
+                    0xFF
+                } else {
+                    0x7E | if self.double_speed { 0x80 } else { 0x00 }
+                        | if self.key1_armed { 0x01 } else { 0x00 }
+                }
             }
             0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF68..=0xFF6B => self.ppu.read(a),
@@ -256,7 +260,13 @@ impl Memory for MMU {
                 }
             }
             0xFF51..=0xFF6F => self.ppu.read(a),
-            0xFF70 => 0xF8 | self.wram_bank as u8,
+            0xFF70 => {
+                if self.mode == GBMode::DMG {
+                    0xFF
+                } else {
+                    0xF8 | self.wram_bank as u8
+                }
+            }
             0xFEA0..=0xFEFF => 0xFF,
             0xFFFF => self.inte.bits(),
             _ => 0xFF
