@@ -1,48 +1,59 @@
 use crate::components::prelude::*;
 
 pub struct Timer {
-    pub div: u8,
+    counter: u16,
     tima: u8,
     tma: u8,
+    tac: u8,
     pub interrupts: Interrupts,
-    enabled: bool,
-    step: u32,
-    internal_count: u32,
-    internal_divider: u32,
 }
 
 impl Timer {
     pub fn new() -> Self {
         Self {
-            div: 0x00,
-            tima: 0x00,
-            tma: 0x00,
+            counter: 0,
+            tima: 0,
+            tma: 0,
+            tac: 0,
             interrupts: Interrupts::empty(),
-            enabled: false,
-            step: 256,
-            internal_count: 0,
-            internal_divider: 0,
+        }
+    }
+
+    pub fn div(&self) -> u8 {
+        (self.counter >> 8) as u8
+    }
+
+    fn tac_bit(tac: u8) -> u16 {
+        match tac & 0b0000_0011 {
+            0 => 9,
+            1 => 3,
+            2 => 5,
+            _ => 7,
+        }
+    }
+
+    fn mux(&self, tac: u8) -> bool {
+        (tac & 0b0000_0100 != 0) && (self.counter >> Self::tac_bit(tac)) & 1 != 0
+    }
+
+    fn tima_inc(&mut self, times: u16) {
+        for _ in 0..times {
+            self.tima = self.tima.wrapping_add(1);
+            if self.tima == 0 {
+                self.tima = self.tma;
+                self.interrupts |= Interrupts::TIMER;
+            }
         }
     }
 
     pub fn cycle(&mut self, cycles: u32) {
-        self.internal_divider += cycles;
-        while self.internal_divider >= 256 {
-            self.div = self.div.wrapping_add(1);
-            self.internal_divider -= 256;
-        }
+        let old = self.counter;
+        self.counter = self.counter.wrapping_add(cycles as u16);
 
-        if self.enabled {
-            self.internal_count += cycles;
-
-            while self.internal_count >= self.step {
-                self.tima = self.tima.wrapping_add(1);
-                if self.tima == 0x00 {
-                    self.tima = self.tma;
-                    self.interrupts |= Interrupts::TIMER;
-                }
-                self.internal_count -= self.step;
-            }
+        if self.tac & 0b0000_0100 != 0 {
+            let bit = Self::tac_bit(self.tac) + 1;
+            let edges = (self.counter >> bit).wrapping_sub(old >> bit);
+            self.tima_inc(edges);
         }
     }
 }
@@ -50,39 +61,32 @@ impl Timer {
 impl Memory for Timer {
     fn read(&self, a: u16) -> u8 {
         match a {
-            0xFF04 => self.div,
+            0xFF04 => (self.counter >> 8) as u8,
             0xFF05 => self.tima,
             0xFF06 => self.tma,
-            0xFF07 => {
-                let mut v = 0xF8;
-                v |= if self.enabled { 0b0000_0100 } else { 0x00 };
-                v |= match self.step {
-                    1024 => 0,
-                    16 => 1,
-                    64 => 2,
-                    256 => 3,
-                    _ => panic!("Unknown timer step ({})!", self.step),
-                };
-
-                v
-            }
+            0xFF07 => 0xF8 | self.tac,
             _ => panic!("Read to unsupported timer address ({:#06x})!", a),
         }
     }
 
     fn write(&mut self, a: u16, v: u8) {
         match a {
-            0xFF04 => self.div = 0x00,
+            0xFF04 => {
+                // Resetting DIV can drop the mux output 1->0 and tick TIMA.
+                if self.mux(self.tac) {
+                    self.tima_inc(1);
+                }
+                self.counter = 0;
+            }
             0xFF05 => self.tima = v,
             0xFF06 => self.tma = v,
             0xFF07 => {
-                self.enabled = (v & 0b0000_0100) != 0;
-                self.step = match v & 0b0000_0011 {
-                    0 => 1024,
-                    1 => 16,
-                    2 => 64,
-                    3 => 256,
-                    _ => panic!("Unknown timer step ({})!", v),
+                // A TAC write that drops the mux output 1->0 also ticks TIMA
+                // (covers both the disable case and a frequency change).
+                let old_out = self.mux(self.tac);
+                self.tac = v & 0x07;
+                if old_out && !self.mux(self.tac) {
+                    self.tima_inc(1);
                 }
             }
             _ => panic!("Write to unsupported timer address ({:#06x})!", a),
