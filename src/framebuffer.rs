@@ -1,5 +1,5 @@
 use crate::components::ppu::ppu::FRAMEBUFFER_SIZE;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
 pub struct Frame {
     pub data: Box<[u8; FRAMEBUFFER_SIZE]>,
@@ -15,11 +15,11 @@ impl Frame {
 
 pub struct FramebufferWriter {
     back_buffer: Box<[u8; FRAMEBUFFER_SIZE]>,
-    frame_sender: Sender<Frame>,
+    frame_sender: SyncSender<Frame>,
 }
 
 impl FramebufferWriter {
-    pub fn new(frame_sender: Sender<Frame>) -> Self {
+    pub fn new(frame_sender: SyncSender<Frame>) -> Self {
         Self {
             back_buffer: Box::new([0xFF; FRAMEBUFFER_SIZE]),
             frame_sender,
@@ -47,7 +47,7 @@ impl FramebufferWriter {
 
         let frame = Frame { data: new_back };
 
-        let _ = self.frame_sender.send(frame);
+        let _ = self.frame_sender.try_send(frame);
     }
 
     pub fn clear(&mut self) {
@@ -86,7 +86,7 @@ impl FramebufferReader {
 }
 
 pub fn create_framebuffer_pair() -> (FramebufferWriter, FramebufferReader) {
-    let (sender, receiver) = channel();
+    let (sender, receiver) = sync_channel(1);
     (
         FramebufferWriter::new(sender),
         FramebufferReader::new(receiver),

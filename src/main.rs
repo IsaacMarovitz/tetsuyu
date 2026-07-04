@@ -46,6 +46,7 @@ struct App {
     config: Config,
     input_tx: Sender<(JoypadButton, bool)>,
     framebuffer_reader: FramebufferReader,
+    occluded: bool,
 }
 
 impl ApplicationHandler for App {
@@ -64,7 +65,7 @@ impl ApplicationHandler for App {
 
     fn window_event(
         &mut self,
-        _event_loop: &ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -79,6 +80,15 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(physical_size) => {
                 context.resize(physical_size);
             }
+            WindowEvent::Occluded(occluded) => {
+                self.occluded = occluded;
+                event_loop.set_control_flow(if occluded {
+                    ControlFlow::Wait
+                } else {
+                    ControlFlow::Poll
+                });
+            }
+            WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
                     if event.state == ElementState::Pressed {
@@ -103,6 +113,10 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if self.occluded {
+            return;
+        }
+
         if let Some(context) = &self.context {
             context.window().request_redraw();
         }
@@ -173,6 +187,7 @@ fn main() {
         config: config.clone(),
         input_tx,
         framebuffer_reader,
+        occluded: false,
     };
 
     // Start CPU
