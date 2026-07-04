@@ -13,6 +13,7 @@ pub struct CPU {
     // Enabled Interrupts
     ime: bool,
     ime_ask: bool,
+    ticks: u32,
 }
 
 unsafe impl Send for CPU {}
@@ -57,10 +58,12 @@ impl CPU {
             halted: false,
             ime: false,
             ime_ask: false,
+            ticks: 0,
         }
     }
 
     pub fn cycle(&mut self) -> u32 {
+        self.ticks = 0;
         let cycles = {
             let count = self.interrupt();
             if count != 0 {
@@ -76,6 +79,14 @@ impl CPU {
                 self.op_call()
             }
         };
+
+        // M-cycles the instruction claimed but did not spend on a memory
+        // access are internal cycles; tick them so the bus advances for the
+        // whole instruction.
+        for _ in 0..cycles.saturating_sub(self.ticks) {
+            self.tick();
+        }
+
         cycles * 4
     }
 
@@ -102,27 +113,50 @@ impl CPU {
         4
     }
 
+    fn tick(&mut self) {
+        self.mem.cycle(4);
+    }
+
+    fn read(&mut self, a: u16) -> u8 {
+        self.tick();
+        self.ticks += 1;
+        self.mem.read(a)
+    }
+
+    fn write(&mut self, a: u16, v: u8) {
+        self.tick();
+        self.ticks += 1;
+        self.mem.write(a, v);
+    }
+
+    fn write_word_at(&mut self, a: u16, v: u16) {
+        self.write(a, (v & 0xFF) as u8);
+        self.write(a.wrapping_add(1), (v >> 8) as u8);
+    }
+
     pub fn read_byte(&mut self) -> u8 {
-        let byte = self.mem.read(self.reg.pc);
+        let byte = self.read(self.reg.pc);
         self.reg.pc += 1;
         byte
     }
 
     pub fn read_word(&mut self) -> u16 {
-        let word = self.mem.read_word(self.reg.pc);
-        self.reg.pc += 2;
-        word
+        let lo = self.read_byte() as u16;
+        let hi = self.read_byte() as u16;
+        lo | (hi << 8)
     }
 
     pub fn push(&mut self, v: u16) {
         self.reg.sp = self.reg.sp.wrapping_sub(2);
-        self.mem.write_word(self.reg.sp, v);
+        self.write(self.reg.sp, (v & 0xFF) as u8);
+        self.write(self.reg.sp.wrapping_add(1), (v >> 8) as u8);
     }
 
     pub fn pop(&mut self) -> u16 {
-        let word = self.mem.read_word(self.reg.sp);
+        let lo = self.read(self.reg.sp) as u16;
+        let hi = self.read(self.reg.sp.wrapping_add(1)) as u16;
         self.reg.sp += 2;
-        word
+        lo | (hi << 8)
     }
 
     #[rustfmt::skip]
@@ -132,7 +166,7 @@ impl CPU {
             0x00 => { 1 },
             0x01 => { let v = self.read_word();
                       self.reg.set_bc(v);                             3 },
-            0x02 => { self.mem.write(self.reg.get_bc(), self.reg.a);  2 },
+            0x02 => { self.write(self.reg.get_bc(), self.reg.a);      2 },
             0x03 => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_add(1));            2 },
             0x04 => { self.reg.b = self.alu_inc(self.reg.b);          1 },
@@ -141,9 +175,9 @@ impl CPU {
             0x07 => { self.reg.a = self.alu_rlc(self.reg.a);
                       self.reg.set_flag(Flags::Z, false);             1 },
             0x08 => { let a = self.read_word();
-                      self.mem.write_word(a, self.reg.sp);            5 },
+                      self.write_word_at(a, self.reg.sp);             5 },
             0x09 => { self.alu_add_16(self.reg.get_bc());             2 },
-            0x0A => { self.reg.a = self.mem.read(self.reg.get_bc());  2 },
+            0x0A => { self.reg.a = self.read(self.reg.get_bc());      2 },
             0x0B => { let bc = self.reg.get_bc();
                       self.reg.set_bc(bc.wrapping_sub(1));            2 },
             0x0C => { self.reg.c = self.alu_inc(self.reg.c);          1 },
@@ -154,7 +188,7 @@ impl CPU {
             0x10 => {                                                 1 },
             0x11 => { let v = self.read_word();
                       self.reg.set_de(v);                             3 },
-            0x12 => { self.mem.write(self.reg.get_de(), self.reg.a);  2 },
+            0x12 => { self.write(self.reg.get_de(), self.reg.a);      2 },
             0x13 => { let de = self.reg.get_de();
                       self.reg.set_de(de.wrapping_add(1));            2 },
             0x14 => { self.reg.d = self.alu_inc(self.reg.d);          1 },
@@ -164,7 +198,7 @@ impl CPU {
                       self.reg.set_flag(Flags::Z, false);             1 },
             0x18 => { self.jr(true);                                  3 },
             0x19 => { self.alu_add_16(self.reg.get_de());             2 },
-            0x1A => { self.reg.a = self.mem.read(self.reg.get_de());  2 },
+            0x1A => { self.reg.a = self.read(self.reg.get_de());      2 },
             0x1B => { let de = self.reg.get_de();
                       self.reg.set_de(de.wrapping_sub(1));            2 },
             0x1C => { self.reg.e = self.alu_inc(self.reg.e);          1 },
@@ -176,7 +210,7 @@ impl CPU {
             0x21 => { let v = self.read_word();
                       self.reg.set_hl(v);                             3 },
             0x22 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.a);
+                      self.write(a, self.reg.a);
                       self.reg.set_hl(a + 1);                         2 },
             0x23 => { let hl = self.reg.get_hl();
                       self.reg.set_hl(hl.wrapping_add(1));            2 },
@@ -187,7 +221,7 @@ impl CPU {
             0x28 => { self.jr(self.reg.get_flag(Flags::Z))              },
             0x29 => { self.alu_add_16(self.reg.get_hl());             2 },
             0x2A => { let a = self.reg.get_hl();
-                      self.reg.a = self.mem.read(a);
+                      self.reg.a = self.read(a);
                       self.reg.set_hl(a + 1);                         2 },
             0x2B => { let hl = self.reg.get_hl();
                       self.reg.set_hl(hl.wrapping_sub(1));            2 },
@@ -199,26 +233,26 @@ impl CPU {
             0x31 => { let v = self.read_word();
                       self.reg.sp = v;                                3 },
             0x32 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.a);
+                      self.write(a, self.reg.a);
                       self.reg.set_hl(a - 1);                         2 },
             0x33 => { let sp = self.reg.sp;
                       self.reg.sp = sp.wrapping_add(1);               2 },
             0x34 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_inc(v);
-                      self.mem.write(a, v);                           3 },
+                      self.write(a, v);                               3 },
             0x35 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_dec(v);
-                      self.mem.write(a, v);                           3 },
+                      self.write(a, v);                               3 },
             0x36 => { let a = self.reg.get_hl();
                       let b = self.read_byte();
-                      self.mem.write(a, b);                           3 },
+                      self.write(a, b);                               3 },
             0x37 => { self.alu_scf();                                 1 },
             0x38 => { self.jr(self.reg.get_flag(Flags::C))              },
             0x39 => { self.alu_add_16(self.reg.sp);                   2 },
             0x3A => { let a = self.reg.get_hl();
-                      self.reg.a = self.mem.read(a);
+                      self.reg.a = self.read(a);
                       self.reg.set_hl(a - 1);                         2 },
             0x3B => { let sp = self.reg.sp;
                       self.reg.sp = sp.wrapping_sub(1);               2 },
@@ -232,7 +266,7 @@ impl CPU {
             0x43 => { self.reg.b = self.reg.e;                        1 },
             0x44 => { self.reg.b = self.reg.h;                        1 },
             0x45 => { self.reg.b = self.reg.l;                        1 },
-            0x46 => { self.reg.b = self.mem.read(self.reg.get_hl());  2 },
+            0x46 => { self.reg.b = self.read(self.reg.get_hl());      2 },
             0x47 => { self.reg.b = self.reg.a;                        1 },
             0x48 => { self.reg.c = self.reg.b;                        1 },
             0x49 => { self.reg.c = self.reg.c;                        1 },
@@ -240,7 +274,7 @@ impl CPU {
             0x4B => { self.reg.c = self.reg.e;                        1 },
             0x4C => { self.reg.c = self.reg.h;                        1 },
             0x4D => { self.reg.c = self.reg.l;                        1 },
-            0x4E => { self.reg.c = self.mem.read(self.reg.get_hl());  2 },
+            0x4E => { self.reg.c = self.read(self.reg.get_hl());      2 },
             0x4F => { self.reg.c = self.reg.a;                        1 },
             0x50 => { self.reg.d = self.reg.b;                        1 },
             0x51 => { self.reg.d = self.reg.c;                        1 },
@@ -248,7 +282,7 @@ impl CPU {
             0x53 => { self.reg.d = self.reg.e;                        1 },
             0x54 => { self.reg.d = self.reg.h;                        1 },
             0x55 => { self.reg.d = self.reg.l;                        1 },
-            0x56 => { self.reg.d = self.mem.read(self.reg.get_hl());  2 },
+            0x56 => { self.reg.d = self.read(self.reg.get_hl());      2 },
             0x57 => { self.reg.d = self.reg.a;                        1 },
             0x58 => { self.reg.e = self.reg.b;                        1 },
             0x59 => { self.reg.e = self.reg.c;                        1 },
@@ -256,7 +290,7 @@ impl CPU {
             0x5B => { self.reg.e = self.reg.e;                        1 },
             0x5C => { self.reg.e = self.reg.h;                        1 },
             0x5D => { self.reg.e = self.reg.l;                        1 },
-            0x5E => { self.reg.e = self.mem.read(self.reg.get_hl());  2 },
+            0x5E => { self.reg.e = self.read(self.reg.get_hl());      2 },
             0x5F => { self.reg.e = self.reg.a;                        1 },
             0x60 => { self.reg.h = self.reg.b;                        1 },
             0x61 => { self.reg.h = self.reg.c;                        1 },
@@ -264,7 +298,7 @@ impl CPU {
             0x63 => { self.reg.h = self.reg.e;                        1 },
             0x64 => { self.reg.h = self.reg.h;                        1 },
             0x65 => { self.reg.h = self.reg.l;                        1 },
-            0x66 => { self.reg.h = self.mem.read(self.reg.get_hl());  2 },
+            0x66 => { self.reg.h = self.read(self.reg.get_hl());      2 },
             0x67 => { self.reg.h = self.reg.a;                        1 },
             0x68 => { self.reg.l = self.reg.b;                        1 },
             0x69 => { self.reg.l = self.reg.c;                        1 },
@@ -272,30 +306,30 @@ impl CPU {
             0x6B => { self.reg.l = self.reg.e;                        1 },
             0x6C => { self.reg.l = self.reg.h;                        1 },
             0x6D => { self.reg.l = self.reg.l;                        1 },
-            0x6E => { self.reg.l = self.mem.read(self.reg.get_hl());  2 },
+            0x6E => { self.reg.l = self.read(self.reg.get_hl());      2 },
             0x6F => { self.reg.l = self.reg.a;                        1 },
             0x70 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.b);                  2 },
+                      self.write(a, self.reg.b);                      2 },
             0x71 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.c);                  2 },
+                      self.write(a, self.reg.c);                      2 },
             0x72 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.d);                  2 },
+                      self.write(a, self.reg.d);                      2 },
             0x73 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.e);                  2 },
+                      self.write(a, self.reg.e);                      2 },
             0x74 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.h);                  2 },
+                      self.write(a, self.reg.h);                      2 },
             0x75 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.l);                  2 },
+                      self.write(a, self.reg.l);                      2 },
             0x76 => { self.halted = true;                             1 },
             0x77 => { let a = self.reg.get_hl();
-                      self.mem.write(a, self.reg.a);                  2 },
+                      self.write(a, self.reg.a);                      2 },
             0x78 => { self.reg.a = self.reg.b;                        1 },
             0x79 => { self.reg.a = self.reg.c;                        1 },
             0x7A => { self.reg.a = self.reg.d;                        1 },
             0x7B => { self.reg.a = self.reg.e;                        1 },
             0x7C => { self.reg.a = self.reg.h;                        1 },
             0x7D => { self.reg.a = self.reg.l;                        1 },
-            0x7E => { self.reg.a = self.mem.read(self.reg.get_hl());  2 },
+            0x7E => { self.reg.a = self.read(self.reg.get_hl());      2 },
             0x7F => { self.reg.a = self.reg.a;                        1 },
             0x80 => { self.alu_add(self.reg.b);                       1 },
             0x81 => { self.alu_add(self.reg.c);                       1 },
@@ -303,7 +337,8 @@ impl CPU {
             0x83 => { self.alu_add(self.reg.e);                       1 },
             0x84 => { self.alu_add(self.reg.h);                       1 },
             0x85 => { self.alu_add(self.reg.l);                       1 },
-            0x86 => { self.alu_add(self.mem.read(self.reg.get_hl())); 2 },
+            0x86 => { let v = self.read(self.reg.get_hl());
+                      self.alu_add(v);                                2 },
             0x87 => { self.alu_add(self.reg.a);                       1 },
             0x88 => { self.alu_adc(self.reg.b);                       1 },
             0x89 => { self.alu_adc(self.reg.c);                       1 },
@@ -311,7 +346,8 @@ impl CPU {
             0x8B => { self.alu_adc(self.reg.e);                       1 },
             0x8C => { self.alu_adc(self.reg.h);                       1 },
             0x8D => { self.alu_adc(self.reg.l);                       1 },
-            0x8E => { self.alu_adc(self.mem.read(self.reg.get_hl())); 2 },
+            0x8E => { let v = self.read(self.reg.get_hl());
+                      self.alu_adc(v);                                2 },
             0x8F => { self.alu_adc(self.reg.a);                       1 },
             0x90 => { self.alu_sub(self.reg.b);                       1 },
             0x91 => { self.alu_sub(self.reg.c);                       1 },
@@ -319,7 +355,8 @@ impl CPU {
             0x93 => { self.alu_sub(self.reg.e);                       1 },
             0x94 => { self.alu_sub(self.reg.h);                       1 },
             0x95 => { self.alu_sub(self.reg.l);                       1 },
-            0x96 => { self.alu_sub(self.mem.read(self.reg.get_hl())); 2 },
+            0x96 => { let v = self.read(self.reg.get_hl());
+                      self.alu_sub(v);                                2 },
             0x97 => { self.alu_sub(self.reg.a);                       1 },
             0x98 => { self.alu_sbc(self.reg.b);                       1 },
             0x99 => { self.alu_sbc(self.reg.c);                       1 },
@@ -327,7 +364,8 @@ impl CPU {
             0x9B => { self.alu_sbc(self.reg.e);                       1 },
             0x9C => { self.alu_sbc(self.reg.h);                       1 },
             0x9D => { self.alu_sbc(self.reg.l);                       1 },
-            0x9E => { self.alu_sbc(self.mem.read(self.reg.get_hl())); 2 },
+            0x9E => { let v = self.read(self.reg.get_hl());
+                      self.alu_sbc(v);                                2 },
             0x9F => { self.alu_sbc(self.reg.a);                       1 },
             0xA0 => { self.alu_and(self.reg.b);                       1 },
             0xA1 => { self.alu_and(self.reg.c);                       1 },
@@ -335,7 +373,8 @@ impl CPU {
             0xA3 => { self.alu_and(self.reg.e);                       1 },
             0xA4 => { self.alu_and(self.reg.h);                       1 },
             0xA5 => { self.alu_and(self.reg.l);                       1 },
-            0xA6 => { self.alu_and(self.mem.read(self.reg.get_hl())); 2 },
+            0xA6 => { let v = self.read(self.reg.get_hl());
+                      self.alu_and(v);                                2 },
             0xA7 => { self.alu_and(self.reg.a);                       1 },
             0xA8 => { self.alu_xor(self.reg.b);                       1 },
             0xA9 => { self.alu_xor(self.reg.c);                       1 },
@@ -343,7 +382,8 @@ impl CPU {
             0xAB => { self.alu_xor(self.reg.e);                       1 },
             0xAC => { self.alu_xor(self.reg.h);                       1 },
             0xAD => { self.alu_xor(self.reg.l);                       1 },
-            0xAE => { self.alu_xor(self.mem.read(self.reg.get_hl())); 2 },
+            0xAE => { let v = self.read(self.reg.get_hl());
+                      self.alu_xor(v);                                2 },
             0xAF => { self.alu_xor(self.reg.a);                       1 },
             0xB0 => { self.alu_or(self.reg.b);                        1 },
             0xB1 => { self.alu_or(self.reg.c);                        1 },
@@ -351,7 +391,8 @@ impl CPU {
             0xB3 => { self.alu_or(self.reg.e);                        1 },
             0xB4 => { self.alu_or(self.reg.h);                        1 },
             0xB5 => { self.alu_or(self.reg.l);                        1 },
-            0xB6 => { self.alu_or(self.mem.read(self.reg.get_hl()));  2 },
+            0xB6 => { let v = self.read(self.reg.get_hl());
+                      self.alu_or(v);                                 2 },
             0xB7 => { self.alu_or(self.reg.a);                        1 },
             0xB8 => { self.alu_cp(self.reg.b);                        1 },
             0xB9 => { self.alu_cp(self.reg.c);                        1 },
@@ -359,7 +400,8 @@ impl CPU {
             0xBB => { self.alu_cp(self.reg.e);                        1 },
             0xBC => { self.alu_cp(self.reg.h);                        1 },
             0xBD => { self.alu_cp(self.reg.l);                        1 },
-            0xBE => { self.alu_cp(self.mem.read(self.reg.get_hl()));  2 },
+            0xBE => { let v = self.read(self.reg.get_hl());
+                      self.alu_cp(v);                                 2 },
             0xBF => { self.alu_cp(self.reg.a);                        1 },
             0xC0 => { self.ret(!self.reg.get_flag(Flags::Z))            },
             0xC1 => { let v = self.pop();
@@ -399,11 +441,11 @@ impl CPU {
                       self.alu_sbc(v);                                2 },
             0xDF => { self.rst(0x18)                                    },
             0xE0 => { let a = 0xFF00 | u16::from(self.read_byte());
-                      self.mem.write(a, self.reg.a);                  3 },
+                      self.write(a, self.reg.a);                      3 },
             0xE1 => { let v = self.pop();
                       self.reg.set_hl(v);                             3 },
             0xE2 => { let a = 0xFF00 | u16::from(self.reg.c);
-                      self.mem.write(a, self.reg.a);                  2 },
+                      self.write(a, self.reg.a);                      2 },
             0xE5 => { self.push(self.reg.get_hl());                   4 },
             0xE6 => { let b = self.read_byte();
                       self.alu_and(b);                                2 },
@@ -411,16 +453,16 @@ impl CPU {
             0xE8 => { self.reg.sp = self.alu_add_16_imm(self.reg.sp); 4 },
             0xE9 => { self.reg.pc = self.reg.get_hl();                1 },
             0xEA => { let a = self.read_word();
-                      self.mem.write(a, self.reg.a);                  4 },
+                      self.write(a, self.reg.a);                      4 },
             0xEE => { let b = self.read_byte();
                       self.alu_xor(b);                                2 },
             0xEF => { self.rst(0x28)                                    },
             0xF0 => { let a = 0xFF00 | u16::from(self.read_byte());
-                      self.reg.a = self.mem.read(a);                  3 },
+                      self.reg.a = self.read(a);                      3 },
             0xF1 => { let v = self.pop();
                       self.reg.set_af(v);                             3 },
             0xF2 => { let a = 0xFF00 | u16::from(self.reg.c);
-                      self.reg.a = self.mem.read(a);                  2 },
+                      self.reg.a = self.read(a);                      2 },
             0xF3 => { self.ime = false; self.ime_ask = false;         1 },
             0xF5 => { self.push(self.reg.get_af());                   4 },
             0xF6 => { let b = self.read_byte();
@@ -430,7 +472,7 @@ impl CPU {
                       self.reg.set_hl(v);                             3 },
             0xF9 => { self.reg.sp = self.reg.get_hl();                2 },
             0xFA => { let a = self.read_word();
-                      self.reg.a = self.mem.read(a);                  4 },
+                      self.reg.a = self.read(a);                      4 },
             0xFB => { self.ime_ask = true;                            1 },
             0xFE => { let b = self.read_byte();
                       self.alu_cp(b);                                 2 },
@@ -450,8 +492,9 @@ impl CPU {
             0x04 => { self.reg.h = self.alu_rlc(self.reg.h);          2 },
             0x05 => { self.reg.l = self.alu_rlc(self.reg.l);          2 },
             0x06 => { let a = self.reg.get_hl();
-                      let v = self.alu_rlc(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_rlc(v);
+                      self.write(a, v);                               4 },
             0x07 => { self.reg.a = self.alu_rlc(self.reg.a);          2 },
             0x08 => { self.reg.b = self.alu_rrc(self.reg.b);          2 },
             0x09 => { self.reg.c = self.alu_rrc(self.reg.c);          2 },
@@ -460,8 +503,9 @@ impl CPU {
             0x0C => { self.reg.h = self.alu_rrc(self.reg.h);          2 },
             0x0D => { self.reg.l = self.alu_rrc(self.reg.l);          2 },
             0x0E => { let a = self.reg.get_hl();
-                      let v = self.alu_rrc(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_rrc(v);
+                      self.write(a, v);                               4 },
             0x0F => { self.reg.a = self.alu_rrc(self.reg.a);          2 },
             0x10 => { self.reg.b = self.alu_rl(self.reg.b);           2 },
             0x11 => { self.reg.c = self.alu_rl(self.reg.c);           2 },
@@ -470,8 +514,9 @@ impl CPU {
             0x14 => { self.reg.h = self.alu_rl(self.reg.h);           2 },
             0x15 => { self.reg.l = self.alu_rl(self.reg.l);           2 },
             0x16 => { let a = self.reg.get_hl();
-                      let v = self.alu_rl(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_rl(v);
+                      self.write(a, v);                               4 },
             0x17 => { self.reg.a = self.alu_rl(self.reg.a);           2 },
             0x18 => { self.reg.b = self.alu_rr(self.reg.b);           2 },
             0x19 => { self.reg.c = self.alu_rr(self.reg.c);           2 },
@@ -480,8 +525,9 @@ impl CPU {
             0x1C => { self.reg.h = self.alu_rr(self.reg.h);           2 },
             0x1D => { self.reg.l = self.alu_rr(self.reg.l);           2 },
             0x1E => { let a = self.reg.get_hl();
-                      let v = self.alu_rr(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_rr(v);
+                      self.write(a, v);                               4 },
             0x1F => { self.reg.a = self.alu_rr(self.reg.a);           2 },
             0x20 => { self.reg.b = self.alu_sla(self.reg.b);          2 },
             0x21 => { self.reg.c = self.alu_sla(self.reg.c);          2 },
@@ -490,8 +536,9 @@ impl CPU {
             0x24 => { self.reg.h = self.alu_sla(self.reg.h);          2 },
             0x25 => { self.reg.l = self.alu_sla(self.reg.l);          2 },
             0x26 => { let a = self.reg.get_hl();
-                      let v = self.alu_sla(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_sla(v);
+                      self.write(a, v);                               4 },
             0x27 => { self.reg.a = self.alu_sla(self.reg.a);          2 },
             0x28 => { self.reg.b = self.alu_sra(self.reg.b);          2 },
             0x29 => { self.reg.c = self.alu_sra(self.reg.c);          2 },
@@ -500,8 +547,9 @@ impl CPU {
             0x2C => { self.reg.h = self.alu_sra(self.reg.h);          2 },
             0x2D => { self.reg.l = self.alu_sra(self.reg.l);          2 },
             0x2E => { let a = self.reg.get_hl();
-                      let v = self.alu_sra(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_sra(v);
+                      self.write(a, v);                               4 },
             0x2F => { self.reg.a = self.alu_sra(self.reg.a);          2 },
             0x30 => { self.reg.b = self.alu_swap(self.reg.b);         2 },
             0x31 => { self.reg.c = self.alu_swap(self.reg.c);         2 },
@@ -510,8 +558,9 @@ impl CPU {
             0x34 => { self.reg.h = self.alu_swap(self.reg.h);         2 },
             0x35 => { self.reg.l = self.alu_swap(self.reg.l);         2 },
             0x36 => { let a = self.reg.get_hl();
-                      let v = self.alu_swap(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_swap(v);
+                      self.write(a, v);                               4 },
             0x37 => { self.reg.a = self.alu_swap(self.reg.a);         2 },
             0x38 => { self.reg.b = self.alu_srl(self.reg.b);          2 },
             0x39 => { self.reg.c = self.alu_srl(self.reg.c);          2 },
@@ -520,8 +569,9 @@ impl CPU {
             0x3C => { self.reg.h = self.alu_srl(self.reg.h);          2 },
             0x3D => { self.reg.l = self.alu_srl(self.reg.l);          2 },
             0x3E => { let a = self.reg.get_hl();
-                      let v = self.alu_srl(self.mem.read(a));
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_srl(v);
+                      self.write(a, v);                               4 },
             0x3F => { self.reg.a = self.alu_srl(self.reg.a);          2 },
             0x40 => { self.alu_bit(self.reg.b, 0);                    2 },
             0x41 => { self.alu_bit(self.reg.c, 0);                    2 },
@@ -530,7 +580,8 @@ impl CPU {
             0x44 => { self.alu_bit(self.reg.h, 0);                    2 },
             0x45 => { self.alu_bit(self.reg.l, 0);                    2 },
             0x46 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 0);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 0);                             3 },
             0x47 => { self.alu_bit(self.reg.a, 0);                    2 },
             0x48 => { self.alu_bit(self.reg.b, 1);                    2 },
             0x49 => { self.alu_bit(self.reg.c, 1);                    2 },
@@ -539,7 +590,8 @@ impl CPU {
             0x4C => { self.alu_bit(self.reg.h, 1);                    2 },
             0x4D => { self.alu_bit(self.reg.l, 1);                    2 },
             0x4E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 1);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 1);                             3 },
             0x4F => { self.alu_bit(self.reg.a, 1);                    2 },
             0x50 => { self.alu_bit(self.reg.b, 2);                    2 },
             0x51 => { self.alu_bit(self.reg.c, 2);                    2 },
@@ -548,7 +600,8 @@ impl CPU {
             0x54 => { self.alu_bit(self.reg.h, 2);                    2 },
             0x55 => { self.alu_bit(self.reg.l, 2);                    2 },
             0x56 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 2);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 2);                             3 },
             0x57 => { self.alu_bit(self.reg.a, 2);                    2 },
             0x58 => { self.alu_bit(self.reg.b, 3);                    2 },
             0x59 => { self.alu_bit(self.reg.c, 3);                    2 },
@@ -557,7 +610,8 @@ impl CPU {
             0x5C => { self.alu_bit(self.reg.h, 3);                    2 },
             0x5D => { self.alu_bit(self.reg.l, 3);                    2 },
             0x5E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 3);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 3);                             3 },
             0x5F => { self.alu_bit(self.reg.a, 3);                    2 },
             0x60 => { self.alu_bit(self.reg.b, 4);                    2 },
             0x61 => { self.alu_bit(self.reg.c, 4);                    2 },
@@ -566,7 +620,8 @@ impl CPU {
             0x64 => { self.alu_bit(self.reg.h, 4);                    2 },
             0x65 => { self.alu_bit(self.reg.l, 4);                    2 },
             0x66 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 4);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 4);                             3 },
             0x67 => { self.alu_bit(self.reg.a, 4);                    2 },
             0x68 => { self.alu_bit(self.reg.b, 5);                    2 },
             0x69 => { self.alu_bit(self.reg.c, 5);                    2 },
@@ -575,7 +630,8 @@ impl CPU {
             0x6C => { self.alu_bit(self.reg.h, 5);                    2 },
             0x6D => { self.alu_bit(self.reg.l, 5);                    2 },
             0x6E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 5);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 5);                             3 },
             0x6F => { self.alu_bit(self.reg.a, 5);                    2 },
             0x70 => { self.alu_bit(self.reg.b, 6);                    2 },
             0x71 => { self.alu_bit(self.reg.c, 6);                    2 },
@@ -584,7 +640,8 @@ impl CPU {
             0x74 => { self.alu_bit(self.reg.h, 6);                    2 },
             0x75 => { self.alu_bit(self.reg.l, 6);                    2 },
             0x76 => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 6);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 6);                             3 },
             0x77 => { self.alu_bit(self.reg.a, 6);                    2 },
             0x78 => { self.alu_bit(self.reg.b, 7);                    2 },
             0x79 => { self.alu_bit(self.reg.c, 7);                    2 },
@@ -593,7 +650,8 @@ impl CPU {
             0x7C => { self.alu_bit(self.reg.h, 7);                    2 },
             0x7D => { self.alu_bit(self.reg.l, 7);                    2 },
             0x7E => { let a = self.reg.get_hl();
-                      self.alu_bit(self.mem.read(a), 7);              3 },
+                      let v = self.read(a);
+                      self.alu_bit(v, 7);                             3 },
             0x7F => { self.alu_bit(self.reg.a, 7);                    2 },
             0x80 => { self.reg.b = self.alu_res(self.reg.b, 0);       2 },
             0x81 => { self.reg.c = self.alu_res(self.reg.c, 0);       2 },
@@ -602,8 +660,9 @@ impl CPU {
             0x84 => { self.reg.h = self.alu_res(self.reg.h, 0);       2 },
             0x85 => { self.reg.l = self.alu_res(self.reg.l, 0);       2 },
             0x86 => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 0);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 0);
+                      self.write(a, v);                               4 },
             0x87 => { self.reg.a = self.alu_res(self.reg.a, 0);       2 },
             0x88 => { self.reg.b = self.alu_res(self.reg.b, 1);       2 },
             0x89 => { self.reg.c = self.alu_res(self.reg.c, 1);       2 },
@@ -612,8 +671,9 @@ impl CPU {
             0x8C => { self.reg.h = self.alu_res(self.reg.h, 1);       2 },
             0x8D => { self.reg.l = self.alu_res(self.reg.l, 1);       2 },
             0x8E => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 1);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 1);
+                      self.write(a, v);                               4 },
             0x8F => { self.reg.a = self.alu_res(self.reg.a, 1);       2 },
             0x90 => { self.reg.b = self.alu_res(self.reg.b, 2);       2 },
             0x91 => { self.reg.c = self.alu_res(self.reg.c, 2);       2 },
@@ -622,8 +682,9 @@ impl CPU {
             0x94 => { self.reg.h = self.alu_res(self.reg.h, 2);       2 },
             0x95 => { self.reg.l = self.alu_res(self.reg.l, 2);       2 },
             0x96 => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 2);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 2);
+                      self.write(a, v);                               4 },
             0x97 => { self.reg.a = self.alu_res(self.reg.a, 2);       2 },
             0x98 => { self.reg.b = self.alu_res(self.reg.b, 3);       2 },
             0x99 => { self.reg.c = self.alu_res(self.reg.c, 3);       2 },
@@ -632,8 +693,9 @@ impl CPU {
             0x9C => { self.reg.h = self.alu_res(self.reg.h, 3);       2 },
             0x9D => { self.reg.l = self.alu_res(self.reg.l, 3);       2 },
             0x9E => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 3);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 3);
+                      self.write(a, v);                               4 },
             0x9F => { self.reg.a = self.alu_res(self.reg.a, 3);       2 },
             0xA0 => { self.reg.b = self.alu_res(self.reg.b, 4);       2 },
             0xA1 => { self.reg.c = self.alu_res(self.reg.c, 4);       2 },
@@ -642,8 +704,9 @@ impl CPU {
             0xA4 => { self.reg.h = self.alu_res(self.reg.h, 4);       2 },
             0xA5 => { self.reg.l = self.alu_res(self.reg.l, 4);       2 },
             0xA6 => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 4);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 4);
+                      self.write(a, v);                               4 },
             0xA7 => { self.reg.a = self.alu_res(self.reg.a, 4);       2 },
             0xA8 => { self.reg.b = self.alu_res(self.reg.b, 5);       2 },
             0xA9 => { self.reg.c = self.alu_res(self.reg.c, 5);       2 },
@@ -652,8 +715,9 @@ impl CPU {
             0xAC => { self.reg.h = self.alu_res(self.reg.h, 5);       2 },
             0xAD => { self.reg.l = self.alu_res(self.reg.l, 5);       2 },
             0xAE => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 5);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 5);
+                      self.write(a, v);                               4 },
             0xAF => { self.reg.a = self.alu_res(self.reg.a, 5);       2 },
             0xB0 => { self.reg.b = self.alu_res(self.reg.b, 6);       2 },
             0xB1 => { self.reg.c = self.alu_res(self.reg.c, 6);       2 },
@@ -662,8 +726,9 @@ impl CPU {
             0xB4 => { self.reg.h = self.alu_res(self.reg.h, 6);       2 },
             0xB5 => { self.reg.l = self.alu_res(self.reg.l, 6);       2 },
             0xB6 => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 6);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 6);
+                      self.write(a, v);                               4 },
             0xB7 => { self.reg.a = self.alu_res(self.reg.a, 6);       2 },
             0xB8 => { self.reg.b = self.alu_res(self.reg.b, 7);       2 },
             0xB9 => { self.reg.c = self.alu_res(self.reg.c, 7);       2 },
@@ -672,8 +737,9 @@ impl CPU {
             0xBC => { self.reg.h = self.alu_res(self.reg.h, 7);       2 },
             0xBD => { self.reg.l = self.alu_res(self.reg.l, 7);       2 },
             0xBE => { let a = self.reg.get_hl();
-                      let v = self.alu_res(self.mem.read(a), 7);
-                      self.mem.write(a, v);                           4 },
+                      let v = self.read(a);
+                      let v = self.alu_res(v, 7);
+                      self.write(a, v);                               4 },
             0xBF => { self.reg.a = self.alu_res(self.reg.a, 7);       2 },
             0xC0 => { self.reg.b = self.alu_set(self.reg.b, 0);       2 },
             0xC1 => { self.reg.c = self.alu_set(self.reg.c, 0);       2 },
@@ -682,9 +748,9 @@ impl CPU {
             0xC4 => { self.reg.h = self.alu_set(self.reg.h, 0);       2 },
             0xC5 => { self.reg.l = self.alu_set(self.reg.l, 0);       2 },
             0xC6 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 0);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xC7 => { self.reg.a = self.alu_set(self.reg.a, 0);       2 },
             0xC8 => { self.reg.b = self.alu_set(self.reg.b, 1);       2 },
             0xC9 => { self.reg.c = self.alu_set(self.reg.c, 1);       2 },
@@ -693,9 +759,9 @@ impl CPU {
             0xCC => { self.reg.h = self.alu_set(self.reg.h, 1);       2 },
             0xCD => { self.reg.l = self.alu_set(self.reg.l, 1);       2 },
             0xCE => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 1);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xCF => { self.reg.a = self.alu_set(self.reg.a, 1);       2 },
             0xD0 => { self.reg.b = self.alu_set(self.reg.b, 2);       2 },
             0xD1 => { self.reg.c = self.alu_set(self.reg.c, 2);       2 },
@@ -704,9 +770,9 @@ impl CPU {
             0xD4 => { self.reg.h = self.alu_set(self.reg.h, 2);       2 },
             0xD5 => { self.reg.l = self.alu_set(self.reg.l, 2);       2 },
             0xD6 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 2);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xD7 => { self.reg.a = self.alu_set(self.reg.a, 2);       2 },
             0xD8 => { self.reg.b = self.alu_set(self.reg.b, 3);       2 },
             0xD9 => { self.reg.c = self.alu_set(self.reg.c, 3);       2 },
@@ -715,9 +781,9 @@ impl CPU {
             0xDC => { self.reg.h = self.alu_set(self.reg.h, 3);       2 },
             0xDD => { self.reg.l = self.alu_set(self.reg.l, 3);       2 },
             0xDE => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 3);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xDF => { self.reg.a = self.alu_set(self.reg.a, 3);       2 },
             0xE0 => { self.reg.b = self.alu_set(self.reg.b, 4);       2 },
             0xE1 => { self.reg.c = self.alu_set(self.reg.c, 4);       2 },
@@ -726,9 +792,9 @@ impl CPU {
             0xE4 => { self.reg.h = self.alu_set(self.reg.h, 4);       2 },
             0xE5 => { self.reg.l = self.alu_set(self.reg.l, 4);       2 },
             0xE6 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 4);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xE7 => { self.reg.a = self.alu_set(self.reg.a, 4);       2 },
             0xE8 => { self.reg.b = self.alu_set(self.reg.b, 5);       2 },
             0xE9 => { self.reg.c = self.alu_set(self.reg.c, 5);       2 },
@@ -737,9 +803,9 @@ impl CPU {
             0xEC => { self.reg.h = self.alu_set(self.reg.h, 5);       2 },
             0xED => { self.reg.l = self.alu_set(self.reg.l, 5);       2 },
             0xEE => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 5);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xEF => { self.reg.a = self.alu_set(self.reg.a, 5);       2 },
             0xF0 => { self.reg.b = self.alu_set(self.reg.b, 6);       2 },
             0xF1 => { self.reg.c = self.alu_set(self.reg.c, 6);       2 },
@@ -748,9 +814,9 @@ impl CPU {
             0xF4 => { self.reg.h = self.alu_set(self.reg.h, 6);       2 },
             0xF5 => { self.reg.l = self.alu_set(self.reg.l, 6);       2 },
             0xF6 => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 6);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xF7 => { self.reg.a = self.alu_set(self.reg.a, 6);       2 },
             0xF8 => { self.reg.b = self.alu_set(self.reg.b, 7);       2 },
             0xF9 => { self.reg.c = self.alu_set(self.reg.c, 7);       2 },
@@ -759,9 +825,9 @@ impl CPU {
             0xFC => { self.reg.h = self.alu_set(self.reg.h, 7);       2 },
             0xFD => { self.reg.l = self.alu_set(self.reg.l, 7);       2 },
             0xFE => { let a = self.reg.get_hl();
-                      let mut v = self.mem.read(a);
+                      let mut v = self.read(a);
                       v = self.alu_set(v, 7);
-                      self.mem.write(a, v);                           4 },
+                      self.write(a, v);                               4 },
             0xFF => { self.reg.a = self.alu_set(self.reg.a, 7);       2 },
         }
     }

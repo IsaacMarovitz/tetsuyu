@@ -212,7 +212,6 @@ fn main() {
 
             let cycles = cpu.cycle();
             step_cycles += cycles;
-            cpu.mem.cycle(cycles);
         }
     });
 
