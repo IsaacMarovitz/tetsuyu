@@ -35,6 +35,7 @@ pub struct MMU {
 
     double_speed: bool,
     key1_armed: bool,
+    rp: u8,
 }
 
 bitflags! {
@@ -99,6 +100,7 @@ impl MMU {
 
             double_speed: false,
             key1_armed: false,
+            rp: 0,
         }
     }
 
@@ -229,9 +231,9 @@ impl Memory for MMU {
             0x8000..=0x9FFF => self.ppu.read(a),
             0xA000..=0xBFFF => self.mbc.read(a),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000],
-            0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank],
+            0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank.max(1)],
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
-            0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
+            0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank.max(1)],
             0xFE00..=0xFE9F => self.ppu.read(a),
             0xFF4D => {
                 0x7E | if self.double_speed { 0x80 } else { 0x00 }
@@ -244,15 +246,20 @@ impl Memory for MMU {
             0xFF01..=0xFF02 => self.serial.read(a),
             0xFF04..=0xFF07 => self.timer.read(a),
             0xFF10..=0xFF3F => self.apu.read(a),
-            0xFF0F => self.intf.bits(),
+            0xFF0F => self.intf.bits() | 0xE0,
             0xFF55 => self.hdma_len,
-            // TODO: RP
-            0xFF56 => 0x00,
+            0xFF56 => {
+                if self.mode == GBMode::DMG {
+                    0xFF
+                } else {
+                    self.rp | 0x3E
+                }
+            }
             0xFF51..=0xFF6F => self.ppu.read(a),
             0xFF70 => 0xF8 | self.wram_bank as u8,
             0xFEA0..=0xFEFF => 0xFF,
             0xFFFF => self.inte.bits(),
-            _ => panic!("Read to unsupported address ({:#06x})!", a),
+            _ => 0xFF
         }
     }
 
@@ -262,9 +269,9 @@ impl Memory for MMU {
             0x8000..=0x9FFF => self.ppu.write(a, v),
             0xA000..=0xBFFF => self.mbc.write(a, v),
             0xC000..=0xCFFF => self.wram[a as usize - 0xC000] = v,
-            0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank] = v,
+            0xD000..=0xDFFF => self.wram[a as usize - 0xD000 + 0x1000 * self.wram_bank.max(1)] = v,
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
-            0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
+            0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank.max(1)] = v,
             0xFE00..=0xFE9F => self.ppu.write(a, v),
             0xFF46 => self.start_oam_dma(v),
             0xFF4D => self.key1_armed = (v & 0x01) != 0,
@@ -286,19 +293,17 @@ impl Memory for MMU {
             0xFF53 => self.hdma_dst = 0x8000 | (self.hdma_dst & 0x00FF) | (((v as u16 & 0x1F) << 8)),
             0xFF54 => self.hdma_dst = (self.hdma_dst & 0xFF00) | (v as u16 & 0xF0),
             0xFF55 => self.start_hdma(v),
-            // TODO: RP
-            0xFF56 => {}
-            0xFF51..=0xFF6F => self.ppu.write(a, v),
-            0xFF70 => {
-                self.wram_bank = match v & 0x07 {
-                    0 => 1,
-                    n => n as usize,
+            0xFF56 => {
+                if self.mode != GBMode::DMG {
+                    self.rp = v & 0xC1;
                 }
             }
+            0xFF51..=0xFF6F => self.ppu.write(a, v),
+            0xFF70 => self.wram_bank = (v & 0x07) as usize,
             0xFEA0..=0xFEFF => {}
             0xFF7F => {}
-            0xFFFF => self.inte = Interrupts::from_bits_truncate(v),
-            _ => panic!("Write to unsupported address ({:#06x})!", a),
+            0xFFFF => self.inte = Interrupts::from_bits_retain(v),
+            _ => {}
         }
     }
 }

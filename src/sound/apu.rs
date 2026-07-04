@@ -365,7 +365,7 @@ impl Memory for APU {
                 self.audio_enabled = (v >> 7) == 0x01;
             }
             0xFF30..=0xFF3F => self.ch3.write(a, v),
-            _ => panic!("Write to unsupported APU address ({:#06x})!", a),
+            _ => {}
         }
 
         if set_apu_control {

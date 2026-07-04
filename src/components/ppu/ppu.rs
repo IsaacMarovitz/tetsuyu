@@ -672,7 +672,7 @@ impl Memory for PPU {
                 }
             }
             0xFF40 => self.lcdc.bits(),
-            0xFF41 => self.lcds.bits() | self.ppu_mode as u8,
+            0xFF41 => self.lcds.bits() | self.ppu_mode as u8 | 0x80,
             0xFF42 => self.scy,
             0xFF43 => self.scx,
             0xFF44 => self.ly,
@@ -683,7 +683,7 @@ impl Memory for PPU {
             0xFF4A => self.wy,
             0xFF4B => self.wx,
             0xFF4F => 0xFE | self.vram_bank as u8,
-            0xFF68 => self.bcps.read(),
+            0xFF68 => self.bcps.read() | 0x40,
             0xFF69 => {
                 if self.ppu_mode != PPUMode::Draw {
                     self.bcpd[self.bcps.address as usize]
@@ -691,7 +691,7 @@ impl Memory for PPU {
                     0xFF
                 }
             }
-            0xFF6A => self.ocps.read(),
+            0xFF6A => self.ocps.read() | 0x40,
             0xFF6B => {
                 if self.ppu_mode != PPUMode::Draw {
                     self.ocpd[self.ocps.address as usize]
@@ -699,8 +699,8 @@ impl Memory for PPU {
                     0xFF
                 }
             }
-            0xFF6C => self.opri as u8,
-            _ => panic!("Read to unsupported PPU address ({:#06x})!", a),
+            0xFF6C => 0xFE | self.opri as u8,
+            _ => 0xFF
         }
     }
 
@@ -775,7 +775,7 @@ impl Memory for PPU {
                 }
             }
             0xFF6C => self.opri = v != 0,
-            _ => panic!("Write to unsupported PPU address ({:#06x})!", a),
+            _ => {}
         }
     }
 }
