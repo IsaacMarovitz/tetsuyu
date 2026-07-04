@@ -14,6 +14,7 @@ pub struct CPU {
     ime: bool,
     ime_ask: bool,
     ticks: u32,
+    halt_bug: bool,
 }
 
 unsafe impl Send for CPU {}
@@ -59,6 +60,7 @@ impl CPU {
             ime: false,
             ime_ask: false,
             ticks: 0,
+            halt_bug: false,
         }
     }
 
@@ -136,7 +138,11 @@ impl CPU {
 
     pub fn read_byte(&mut self) -> u8 {
         let byte = self.read(self.reg.pc);
-        self.reg.pc += 1;
+        if self.halt_bug {
+            self.halt_bug = false;
+        } else {
+            self.reg.pc += 1;
+        }
         byte
     }
 
@@ -320,7 +326,9 @@ impl CPU {
                       self.write(a, self.reg.h);                      2 },
             0x75 => { let a = self.reg.get_hl();
                       self.write(a, self.reg.l);                      2 },
-            0x76 => { self.halted = true;                             1 },
+            0x76 => { let pending = self.mem.read(0xFF0F) & self.mem.read(0xFFFF) & 0x1F != 0;
+                      if !self.ime && pending { self.halt_bug = true; }
+                      else { self.halted = true; }                    1 },
             0x77 => { let a = self.reg.get_hl();
                       self.write(a, self.reg.a);                      2 },
             0x78 => { self.reg.a = self.reg.b;                        1 },
