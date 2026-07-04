@@ -325,6 +325,16 @@ impl Memory for APU {
                 }
             }
             0xFF1A..=0xFF1E => {
+                // DMG: retriggering CH3 while it is still active corrupts wave
+                // RAM. Must run before the trigger resets the sample index.
+                if a == 0xFF1E
+                    && (v & 0x80) != 0
+                    && self.mode == GBMode::DMG
+                    && self.is_ch_3_active
+                {
+                    self.ch3.corrupt_wave_ram();
+                }
+
                 self.ch3.write(a, v);
 
                 // Handle trigger

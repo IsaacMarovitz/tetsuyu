@@ -76,7 +76,7 @@ impl MMU {
             mbc,
             apu: APU::new(config.apu_config, config.mode),
             ppu: PPU::new(config.clone(), framebuffer, rom_is_cgb),
-            serial: Serial::new(config.print_serial),
+            serial: Serial::new(config.print_serial, config.mode),
             joypad: Joypad::new(),
             timer: Timer::new(),
             wram: [0; 0x8000],
@@ -285,8 +285,16 @@ impl Memory for MMU {
             0xFE00..=0xFE9F => self.ppu.write(a, v),
             0xFF46 => self.start_oam_dma(v),
             0xFF4D => self.key1_armed = (v & 0x01) != 0,
-            0xFF40..=0xFF4F => self.ppu.write(a, v),
-            0xFF68..=0xFF6B => self.ppu.write(a, v),
+            0xFF40..=0xFF4F => {
+                if !(self.mode == GBMode::DMG && a == 0xFF4F) {
+                    self.ppu.write(a, v);
+                }
+            }
+            0xFF68..=0xFF6B => {
+                if self.mode != GBMode::DMG {
+                    self.ppu.write(a, v);
+                }
+            }
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,
             0xFF00 => self.joypad.write(a, v),
             0xFF01..=0xFF02 => self.serial.write(a, v),
@@ -309,7 +317,11 @@ impl Memory for MMU {
                 }
             }
             0xFF51..=0xFF6F => self.ppu.write(a, v),
-            0xFF70 => self.wram_bank = (v & 0x07) as usize,
+            0xFF70 => {
+                if self.mode != GBMode::DMG {
+                    self.wram_bank = (v & 0x07) as usize;
+                }
+            }
             0xFEA0..=0xFEFF => {}
             0xFF7F => {}
             0xFFFF => self.inte = Interrupts::from_bits_retain(v),

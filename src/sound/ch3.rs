@@ -67,6 +67,22 @@ impl CH3 {
         self.length_counter.reload_if_zero(256);
     }
 
+    pub fn corrupt_wave_ram(&mut self) {
+        // DMG only: triggering CH3 while it is about to read a wave-RAM byte
+        // rewrites the low bytes. sample_index counts nibbles, so the byte
+        // it is about to read is (sample_index / 2), advanced by one because
+        // the trigger lands just before the next read.
+        let byte = ((self.sample_index as usize + 1) & 0x1F) / 2;
+        if byte < 4 {
+            self.wave_ram[0] = self.wave_ram[byte];
+        } else {
+            let base = byte & 0x0C;
+            for i in 0..4 {
+                self.wave_ram[i] = self.wave_ram[base + i];
+            }
+        }
+    }
+
     pub fn get_volume_shift(&self) -> u8 {
         match self.output_level {
             OutputLevel::MAX => 0,

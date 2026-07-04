@@ -652,6 +652,36 @@ impl PPU {
     pub fn write_oam(&mut self, index: u16, v: u8) {
         self.oam[index as usize] = v;
     }
+
+    pub fn oam_corrupt_inc(&mut self) {
+        // DMG/SGB OAM corruption: an address in FE00-FEFF held by a 16-bit
+        // inc/dec during mode 2 glitches the row the PPU is scanning. Rows 0-1
+        // are immune. OAM is a 16-bit-word bus; corruption acts on words.
+        if self.mode != GBMode::DMG || self.ppu_mode != PPUMode::OAMScan {
+            return;
+        }
+        let row = (self.cycle_count / 4) as usize; // one row scanned per M-cycle
+        if row < 2 || row >= 20 {
+            return;
+        }
+
+        let word = |o: &[u8; 0xA0], r: usize, w: usize| -> u16 {
+            let i = r * 8 + w * 2;
+            (o[i] as u16) | ((o[i + 1] as u16) << 8)
+        };
+        let a = word(&self.oam, row, 0);
+        let b = word(&self.oam, row - 1, 0);
+        let c = word(&self.oam, row - 1, 2);
+        let new0 = ((a ^ c) & (b ^ c)) ^ c;
+
+        let base = row * 8;
+        self.oam[base] = new0 as u8;
+        self.oam[base + 1] = (new0 >> 8) as u8;
+        for w in 1..4 {
+            self.oam[base + w * 2] = self.oam[(row - 1) * 8 + w * 2];
+            self.oam[base + w * 2 + 1] = self.oam[(row - 1) * 8 + w * 2 + 1];
+        }
+    }
 }
 
 impl Memory for PPU {

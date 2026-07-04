@@ -7,15 +7,17 @@ pub struct Serial {
     sb: u8,
     sc: u8,
     print: bool,
+    mode: GBMode
 }
 
 impl Serial {
-    pub fn new(print: bool) -> Self {
+    pub fn new(print: bool, mode: GBMode) -> Self {
         Self {
             interrupts: Interrupts::empty(),
             sb: 0,
             sc: 0,
             print,
+            mode
         }
     }
 }
@@ -24,7 +26,10 @@ impl Memory for Serial {
     fn read(&self, a: u16) -> u8 {
         match a {
             0xFF01 => self.sb,
-            0xFF02 => 0x7C | self.sc,
+            0xFF02 => {
+                let mask = if self.mode == GBMode::DMG { 0x7E } else { 0x7C };
+                mask | self.sc
+            }
             _ => panic!("Read to unsupported Serial address ({:#06x})!", a),
         }
     }
