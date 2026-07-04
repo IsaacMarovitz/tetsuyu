@@ -78,11 +78,7 @@ impl Memory for CH4 {
             // NR41: Length Timer
             0xFF20 => 0xFF,
             // NR42: Volume & Envelope
-            0xFF21 => {
-                (self.volume_envelope.volume as u8 & 0b0000_1111) << 4
-                    | (self.volume_envelope.positive as u8) << 3
-                    | (self.volume_envelope.period as u8 & 0b0000_0111)
-            }
+            0xFF21 => self.volume_envelope.read(),
             // NR43: Frequency & Randomness
             0xFF22 => {
                 ((self.clock_shift & 0b0000_1111) << 4)

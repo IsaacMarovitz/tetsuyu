@@ -51,6 +51,10 @@ impl VolumeEnvelope {
         self.enabled = true;
     }
 
+    pub fn read(&self) -> u8 {
+        ((self.initial_volume as u8) << 4) | ((self.positive as u8) << 3) | (self.period as u8 & 0x07)
+    }
+
     pub fn write(&mut self, v: u8) {
         // Zombie mode: a non-trigger NRx2 write adjusts the live volume
         // based on the OLD envelope state before the new config is stored.

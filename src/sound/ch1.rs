@@ -158,11 +158,7 @@ impl Memory for CH1 {
             // NR11: Length Timer & Duty Cycle
             0xFF11 => (self.duty_cycle.bits()) << 6 | 0x3F,
             // NR12: Volume & Envelope
-            0xFF12 => {
-                (self.volume_envelope.volume as u8 & 0b0000_1111) << 4
-                    | (self.volume_envelope.positive as u8) << 3
-                    | (self.volume_envelope.period as u8 & 0b0000_0111)
-            }
+            0xFF12 => self.volume_envelope.read(),
             // NR13: Period Low
             0xFF13 => 0xFF,
             // NR14: Period High & Control
