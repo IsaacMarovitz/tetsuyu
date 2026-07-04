@@ -584,10 +584,6 @@ impl PPU {
         }
     }
 
-    pub fn clear_vram(&mut self) {
-        self.vram = [0; 0x4000];
-    }
-
     pub fn disable_boot_rom(&mut self) {
         self.boot_rom_enabled = false;
     }
@@ -644,8 +640,6 @@ impl Memory for PPU {
             // TODO: Speed Switch
             0xFF4D => 0x7E,
             0xFF4F => 0xFE | self.vram_bank as u8,
-            // TODO: DMA
-            0xFF51..=0xFF55 => 0x00,
             0xFF68 => self.bcps.read(),
             0xFF69 => {
                 if self.ppu_mode != PPUMode::Draw {
@@ -717,8 +711,6 @@ impl Memory for PPU {
             // TODO: Handle PPU speed switching
             0xFF4D => {}
             0xFF4F => self.vram_bank = (v & 0x01) as usize,
-            // TODO: DMA
-            0xFF51..=0xFF55 => {}
             0xFF68 => self.bcps.write(v),
             0xFF69 => {
                 if self.ppu_mode != PPUMode::Draw {

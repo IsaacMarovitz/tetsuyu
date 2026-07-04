@@ -27,6 +27,11 @@ pub struct MMU {
     oam_dma_progress: u16,
     oam_dma_timer: u32,
     oam_dma_active: bool,
+
+    hdma_src: u16,
+    hdma_dst: u16,
+    hdma_len: u8,
+    hdma_hblank: bool,
 }
 
 bitflags! {
@@ -83,6 +88,11 @@ impl MMU {
             oam_dma_progress: 0,
             oam_dma_timer: 0,
             oam_dma_active: false,
+
+            hdma_src: 0,
+            hdma_dst: 0,
+            hdma_len: 0,
+            hdma_hblank: false,
         }
     }
 
@@ -130,6 +140,40 @@ impl MMU {
             self.oam_dma_active = false;
         }
     }
+
+    fn start_hdma(&mut self, v: u8) {
+        // Writing bit 7 = 0 while an HBlank transfer is active cancels it.
+        if self.hdma_len != 0xFF && (v & 0x80) == 0 {
+            self.hdma_len = 0xFF;
+            return;
+        }
+
+        self.hdma_len = v & 0x7F;
+        self.hdma_hblank = (v & 0x80) != 0;
+
+        if !self.hdma_hblank {
+            // GPDMA: copy everything at once.
+            let blocks = (self.hdma_len as u16) + 1;
+            for _ in 0..blocks {
+                self.hdma_copy_block();
+            }
+            self.hdma_len = 0xFF;
+        }
+    }
+
+    fn hdma_copy_block(&mut self) {
+        for _ in 0..0x10 {
+            let byte = self.read(self.hdma_src);
+            self.ppu.write(self.hdma_dst, byte);
+            self.hdma_src = self.hdma_src.wrapping_add(1);
+            self.hdma_dst = self.hdma_dst.wrapping_add(1);
+        }
+        if self.hdma_len != 0 {
+            self.hdma_len -= 1;
+        } else {
+            self.hdma_len = 0xFF;
+        }
+    }
 }
 
 impl Memory for MMU {
@@ -170,6 +214,7 @@ impl Memory for MMU {
             0xFF04..=0xFF07 => self.timer.read(a),
             0xFF10..=0xFF3F => self.apu.read(a),
             0xFF0F => self.intf.bits(),
+            0xFF55 => self.hdma_len,
             // TODO: RP
             0xFF56 => 0x00,
             0xFF51..=0xFF6F => self.ppu.read(a),
@@ -201,9 +246,13 @@ impl Memory for MMU {
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
             0xFF50 => {
                 self.boot_rom_enabled = false;
-                self.ppu.clear_vram();
                 self.ppu.disable_boot_rom();
             }
+            0xFF51 => self.hdma_src = (self.hdma_src & 0x00FF) | ((v as u16) << 8),
+            0xFF52 => self.hdma_src = (self.hdma_src & 0xFF00) | (v as u16 & 0xF0),
+            0xFF53 => self.hdma_dst = 0x8000 | (self.hdma_dst & 0x00FF) | (((v as u16 & 0x1F) << 8)),
+            0xFF54 => self.hdma_dst = (self.hdma_dst & 0xFF00) | (v as u16 & 0xF0),
+            0xFF55 => self.start_hdma(v),
             // TODO: RP
             0xFF56 => {}
             0xFF51..=0xFF6F => self.ppu.write(a, v),

@@ -49,8 +49,7 @@ impl CPU {
             boot_rom[0..=0x08FF].copy_from_slice(boot_rom_vec.as_slice());
         }
 
-        let rom_is_cgb =
-            header.cgb_flag == CGBFlag::CGBOnly || header.cgb_flag == CGBFlag::BackwardsCompatible;
+        let rom_is_cgb = matches!(header.cgb_flag, CGBFlag::CGBOnly | CGBFlag::BackwardsCompatible);
 
         Self {
             reg: Registers::new(config.mode),
