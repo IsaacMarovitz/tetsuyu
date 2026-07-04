@@ -32,6 +32,9 @@ pub struct MMU {
     hdma_dst: u16,
     hdma_len: u8,
     hdma_hblank: bool,
+
+    double_speed: bool,
+    key1_armed: bool,
 }
 
 bitflags! {
@@ -93,6 +96,9 @@ impl MMU {
             hdma_dst: 0,
             hdma_len: 0,
             hdma_hblank: false,
+
+            double_speed: false,
+            key1_armed: false,
         }
     }
 
@@ -106,7 +112,7 @@ impl MMU {
         self.intf |= self.joypad.interrupts;
         self.joypad.interrupts = Interrupts::empty();
 
-        self.ppu.cycle(cycles);
+        self.ppu.cycle(cycles >> self.double_speed as u32);
         self.intf |= self.ppu.interrupts;
         self.ppu.interrupts = Interrupts::empty();
 
@@ -174,6 +180,13 @@ impl MMU {
             self.hdma_len = 0xFF;
         }
     }
+
+    pub fn speed_switch(&mut self) {
+        if self.key1_armed {
+            self.double_speed = !self.double_speed;
+            self.key1_armed = false;
+        }
+    }
 }
 
 impl Memory for MMU {
@@ -206,6 +219,10 @@ impl Memory for MMU {
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFE00..=0xFE9F => self.ppu.read(a),
+            0xFF4D => {
+                0x7E | if self.double_speed { 0x80 } else { 0x00 }
+                    | if self.key1_armed { 0x01 } else { 0x00 }
+            }
             0xFF40..=0xFF4F => self.ppu.read(a),
             0xFF68..=0xFF6B => self.ppu.read(a),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80],
@@ -236,6 +253,7 @@ impl Memory for MMU {
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFE00..=0xFE9F => self.ppu.write(a, v),
             0xFF46 => self.start_oam_dma(v),
+            0xFF4D => self.key1_armed = (v & 0x01) != 0,
             0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF68..=0xFF6B => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,

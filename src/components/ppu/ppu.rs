@@ -641,8 +641,6 @@ impl Memory for PPU {
             0xFF49 => self.obp1,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
-            // TODO: Speed Switch
-            0xFF4D => 0x7E,
             0xFF4F => 0xFE | self.vram_bank as u8,
             0xFF68 => self.bcps.read(),
             0xFF69 => {
@@ -712,8 +710,6 @@ impl Memory for PPU {
             0xFF4A => self.wy = v,
             0xFF4B => self.wx = v,
             0xFF4C => {}
-            // TODO: Handle PPU speed switching
-            0xFF4D => {}
             0xFF4F => self.vram_bank = (v & 0x01) as usize,
             0xFF68 => self.bcps.write(v),
             0xFF69 => {
