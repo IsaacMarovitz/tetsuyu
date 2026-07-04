@@ -15,7 +15,6 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{process, thread};
-use wgpu::SurfaceError;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -65,24 +64,17 @@ impl ApplicationHandler for App {
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        _event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
         let context = self.context.as_mut().unwrap();
-        let size = context.size;
 
         match event {
             WindowEvent::RedrawRequested if window_id == context.window().id() => {
                 let frame_data = self.framebuffer_reader.get_latest_frame();
                 context.update(frame_data);
-
-                match context.render() {
-                    Ok(_) => {}
-                    Err(SurfaceError::Lost) => context.resize(size),
-                    Err(SurfaceError::OutOfMemory) => event_loop.exit(),
-                    Err(e) => println!("{:?}", e),
-                }
+                context.render();
             }
             WindowEvent::Resized(physical_size) => {
                 context.resize(physical_size);

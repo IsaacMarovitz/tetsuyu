@@ -3,7 +3,7 @@ use librashader::presets::{ShaderFeatures, ShaderPreset};
 use librashader::runtime::Viewport;
 use librashader::runtime::wgpu::FilterChain;
 use std::sync::Arc;
-use wgpu::{MemoryHints, PresentMode, Trace};
+use wgpu::{CurrentSurfaceTexture, MemoryHints, PresentMode, SurfaceColorSpace, Trace};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -32,6 +32,7 @@ impl Context {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await
             .unwrap();
@@ -54,6 +55,7 @@ impl Context {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
             format: surface_format,
+            color_space: SurfaceColorSpace::Srgb,
             width: size.width,
             height: size.height,
             present_mode: if surface_caps.present_modes.contains(&PresentMode::Mailbox) {
@@ -138,8 +140,19 @@ impl Context {
         );
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
+    pub fn render(&mut self) {
+        let output = match self.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(frame) => frame,
+            CurrentSurfaceTexture::Outdated
+            | CurrentSurfaceTexture::Lost
+            | CurrentSurfaceTexture::Suboptimal(_) => {
+                self.surface.configure(&self.device, &self.config);
+                return;
+            }
+            CurrentSurfaceTexture::Timeout
+            | CurrentSurfaceTexture::Occluded
+            | CurrentSurfaceTexture::Validation => return,
+        };
 
         let filter_output = Arc::new(self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("filteroutput"),
@@ -190,9 +203,9 @@ impl Context {
         );
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
+        self.window.pre_present_notify();
+        self.queue.present(output);
 
         self.frame_count += 1;
-        Ok(())
     }
 }
