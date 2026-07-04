@@ -45,7 +45,8 @@ pub struct PPU {
     bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
     framebuffer: FramebufferWriter,
-    pub entered_hblank: bool
+    pub entered_hblank: bool,
+    stat_line: bool,
 }
 
 impl PPU {
@@ -86,6 +87,7 @@ impl PPU {
             interrupts: Interrupts::empty(),
             framebuffer,
             entered_hblank: false,
+            stat_line: false,
         }
     }
 
@@ -102,9 +104,14 @@ impl PPU {
 
                 if self.cycle_count >= 80 {
                     self.ppu_mode = PPUMode::Draw;
-                    self.mode3_len = 172 + (self.scx % 8) as u32; // + sprite penalty later
+                    self.mode3_len = 172 + (self.scx % 8) as u32;
+                    if self.window_visible() {
+                        self.mode3_len += 6;
+                    }
+                    self.mode3_len += self.mode3_sprite_penalty();
                     self.draw_start = 92 + (self.scx % 8) as u32; // 80 (mode 2) + 12 warmup + fine scroll
                     self.draw_x = 0;
+                    self.update_stat_line();
                 }
             }
             PPUMode::Draw => {
@@ -121,9 +128,7 @@ impl PPU {
                 if self.cycle_count >= 80 + self.mode3_len {
                     self.ppu_mode = PPUMode::HBlank;
                     self.entered_hblank = true;
-                    if self.lcds.contains(LCDS::MODE_0_SELECT) {
-                        self.interrupts |= Interrupts::LCD;
-                    }
+                    self.update_stat_line();
 
                     while self.draw_x < SCREEN_W as u8 {
                         self.draw_bg_pixel(self.draw_x as usize);
@@ -141,21 +146,15 @@ impl PPU {
                     self.inc_ly();
                     self.check_lyc();
 
-                    return if self.ly > 143 {
+                    if self.ly > 143 {
                         self.ppu_mode = PPUMode::VBlank;
                         self.interrupts |= Interrupts::V_BLANK;
-                        if self.lcds.contains(LCDS::MODE_1_SELECT) {
-                            self.interrupts |= Interrupts::LCD;
-                        }
-                        // println!("[PPU] Switching to VBlank!");
+                        self.update_stat_line();
                         self.framebuffer.submit_frame();
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
-                        if self.lcds.contains(LCDS::MODE_2_SELECT) {
-                            self.interrupts |= Interrupts::LCD;
-                        }
-                        // println!("[PPU] Switching to OAMScan!");
-                    };
+                        self.update_stat_line();
+                    }
                 }
             }
             PPUMode::VBlank => {
@@ -167,10 +166,7 @@ impl PPU {
                         self.vblanked_lines = 0;
                         self.reset_ly();
                         self.ppu_mode = PPUMode::OAMScan;
-                        if self.lcds.contains(LCDS::MODE_2_SELECT) {
-                            self.interrupts |= Interrupts::LCD;
-                        }
-                        // println!("[PPU] Switching to OAMScan!");
+                        self.update_stat_line();
                     } else {
                         self.inc_ly()
                     }
@@ -183,14 +179,56 @@ impl PPU {
 
     fn check_lyc(&mut self) {
         if self.ly == self.lc {
-            if self.lcds.contains(LCDS::LYC_SELECT) && !self.lcds.contains(LCDS::LYC_EQUALS) {
-                self.interrupts |= Interrupts::LCD;
-            }
-
             self.lcds |= LCDS::LYC_EQUALS;
         } else {
             self.lcds &= !LCDS::LYC_EQUALS;
         }
+
+        self.update_stat_line();
+    }
+
+    fn update_stat_line(&mut self) {
+        // All enabled STAT sources feed one internal line; the LCD interrupt
+        // fires only on its rising edge (STAT blocking).
+        let line = (self.lcds.contains(LCDS::LYC_SELECT)
+            && self.lcds.contains(LCDS::LYC_EQUALS))
+            || (self.lcds.contains(LCDS::MODE_0_SELECT) && self.ppu_mode == PPUMode::HBlank)
+            || (self.lcds.contains(LCDS::MODE_1_SELECT) && self.ppu_mode == PPUMode::VBlank)
+            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan);
+
+        if line && !self.stat_line {
+            self.interrupts |= Interrupts::LCD;
+        }
+        self.stat_line = line;
+    }
+
+    fn mode3_sprite_penalty(&self) -> u32 {
+        // DMG skips object fetches entirely when objects are disabled; CGB
+        // still fetches them during Mode 3 (only pixel mixing checks LCDC),
+        // so disabling objects shortens Mode 3 on DMG only.
+        if self.mode == GBMode::DMG && !self.lcdc.contains(LCDC::OBJ_ENABLE) {
+            return 0;
+        }
+
+        let sprite_size: i32 = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
+        let mut penalty = 0;
+        let mut count = 0;
+
+        for i in 0..40 {
+            let oam_i = i * 4;
+            let y = self.oam[oam_i] as i32;
+            let ly = self.ly as i32 + 16;
+            if ly >= y && ly < y + sprite_size {
+                let x = self.oam[oam_i + 1] as u32;
+                penalty += 11 - ((x + self.scx as u32) % 8).min(5);
+                count += 1;
+                if count == 10 {
+                    break;
+                }
+            }
+        }
+
+        penalty
     }
 
     fn window_visible(&mut self) -> bool {
