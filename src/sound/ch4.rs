@@ -104,11 +104,9 @@ impl Memory for CH4 {
             }
             // NR42: Volume & Envelope
             0xFF21 => {
-                let initial_vol = ((v & 0b1111_0000) >> 4) as f32;
-                self.volume_envelope.set_initial_volume(initial_vol);
-                self.volume_envelope.positive = ((v & 0b0000_1000) >> 3) != 0;
-                self.volume_envelope.period = (v & 0b0000_0111) as u16;
+                self.volume_envelope.write(v);
 
+                // DAC is enabled if any of bits 3-7 are set
                 self.dac_enabled = (v & 0xF8) != 0;
             }
             // NR43: Frequency & Randomness

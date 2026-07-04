@@ -4,6 +4,7 @@ pub struct VolumeEnvelope {
     pub positive: bool,
     initial_volume: f32,
     period_counter: u16,
+    enabled: bool,
 }
 
 impl VolumeEnvelope {
@@ -14,11 +15,12 @@ impl VolumeEnvelope {
             positive: false,
             initial_volume: 0.0,
             period_counter: 0,
+            enabled: false,
         }
     }
 
     pub fn tick(&mut self) {
-        if self.period == 0 {
+        if !self.enabled || self.period == 0 {
             return;
         }
 
@@ -30,10 +32,14 @@ impl VolumeEnvelope {
             if self.positive {
                 if self.volume < 15.0 {
                     self.volume += 1.0;
+                } else {
+                    self.enabled = false;
                 }
             } else {
                 if self.volume > 0.0 {
                     self.volume -= 1.0;
+                } else {
+                    self.enabled = false;
                 }
             }
         }
@@ -42,11 +48,30 @@ impl VolumeEnvelope {
     pub fn reload(&mut self) {
         self.volume = self.initial_volume;
         self.period_counter = 0;
+        self.enabled = true;
     }
 
-    pub fn set_initial_volume(&mut self, vol: f32) {
-        self.initial_volume = vol;
-        self.volume = vol;
+    pub fn write(&mut self, v: u8) {
+        // Zombie mode: a non-trigger NRx2 write adjusts the live volume
+        // based on the OLD envelope state before the new config is stored.
+        let mut vol = self.volume as i32;
+
+        if self.period == 0 && self.enabled {
+            vol += 1;
+        } else if !self.positive {
+            vol += 2;
+        }
+
+        let new_positive = (v & 0x08) != 0;
+        if self.positive != new_positive {
+            vol = 16 - vol;
+        }
+
+        self.volume = (vol & 0x0F) as f32;
+
+        self.initial_volume = ((v & 0xF0) >> 4) as f32;
+        self.positive = new_positive;
+        self.period = (v & 0x07) as u16;
     }
 
     pub fn clear(&mut self) {
@@ -55,5 +80,6 @@ impl VolumeEnvelope {
         self.positive = false;
         self.initial_volume = 0.0;
         self.period_counter = 0;
+        self.enabled = false;
     }
 }
