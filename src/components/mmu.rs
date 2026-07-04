@@ -246,6 +246,7 @@ impl Memory for MMU {
             0xFF0F => self.intf = Interrupts::from_bits_truncate(v),
             0xFF50 => {
                 self.boot_rom_enabled = false;
+                self.ppu.clear_vram();
                 self.ppu.disable_boot_rom();
             }
             0xFF51 => self.hdma_src = (self.hdma_src & 0x00FF) | ((v as u16) << 8),

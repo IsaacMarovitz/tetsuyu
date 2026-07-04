@@ -584,6 +584,10 @@ impl PPU {
         }
     }
 
+    pub fn clear_vram(&mut self) {
+        self.vram = [0; 0x4000];
+    }
+
     pub fn disable_boot_rom(&mut self) {
         self.boot_rom_enabled = false;
     }
