@@ -22,6 +22,11 @@ pub struct MMU {
     boot_rom: [u8; 0x900],
     boot_rom_enabled: bool,
     mode: GBMode,
+
+    oam_dma_src: u16,
+    oam_dma_progress: u16,
+    oam_dma_timer: u32,
+    oam_dma_active: bool,
 }
 
 bitflags! {
@@ -73,10 +78,17 @@ impl MMU {
             boot_rom,
             boot_rom_enabled: true,
             mode: config.mode,
+
+            oam_dma_src: 0,
+            oam_dma_progress: 0,
+            oam_dma_timer: 0,
+            oam_dma_active: false,
         }
     }
 
     pub fn cycle(&mut self, cycles: u32) {
+        self.step_oam_dma(cycles);
+
         self.timer.cycle(cycles);
         self.intf |= self.timer.interrupts;
         self.timer.interrupts = Interrupts::empty();
@@ -94,11 +106,28 @@ impl MMU {
         self.serial.interrupts = Interrupts::empty();
     }
 
-    fn oamdma(&mut self, value: u8) {
-        let base = (value as u16) << 8;
-        for i in 0..0xA0 {
-            let b = self.read_word(base + i);
-            self.write_word(0xFE00 + i, b);
+    fn start_oam_dma(&mut self, value: u8) {
+        self.oam_dma_src = (value as u16) << 8;
+        self.oam_dma_progress = 0;
+        self.oam_dma_timer = 0;
+        self.oam_dma_active = true;
+    }
+
+    fn step_oam_dma(&mut self, cycles: u32) {
+        if !self.oam_dma_active {
+            return;
+        }
+
+        self.oam_dma_timer += cycles;
+        while self.oam_dma_timer >= 4 && self.oam_dma_progress < 0xA0 {
+            self.oam_dma_timer -= 4;
+            let byte = self.read(self.oam_dma_src + self.oam_dma_progress);
+            self.ppu.write_oam(self.oam_dma_progress, byte);
+            self.oam_dma_progress += 1;
+        }
+
+        if self.oam_dma_progress >= 0xA0 {
+            self.oam_dma_active = false;
         }
     }
 }
@@ -161,7 +190,7 @@ impl Memory for MMU {
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank] = v,
             0xFE00..=0xFE9F => self.ppu.write(a, v),
-            0xFF46 => self.oamdma(v),
+            0xFF46 => self.start_oam_dma(v),
             0xFF40..=0xFF4F => self.ppu.write(a, v),
             0xFF68..=0xFF6B => self.ppu.write(a, v),
             0xFF80..=0xFFFE => self.hram[a as usize - 0xFF80] = v,

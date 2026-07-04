@@ -17,6 +17,9 @@ pub struct PPU {
     ppu_config: PPUConfig,
     cc: ColorCorrection,
     ppu_mode: PPUMode,
+    mode3_len: u32,
+    draw_start: u32,
+    draw_x: u8,
     cycle_count: u32,
     vblanked_lines: u32,
     scy: u8,
@@ -53,6 +56,9 @@ impl PPU {
             ppu_config: config.ppu_config,
             cc: ColorCorrection::new(),
             ppu_mode: PPUMode::OAMScan,
+            mode3_len: 0,
+            draw_start: 0,
+            draw_x: 0,
             cycle_count: 0,
             vblanked_lines: 0,
             scy: 0x00,
@@ -94,23 +100,36 @@ impl PPU {
 
                 if self.cycle_count >= 80 {
                     self.ppu_mode = PPUMode::Draw;
-                    // println!("[PPU] Switching to Draw!");
+                    self.mode3_len = 172 + (self.scx % 8) as u32; // + sprite penalty later
+                    self.draw_start = 92 + (self.scx % 8) as u32; // 80 (mode 2) + 12 warmup + fine scroll
+                    self.draw_x = 0;
                 }
             }
             PPUMode::Draw => {
-                // TODO: Allow variable length Mode 3
-                if self.cycle_count >= (172 + 80) {
+                let target_x = self
+                    .cycle_count
+                    .saturating_sub(self.draw_start)
+                    .min(SCREEN_W as u32) as u8;
+
+                while self.draw_x < target_x {
+                    self.draw_bg_pixel(self.draw_x as usize);
+                    self.draw_x += 1;
+                }
+
+                if self.cycle_count >= 80 + self.mode3_len {
                     self.ppu_mode = PPUMode::HBlank;
                     if self.lcds.contains(LCDS::MODE_0_SELECT) {
                         self.interrupts |= Interrupts::LCD;
                     }
 
-                    self.draw_bg();
+                    while self.draw_x < SCREEN_W as u8 {
+                        self.draw_bg_pixel(self.draw_x as usize);
+                        self.draw_x += 1;
+                    }
 
                     if self.lcdc.contains(LCDC::OBJ_ENABLE) {
                         self.draw_sprites();
                     }
-                    // println!("[PPU] Switching to HBlank!");
                 }
             }
             PPUMode::HBlank => {
@@ -213,7 +232,7 @@ impl PPU {
             .set_pixel(color[0], color[1], color[2], x, self.ly as usize);
     }
 
-    fn draw_bg(&mut self) {
+    fn draw_bg_pixel(&mut self, x: usize) {
         // ┌──────────────────┬──────────────────┬──────────────────┐
         // │ TILE_DATA_AREA   │        1         │        0         │
         // ╞══════════════════╪══════════════════╪══════════════════╡
@@ -233,148 +252,146 @@ impl PPU {
         // Only show window if it's enabled and it intersects current scanline
         let in_window_y = self.window_visible();
 
-        for x in 0..SCREEN_W {
-            let in_window_x = x as u8 >= wx;
+        let in_window_x = x as u8 >= wx;
 
-            let (px, py) = if in_window_y && in_window_x {
-                let px = x as u8 - wx;
-                let py = self.wly;
-                (px, py)
+        let (px, py) = if in_window_y && in_window_x {
+            let px = x as u8 - wx;
+            let py = self.wly;
+            (px, py)
+        } else {
+            let px = self.scx.wrapping_add(x as u8);
+            let py = self.scy.wrapping_add(self.ly);
+            (px, py)
+        };
+
+        // Check if BG/Window is disabled (DMG game with LCDC bit 0 off)
+        let bg_disabled = !self.use_cgb_mode() && !self.lcdc.contains(LCDC::WINDOW_PRIORITY);
+
+        if bg_disabled {
+            // BG is disabled: draw color 0 from BGP and set priority to Color0
+            self.bgprio[x] = Priority::Color0;
+
+            if self.mode == GBMode::CGB {
+                // In CGB mode, use white when BG is disabled
+                self.set_rgb_mapped(x, 0x7FFF);
             } else {
-                let px = self.scx.wrapping_add(x as u8);
-                let py = self.scy.wrapping_add(self.ly);
-                (px, py)
-            };
-
-            // Check if BG/Window is disabled (DMG game with LCDC bit 0 off)
-            let bg_disabled = !self.use_cgb_mode() && !self.lcdc.contains(LCDC::WINDOW_PRIORITY);
-
-            if bg_disabled {
-                // BG is disabled: draw color 0 from BGP and set priority to Color0
-                self.bgprio[x] = Priority::Color0;
-
-                if self.mode == GBMode::CGB {
-                    // In CGB mode, use white when BG is disabled
-                    self.set_rgb_mapped(x, 0x7FFF);
-                } else {
-                    let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, 0);
-                    self.framebuffer.set_pixel(
-                        color.r(),
-                        color.g(),
-                        color.b(),
-                        x,
-                        self.ly as usize,
-                    );
-                }
-                continue; // Skip all the tile reading logic
+                let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, 0);
+                self.framebuffer.set_pixel(
+                    color.r(),
+                    color.g(),
+                    color.b(),
+                    x,
+                    self.ly as usize,
+                );
             }
+            return; // Skip all the tile reading logic
+        }
 
-            // Tile Map Base Address
-            let tile_map_base = if in_window_y && in_window_x {
-                if self.lcdc.contains(LCDC::WINDOW_AREA) {
-                    0x9C00
-                } else {
-                    0x9800
-                }
-            } else if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) {
+        // Tile Map Base Address
+        let tile_map_base = if in_window_y && in_window_x {
+            if self.lcdc.contains(LCDC::WINDOW_AREA) {
                 0x9C00
             } else {
                 0x9800
-            };
-
-            let tile_index_y = (py as u16 >> 3) & 31;
-            let tile_index_x = (px as u16 >> 3) & 31;
-
-            // Location of Tile Attributes
-            let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
-            let tile_index = self.read_vram(tile_address, 0);
-
-            // If we're using the secondary address mode,
-            // we need to interpret this tile index as signed
-            let tile_offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-                tile_index as i16
-            } else {
-                (tile_index as i8) as i16 + 128
-            } as u16
-                * 16;
-
-            let tile_data_location = tile_data_base + tile_offset;
-            let tile_attributes = if self.mode == GBMode::CGB {
-                Attributes::from_bits_retain(self.read_vram(tile_address, 1))
-            } else {
-                // BG Tiles don't get attributes on DMG
-                Attributes::empty()
-            };
-
-            let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
-                7 - py % 8
-            } else {
-                py % 8
-            };
-            let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
-                7 - px % 8
-            } else {
-                px % 8
-            };
-            let tile_data_address = tile_data_location + ((tile_y * 2) as u16);
-            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
-                1
-            } else {
-                0
-            };
-
-            let tile_data = {
-                let a = self.read_vram(tile_data_address, bank);
-                let b = self.read_vram(tile_data_address + 1, bank);
-                [a, b]
-            };
-
-            let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 {
-                1
-            } else {
-                0
-            };
-            let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 {
-                2
-            } else {
-                0
-            };
-            let color = color_h | color_l;
-
-            self.bgprio[x] = if color == 0 {
-                Priority::Color0
-            } else {
-                if tile_attributes.contains(Attributes::PRIORITY) {
-                    Priority::Priority
-                } else {
-                    Priority::Normal
-                }
-            };
-
-            if self.mode == GBMode::CGB {
-                let palette_no_1 = if self.use_cgb_mode() {
-                    (tile_attributes.bits() & 0b0000_0111) as usize
-                } else {
-                    0
-                };
-
-                let final_color = if !self.use_cgb_mode() {
-                    ((self.bgp >> (color * 2)) & 0x03) as usize
-                } else {
-                    color
-                };
-
-                let palette_address = palette_no_1 * 8 + final_color * 2;
-
-                let color: u16 = (self.bcpd[palette_address] as u16)
-                    | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
-
-                self.set_rgb_mapped(x, color);
-            } else {
-                let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, color);
-                self.framebuffer
-                    .set_pixel(color.r(), color.g(), color.b(), x, self.ly as usize);
             }
+        } else if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) {
+            0x9C00
+        } else {
+            0x9800
+        };
+
+        let tile_index_y = (py as u16 >> 3) & 31;
+        let tile_index_x = (px as u16 >> 3) & 31;
+
+        // Location of Tile Attributes
+        let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
+        let tile_index = self.read_vram(tile_address, 0);
+
+        // If we're using the secondary address mode,
+        // we need to interpret this tile index as signed
+        let tile_offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
+            tile_index as i16
+        } else {
+            (tile_index as i8) as i16 + 128
+        } as u16
+            * 16;
+
+        let tile_data_location = tile_data_base + tile_offset;
+        let tile_attributes = if self.mode == GBMode::CGB {
+            Attributes::from_bits_retain(self.read_vram(tile_address, 1))
+        } else {
+            // BG Tiles don't get attributes on DMG
+            Attributes::empty()
+        };
+
+        let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
+            7 - py % 8
+        } else {
+            py % 8
+        };
+        let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
+            7 - px % 8
+        } else {
+            px % 8
+        };
+        let tile_data_address = tile_data_location + ((tile_y * 2) as u16);
+        let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
+            1
+        } else {
+            0
+        };
+
+        let tile_data = {
+            let a = self.read_vram(tile_data_address, bank);
+            let b = self.read_vram(tile_data_address + 1, bank);
+            [a, b]
+        };
+
+        let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 {
+            1
+        } else {
+            0
+        };
+        let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 {
+            2
+        } else {
+            0
+        };
+        let color = color_h | color_l;
+
+        self.bgprio[x] = if color == 0 {
+            Priority::Color0
+        } else {
+            if tile_attributes.contains(Attributes::PRIORITY) {
+                Priority::Priority
+            } else {
+                Priority::Normal
+            }
+        };
+
+        if self.mode == GBMode::CGB {
+            let palette_no_1 = if self.use_cgb_mode() {
+                (tile_attributes.bits() & 0b0000_0111) as usize
+            } else {
+                0
+            };
+
+            let final_color = if !self.use_cgb_mode() {
+                ((self.bgp >> (color * 2)) & 0x03) as usize
+            } else {
+                color
+            };
+
+            let palette_address = palette_no_1 * 8 + final_color * 2;
+
+            let color: u16 = (self.bcpd[palette_address] as u16)
+                | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
+
+            self.set_rgb_mapped(x, color);
+        } else {
+            let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, color);
+            self.framebuffer
+                .set_pixel(color.r(), color.g(), color.b(), x, self.ly as usize);
         }
     }
 
@@ -589,6 +606,10 @@ impl PPU {
 
     fn write_vram(&mut self, a: u16, v: u8, bank: usize) {
         self.vram[(bank * 0x2000) + a as usize - 0x8000] = v;
+    }
+
+    pub fn write_oam(&mut self, index: u16, v: u8) {
+        self.oam[index as usize] = v;
     }
 }
 
