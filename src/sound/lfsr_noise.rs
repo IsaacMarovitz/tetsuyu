@@ -1,4 +1,4 @@
-use fundsp::hacker::*;
+use fundsp::prelude::*;
 
 #[derive(Clone)]
 pub struct LfsrNoiseControlled {

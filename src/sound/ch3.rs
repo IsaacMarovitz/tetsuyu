@@ -77,13 +77,16 @@ impl CH3 {
         }
     }
 
-    pub fn wave_as_f32(&self) -> [f32; 32] {
+    pub fn wave_as_f32(&self, shift: u8) -> [f32; 32] {
         const U4_MAX: f32 = 0b1111 as f32;
         let mut wave: [f32; 32] = [0f32; 32];
 
         for i in 0..self.wave_ram.len() {
-            wave[i * 2] = ((((self.wave_ram[i] & 0b1111_0000) >> 4) as f32 / U4_MAX) * 2.0) - 1.0;
-            wave[(i * 2) + 1] = (((self.wave_ram[i] & 0b0000_1111) as f32 / U4_MAX) * 2.0) - 1.0;
+            let hi = (self.wave_ram[i] & 0b1111_0000) >> 4;
+            let lo = self.wave_ram[i] & 0b0000_1111;
+
+            wave[i * 2] = (((hi >> shift) as f32 / U4_MAX) * 2.0) - 1.0;
+            wave[(i * 2) + 1] = (((lo >> shift) as f32 / U4_MAX) * 2.0) - 1.0;
         }
 
         wave

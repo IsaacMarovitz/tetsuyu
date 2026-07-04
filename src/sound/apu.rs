@@ -192,24 +192,11 @@ impl APU {
     }
 
     fn update_channel_3(&self, synth: &Synth) {
-        let vol = if self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled {
-            let max_sample = match self.ch3.get_volume_shift() {
-                0 => 15.0,
-                1 => 7.0,
-                2 => 3.0,
-                _ => 0.0,
-            };
+        let active = self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled;
+        let vol = if active { 1.0 } else { 0.0 };
 
-            if max_sample > 0.0 {
-                max_sample / 15.0
-            } else {
-                0.0
-            }
-        } else {
-            0.0
-        };
-
-        let wave = self.ch3.wave_as_f32();
+        let shift = self.ch3.get_volume_shift();
+        let wave = self.ch3.wave_as_f32(shift);
 
         synth.ch3.update(
             65536.0 / (2048.0 - self.ch3.period as f32),
@@ -238,13 +225,13 @@ impl APU {
 
     fn update_global_mix(&self, synth: &Synth) {
         let global_l = if self.audio_enabled {
-            self.left_volume as f32 / 7.0
+            (self.left_volume + 1) as f32 / 8.0
         } else {
             0.0
         };
 
         let global_r = if self.audio_enabled {
-            self.right_volume as f32 / 7.0
+            (self.right_volume + 1) as f32 / 8.0
         } else {
             0.0
         };
@@ -352,7 +339,7 @@ impl Memory for APU {
             // NR50: Master Volume & VIN
             0xFF24 => {
                 if self.audio_enabled {
-                    self.left_volume = v >> 4;
+                    self.left_volume = (v >> 4) & 0b0000_0111;
                     self.right_volume = v & 0b0000_0111;
                 }
             }

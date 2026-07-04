@@ -1,10 +1,9 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
-use fundsp::hacker::*;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-
+use fundsp::prelude::*;
 use crate::sound::lfsr_noise::lfsr_noise_controlled;
 
 #[derive(Clone)]
@@ -213,8 +212,9 @@ impl Synth {
             let ch4_stereo = ch4_mono >> ((pass() * var(&ch4.l)) ^ (pass() * var(&ch4.r)));
 
             let total_stereo = ch1_stereo + ch2_stereo + ch3_stereo + ch4_stereo;
+            let stereo_out = total_stereo >> (pass() * var(&global.l) | pass() * var(&global.r));
 
-            let mut c = total_stereo >> (pass() * var(&global.l) | pass() * var(&global.r));
+            let mut c = stereo_out >> (dcblock_hz(20.0) | dcblock_hz(20.0));
             c.set_sample_rate(sample_rate);
 
             let mut next_value = move || c.get_stereo();
@@ -223,7 +223,7 @@ impl Synth {
 
             let stream = device
                 .build_output_stream(
-                    &config,
+                    config,
                     move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                         Synth::write_data(data, channels, &mut next_value)
                     },
