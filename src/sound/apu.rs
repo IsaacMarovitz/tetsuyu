@@ -308,17 +308,17 @@ impl Memory for APU {
                 let extra = self.length_extra_clock();
                 self.ch1.write(a, v);
 
-                if a == 0xFF14
-                    && (v & 0x80) == 0
-                    && self.ch1.length_counter.enable_clock(was_enabled, extra)
-                {
-                    self.is_ch_1_active = false;
-                }
-
-                // Handle trigger
-                if a == 0xFF14 && (v & 0x80) != 0 {
-                    if self.ch1.dac_enabled {
-                        self.is_ch_1_active = true;
+                if a == 0xFF14 {
+                    let trigger = (v & 0x80) != 0;
+                    let hit_zero = self.ch1.length_counter.enable_clock(was_enabled, extra);
+                    if hit_zero && !trigger {
+                        self.is_ch_1_active = false;
+                    }
+                    if trigger {
+                        self.ch1.length_counter.trigger_reload(64, extra);
+                        if self.ch1.dac_enabled {
+                            self.is_ch_1_active = true;
+                        }
                     }
                 }
 
@@ -338,17 +338,17 @@ impl Memory for APU {
                 let extra = self.length_extra_clock();
                 self.ch2.write(a, v);
 
-                if a == 0xFF19
-                    && (v & 0x80) == 0
-                    && self.ch2.length_counter.enable_clock(was_enabled, extra)
-                {
-                    self.is_ch_2_active = false;
-                }
-
-                // Handle trigger
-                if a == 0xFF19 && (v & 0x80) != 0 {
-                    if self.ch2.dac_enabled {
-                        self.is_ch_2_active = true;
+                if a == 0xFF19 {
+                    let trigger = (v & 0x80) != 0;
+                    let hit_zero = self.ch2.length_counter.enable_clock(was_enabled, extra);
+                    if hit_zero && !trigger {
+                        self.is_ch_2_active = false;
+                    }
+                    if trigger {
+                        self.ch2.length_counter.trigger_reload(64, extra);
+                        if self.ch2.dac_enabled {
+                            self.is_ch_2_active = true;
+                        }
                     }
                 }
 
@@ -358,8 +358,8 @@ impl Memory for APU {
                 }
             }
             0xFF1A..=0xFF1E => {
-                // DMG: retriggering CH3 while it is still active corrupts wave
-                // RAM. Must run before the trigger resets the sample index.
+                // DMG: retriggering CH3 while active corrupts wave RAM. Must run
+                // before the trigger resets the sample index.
                 if a == 0xFF1E
                     && (v & 0x80) != 0
                     && self.mode == GBMode::DMG
@@ -372,17 +372,17 @@ impl Memory for APU {
                 let extra = self.length_extra_clock();
                 self.ch3.write(a, v);
 
-                if a == 0xFF1E
-                    && (v & 0x80) == 0
-                    && self.ch3.length_counter.enable_clock(was_enabled, extra)
-                {
-                    self.is_ch_3_active = false;
-                }
-
-                // Handle trigger
-                if a == 0xFF1E && (v & 0x80) != 0 {
-                    if self.ch3.dac_enabled {
-                        self.is_ch_3_active = true;
+                if a == 0xFF1E {
+                    let trigger = (v & 0x80) != 0;
+                    let hit_zero = self.ch3.length_counter.enable_clock(was_enabled, extra);
+                    if hit_zero && !trigger {
+                        self.is_ch_3_active = false;
+                    }
+                    if trigger {
+                        self.ch3.length_counter.trigger_reload(256, extra);
+                        if self.ch3.dac_enabled {
+                            self.is_ch_3_active = true;
+                        }
                     }
                 }
 
@@ -396,17 +396,17 @@ impl Memory for APU {
                 let extra = self.length_extra_clock();
                 self.ch4.write(a, v);
 
-                if a == 0xFF23
-                    && (v & 0x80) == 0
-                    && self.ch4.length_counter.enable_clock(was_enabled, extra)
-                {
-                    self.is_ch_4_active = false;
-                }
-
-                // Handle trigger
-                if a == 0xFF23 && (v & 0x80) != 0 {
-                    if self.ch4.dac_enabled {
-                        self.is_ch_4_active = true;
+                if a == 0xFF23 {
+                    let trigger = (v & 0x80) != 0;
+                    let hit_zero = self.ch4.length_counter.enable_clock(was_enabled, extra);
+                    if hit_zero && !trigger {
+                        self.is_ch_4_active = false;
+                    }
+                    if trigger {
+                        self.ch4.length_counter.trigger_reload(64, extra);
+                        if self.ch4.dac_enabled {
+                            self.is_ch_4_active = true;
+                        }
                     }
                 }
 

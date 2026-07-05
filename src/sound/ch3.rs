@@ -62,9 +62,6 @@ impl CH3 {
 
         // Reset sample position
         self.sample_index = 0;
-
-        // Reset length if zero
-        self.length_counter.reload_if_zero(256);
     }
 
     pub fn corrupt_wave_ram(&mut self) {

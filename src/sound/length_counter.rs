@@ -25,9 +25,12 @@ impl LengthCounter {
         self.counter = max_length - value;
     }
 
-    pub fn reload_if_zero(&mut self, max_length: u16) {
+    pub fn trigger_reload(&mut self, max_length: u16, extra: bool) {
         if self.counter == 0 {
             self.counter = max_length;
+            if self.enabled && extra {
+                self.counter -= 1;
+            }
         }
     }
 

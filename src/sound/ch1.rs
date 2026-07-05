@@ -126,9 +126,6 @@ impl CH1 {
         // Reset envelope
         self.volume_envelope.reload();
 
-        // Reset length if zero
-        self.length_counter.reload_if_zero(64);
-
         // Initialize sweep
         self.shadow_frequency = self.period;
         self.sweep_counter = if self.sweep_pace > 0 {

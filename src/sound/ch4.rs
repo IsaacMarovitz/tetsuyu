@@ -48,7 +48,6 @@ impl CH4 {
 
     pub fn trigger(&mut self) {
         self.volume_envelope.reload();
-        self.length_counter.reload_if_zero(64);
         self.final_volume = self.volume_envelope.volume;
     }
 

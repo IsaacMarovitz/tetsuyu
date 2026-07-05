@@ -54,9 +54,6 @@ impl CH2 {
 
         // Reset envelope
         self.volume_envelope.reload();
-
-        // Reset length if zero
-        self.length_counter.reload_if_zero(64);
     }
 }
 
