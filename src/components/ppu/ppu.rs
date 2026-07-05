@@ -674,13 +674,14 @@ impl PPU {
 
     pub fn oam_corrupt_inc(&mut self) {
         // DMG/SGB OAM corruption: an address in FE00-FEFF held by a 16-bit
-        // inc/dec during mode 2 glitches the row the PPU is scanning. Rows 0-1
-        // are immune. OAM is a 16-bit-word bus; corruption acts on words.
+        // inc/dec during mode 2 glitches the row the PPU is scanning. The
+        // corruption sources from the previous row, so only row 0 is immune.
+        // OAM is a 16-bit-word bus; corruption acts on words.
         if self.mode != GBMode::DMG || self.ppu_mode != PPUMode::OAMScan {
             return;
         }
         let row = (self.cycle_count / 4) as usize; // one row scanned per M-cycle
-        if row < 2 || row >= 20 {
+        if row < 1 || row >= 20 {
             return;
         }
 
