@@ -7,6 +7,7 @@ mod length_counter;
 mod lfsr_noise;
 mod synth;
 mod volume_envelope;
+mod period_timer;
 
 #[allow(unused_imports)]
 mod prelude {

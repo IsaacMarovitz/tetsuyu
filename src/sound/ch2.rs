@@ -1,13 +1,14 @@
 use crate::components::memory::Memory;
 use crate::sound::apu::DutyCycle;
 use crate::sound::length_counter::LengthCounter;
+use crate::sound::period_timer::PeriodTimer;
 use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH2 {
     pub dac_enabled: bool,
     pub duty_cycle: DutyCycle,
     pub period: u16,
-    frequency_timer: u16,
+    timer: PeriodTimer,
     pub sample_index: u8,
     pub length_counter: LengthCounter,
     pub volume_envelope: VolumeEnvelope,
@@ -19,7 +20,7 @@ impl CH2 {
             dac_enabled: false,
             duty_cycle: DutyCycle::EIGHTH,
             period: 0,
-            frequency_timer: 0,
+            timer: PeriodTimer::new(),
             sample_index: 0,
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
@@ -30,27 +31,22 @@ impl CH2 {
         self.dac_enabled = false;
         self.duty_cycle = DutyCycle::EIGHTH;
         self.period = 0;
-        self.frequency_timer = 0;
+        self.timer.set(0);
         self.sample_index = 0;
         self.length_counter.clear();
         self.volume_envelope.clear();
     }
 
     pub fn tick_frequency(&mut self) {
-        if self.frequency_timer > 0 {
-            self.frequency_timer -= 1;
-        } else {
-            // Reload timer: (2048 - period) * 4
-            self.frequency_timer = (2048 - self.period) * 4;
-
-            // Advance to next sample in duty cycle
+        // Reload period: (2048 - period) * 4. Advance one of 8 duty steps.
+        if self.timer.tick((2048 - self.period) * 4) {
             self.sample_index = (self.sample_index + 1) & 0x07;
         }
     }
 
     pub fn trigger(&mut self) {
         // Reset frequency timer
-        self.frequency_timer = (2048 - self.period) * 4;
+        self.timer.set((2048 - self.period) * 4);
 
         // Reset envelope
         self.volume_envelope.reload();

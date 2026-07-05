@@ -1,6 +1,7 @@
 use crate::components::memory::Memory;
 use crate::components::mode::GBMode;
 use crate::sound::length_counter::LengthCounter;
+use crate::sound::period_timer::PeriodTimer;
 use bitflags::bitflags;
 
 pub struct CH3 {
@@ -8,7 +9,7 @@ pub struct CH3 {
     pub output_level: OutputLevel,
     pub period: u16,
     wave_ram: [u8; 16],
-    frequency_timer: u16,
+    timer: PeriodTimer,
     pub sample_index: u8,
     pub length_counter: LengthCounter,
 }
@@ -30,7 +31,7 @@ impl CH3 {
             output_level: OutputLevel::MUTE,
             period: 0,
             wave_ram: [0; 16],
-            frequency_timer: 0,
+            timer: PeriodTimer::new(),
             sample_index: 0,
             length_counter: LengthCounter::new(),
         }
@@ -40,20 +41,14 @@ impl CH3 {
         self.dac_enabled = false;
         self.output_level = OutputLevel::MUTE;
         self.period = 0;
-        self.frequency_timer = 0;
+        self.timer.set(0);
         self.sample_index = 0;
         self.length_counter.clear();
     }
 
     pub fn tick_frequency(&mut self) {
-        if self.frequency_timer > 0 {
-            self.frequency_timer -= 1;
-        }
-        if self.frequency_timer == 0 {
-            // Reload timer: (2048 - period) * 2
-            self.frequency_timer = (2048 - self.period) * 2;
-
-            // Advance to next sample (32 samples total)
+        // Reload period: (2048 - period) * 2. Advance one of 32 samples.
+        if self.timer.tick((2048 - self.period) * 2) {
             self.sample_index = (self.sample_index + 1) & 0x1F;
         }
     }
@@ -61,7 +56,7 @@ impl CH3 {
     pub fn trigger(&mut self) {
         // The wave channel waits an extra 6 T-cycles after a trigger before it
         // fetches the first sample, so its position lags a plain reload.
-        self.frequency_timer = (2048 - self.period) * 2 + 6;
+        self.timer.set((2048 - self.period) * 2 + 6);
 
         // Reset sample position
         self.sample_index = 0;
