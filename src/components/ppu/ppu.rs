@@ -633,6 +633,17 @@ impl PPU {
         self.boot_rom_enabled = false;
     }
 
+    /// Drain the interrupt requests and the HBlank edge produced since the last
+    /// call, clearing them. Used by the peer-chip bus to build its `Ticked`
+    /// result instead of reaching into the public fields.
+    pub fn take_events(&mut self) -> (u8, bool) {
+        let irq = self.interrupts.bits();
+        self.interrupts = Interrupts::empty();
+        let hblank = self.entered_hblank;
+        self.entered_hblank = false;
+        (irq, hblank)
+    }
+
     fn use_cgb_mode(&self) -> bool {
         if self.boot_rom_enabled {
             true
@@ -651,6 +662,13 @@ impl PPU {
 
     pub fn write_oam(&mut self, index: u16, v: u8) {
         self.oam[index as usize] = v;
+    }
+
+    /// Unconditional VRAM write at the current bank, for the HDMA/GPDMA engine
+    /// (which drives VRAM directly, not through the CPU's mode-gated port).
+    pub fn write_vram_direct(&mut self, a: u16, v: u8) {
+        let bank = self.vram_bank;
+        self.write_vram(a, v, bank);
     }
 
     pub fn oam_corrupt_inc(&mut self) {

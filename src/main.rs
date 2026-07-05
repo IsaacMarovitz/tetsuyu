@@ -27,6 +27,7 @@ mod components;
 mod config;
 mod context;
 mod framebuffer;
+mod hw;
 mod mbc;
 mod sound;
 
@@ -192,7 +193,8 @@ fn main() {
 
     // Start CPU
     thread::spawn(move || {
-        let mut cpu = CPU::new(buffer, header, config, framebuffer_writer);
+        let mut mb =
+            hw::motherboard::Motherboard::from_config(buffer, header, config, framebuffer_writer);
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 
@@ -217,15 +219,15 @@ fn main() {
             match input_rx.try_recv() {
                 Ok(v) => {
                     if v.1 {
-                        cpu.mem.joypad.down(v.0);
+                        mb.joypad_down(v.0);
                     } else {
-                        cpu.mem.joypad.up(v.0);
+                        mb.joypad_up(v.0);
                     }
                 }
                 Err(_) => {}
             }
 
-            let cycles = cpu.cycle();
+            let cycles = mb.step();
             step_cycles += cycles;
         }
     });

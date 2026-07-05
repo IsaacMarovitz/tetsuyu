@@ -48,9 +48,9 @@ impl ColorCorrection {
     }
 
     fn true_color(r: u8, g: u8, b: u8) -> [u8; 3] {
-        let r = (r * 0xFF + 0xF) / 0x1F;
-        let g = (g * 0xFF + 0xF) / 0x1F;
-        let b = (b * 0xFF + 0xF) / 0x1F;
+        let r = ((r as u16 * 0xFF + 0xF) / 0x1F) as u8;
+        let g = ((g as u16 * 0xFF + 0xF) / 0x1F) as u8;
+        let b = ((b as u16 * 0xFF + 0xF) / 0x1F) as u8;
         [r, g, b]
     }
 
