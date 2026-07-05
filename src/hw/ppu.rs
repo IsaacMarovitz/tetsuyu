@@ -45,6 +45,12 @@ impl Ppu {
         self.core.write_vram_direct(addr, value);
     }
 
+    /// DMG OAM corruption: a 16-bit inc/dec through the OAM region during
+    /// mode 2 glitches the row being scanned. No-op outside that window.
+    pub fn corrupt_oam_inc(&mut self) {
+        self.core.oam_corrupt_inc();
+    }
+
     /// Forwarded from a write to 0xFF50: mirrors the legacy hand-off (clears
     /// VRAM and drops the PPU's boot-rom palette behaviour).
     pub fn on_boot_rom_disabled(&mut self) {

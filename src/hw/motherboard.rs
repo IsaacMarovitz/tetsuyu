@@ -130,6 +130,12 @@ impl Motherboard {
         let was_halted = self.cpu.is_halted();
         self.cpu.run_free_acts();
 
+        // A 16-bit inc/dec through the OAM region this M-cycle glitches OAM on
+        // the DMG when the PPU is scanning it; the PPU gates on mode itself.
+        if self.cpu.take_oam_glitch() {
+            self.ppu.corrupt_oam_inc();
+        }
+
         if self.cpu.is_halted() {
             if self.ic.pending() != Interrupts::empty() {
                 // Executing HALT with an interrupt already pending but IME

@@ -182,6 +182,7 @@ pub struct Cpu {
     ime_pending: bool,
     halted: bool,
     halt_bug: bool,
+    oam_glitch: bool,
     speed_switch: bool,
     micro: VecDeque<MicroOp>,
 }
@@ -199,6 +200,7 @@ impl Cpu {
             ime_pending: false,
             halted: false,
             halt_bug: false,
+            oam_glitch: false,
             speed_switch: false,
             micro,
         }
@@ -446,8 +448,8 @@ impl Cpu {
             Effect::DecR(r) => { let v = self.dec8(self.r8(r)); self.set_r8(r, v); }
             Effect::IncZ => self.z = self.inc8(self.z),
             Effect::DecZ => self.z = self.dec8(self.z),
-            Effect::Inc16(r) => self.set_r16(r, self.r16(r).wrapping_add(1)),
-            Effect::Dec16(r) => self.set_r16(r, self.r16(r).wrapping_sub(1)),
+            Effect::Inc16(r) => { let v = self.r16(r); self.note_oam_glitch(v); self.set_r16(r, v.wrapping_add(1)); }
+            Effect::Dec16(r) => { let v = self.r16(r); self.note_oam_glitch(v); self.set_r16(r, v.wrapping_sub(1)); }
             Effect::AddHl(r) => { let v = self.r16(r); self.add_hl(v); }
             Effect::AccRot(op) => {
                 let v = self.rotate(op, self.reg.a);
@@ -496,8 +498,8 @@ impl Cpu {
                 let e = self.z as i8 as i16;
                 self.reg.pc = (self.reg.pc as i16).wrapping_add(e) as u16;
             }
-            Effect::SpDec => self.reg.sp = self.reg.sp.wrapping_sub(1),
-            Effect::SpInc => self.reg.sp = self.reg.sp.wrapping_add(1),
+            Effect::SpDec => { self.note_oam_glitch(self.reg.sp); self.reg.sp = self.reg.sp.wrapping_sub(1); }
+            Effect::SpInc => { self.note_oam_glitch(self.reg.sp); self.reg.sp = self.reg.sp.wrapping_add(1); }
             Effect::WzInc => {
                 let v = self.wz().wrapping_add(1);
                 self.w = (v >> 8) as u8;
@@ -955,6 +957,19 @@ impl Cpu {
     /// without advancing PC, so it is decoded twice.
     pub fn trigger_halt_bug(&mut self) {
         self.halt_bug = true;
+    }
+
+    /// Record that a 16-bit inc/dec acted on an address in the OAM region.
+    /// The DMG glitches OAM when this happens during mode 2; the motherboard
+    /// forwards the event and the PPU decides whether it corrupts.
+    fn note_oam_glitch(&mut self, addr: u16) {
+        if (0xFE00..=0xFEFF).contains(&addr) {
+            self.oam_glitch = true;
+        }
+    }
+
+    pub fn take_oam_glitch(&mut self) -> bool {
+        std::mem::take(&mut self.oam_glitch)
     }
 
     pub fn take_speed_switch(&mut self) -> bool {
