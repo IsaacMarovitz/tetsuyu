@@ -32,4 +32,9 @@ impl PeriodTimer {
             false
         }
     }
+
+    /// T-cycles left before the next reload.
+    pub fn remaining(&self) -> u16 {
+        self.counter
+    }
 }

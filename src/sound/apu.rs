@@ -370,6 +370,7 @@ impl Memory for APU {
                     && (v & 0x80) != 0
                     && self.mode == GBMode::DMG
                     && self.is_ch_3_active
+                    && self.ch3.about_to_read()
                 {
                     self.ch3.corrupt_wave_ram();
                 }

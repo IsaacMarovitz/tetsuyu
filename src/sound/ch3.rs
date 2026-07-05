@@ -70,12 +70,17 @@ impl CH3 {
         self.just_fetched = false;
     }
 
+    /// True two T-cycles before the wave channel reads its next sample: the
+    /// window in which a DMG retrigger corrupts wave RAM.
+    pub fn about_to_read(&self) -> bool {
+        self.timer.remaining() == 2
+    }
+
     pub fn corrupt_wave_ram(&mut self) {
-        // DMG only: triggering CH3 while it is about to read a wave-RAM byte
-        // rewrites the low bytes. sample_index counts nibbles, so the byte
-        // it is about to read is (sample_index / 2), advanced by one because
-        // the trigger lands just before the next read.
-        let byte = ((self.sample_index as usize + 1) & 0x1F) / 2;
+        // DMG only: a retrigger two T-cycles before a read rewrites the low
+        // wave-RAM bytes with the byte the channel is about to read. The read
+        // has not advanced yet, so that byte is (sample_index + 1) / 2.
+        let byte = ((self.sample_index as usize + 1) & 0x1F) >> 1;
         if byte < 4 {
             self.wave_ram[0] = self.wave_ram[byte];
         } else {
