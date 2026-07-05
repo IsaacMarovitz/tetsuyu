@@ -18,6 +18,7 @@ pub struct CH1 {
     pub length_counter: LengthCounter,
     pub volume_envelope: VolumeEnvelope,
     pub sweep_overflow: bool,
+    negate_used: bool,
 }
 
 impl CH1 {
@@ -37,6 +38,7 @@ impl CH1 {
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
             sweep_overflow: false,
+            negate_used: false,
         }
     }
 
@@ -105,6 +107,7 @@ impl CH1 {
         let offset = self.shadow_frequency >> self.sweep_step;
 
         let new_freq = if self.negative_direction {
+            self.negate_used = true;
             self.shadow_frequency.saturating_sub(offset)
         } else {
             self.shadow_frequency + offset
@@ -134,6 +137,7 @@ impl CH1 {
             8
         };
         self.sweep_enabled = self.sweep_pace > 0 || self.sweep_step > 0;
+        self.negate_used = false;
 
         // If sweep shift is non-zero, do frequency calculation
         if self.sweep_step > 0 {
@@ -168,9 +172,16 @@ impl Memory for CH1 {
         match a {
             // NR10: Sweep
             0xFF10 => {
+                let was_negate = self.negative_direction;
                 self.sweep_pace = (v & 0b0111_0000) >> 4;
                 self.negative_direction = ((v & 0b0000_1000) >> 3) != 0;
                 self.sweep_step = v & 0b0000_0111;
+
+                // Exiting negate mode after a negate-mode calculation has been
+                // made since the last trigger disables the channel at once.
+                if was_negate && !self.negative_direction && self.negate_used {
+                    self.sweep_overflow = true;
+                }
             }
             // NR11: Length Timer & Duty Cycle
             0xFF11 => {
