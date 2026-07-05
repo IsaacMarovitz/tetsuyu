@@ -31,6 +31,19 @@ impl LengthCounter {
         }
     }
 
+    // Extra clock applied when the counter is enabled (0->1 via NRx4) while the
+    // next frame-sequencer step won't clock length. Returns true if this drove
+    // the counter to zero, so the caller can disable the channel (unless the
+    // same write also triggered).
+    pub fn enable_clock(&mut self, was_enabled: bool, extra_phase: bool) -> bool {
+        if !was_enabled && self.enabled && extra_phase && self.counter > 0 {
+            self.counter -= 1;
+            self.counter == 0
+        } else {
+            false
+        }
+    }
+
     pub fn clear(&mut self) {
         self.enabled = false;
         self.counter = 0;

@@ -121,6 +121,12 @@ impl APU {
         }
     }
 
+    fn length_extra_clock(&self) -> bool {
+        // The next frame-sequencer step won't clock length while the sequencer
+        // sits on an even step, so enabling length now gives one extra clock.
+        self.frame_sequencer & 1 == 0
+    }
+
     pub fn cycle(&mut self, div: u8) {
         let div_bit = (div >> 4) & 1;
         let old_div_bit = (self.div_apu >> 4) & 1;
@@ -298,7 +304,16 @@ impl Memory for APU {
 
         match a {
             0xFF10..=0xFF14 => {
+                let was_enabled = self.ch1.length_counter.enabled;
+                let extra = self.length_extra_clock();
                 self.ch1.write(a, v);
+
+                if a == 0xFF14
+                    && (v & 0x80) == 0
+                    && self.ch1.length_counter.enable_clock(was_enabled, extra)
+                {
+                    self.is_ch_1_active = false;
+                }
 
                 // Handle trigger
                 if a == 0xFF14 && (v & 0x80) != 0 {
@@ -319,7 +334,16 @@ impl Memory for APU {
                 }
             }
             0xFF15..=0xFF19 => {
+                let was_enabled = self.ch2.length_counter.enabled;
+                let extra = self.length_extra_clock();
                 self.ch2.write(a, v);
+
+                if a == 0xFF19
+                    && (v & 0x80) == 0
+                    && self.ch2.length_counter.enable_clock(was_enabled, extra)
+                {
+                    self.is_ch_2_active = false;
+                }
 
                 // Handle trigger
                 if a == 0xFF19 && (v & 0x80) != 0 {
@@ -344,7 +368,16 @@ impl Memory for APU {
                     self.ch3.corrupt_wave_ram();
                 }
 
+                let was_enabled = self.ch3.length_counter.enabled;
+                let extra = self.length_extra_clock();
                 self.ch3.write(a, v);
+
+                if a == 0xFF1E
+                    && (v & 0x80) == 0
+                    && self.ch3.length_counter.enable_clock(was_enabled, extra)
+                {
+                    self.is_ch_3_active = false;
+                }
 
                 // Handle trigger
                 if a == 0xFF1E && (v & 0x80) != 0 {
@@ -359,7 +392,16 @@ impl Memory for APU {
                 }
             }
             0xFF1F..=0xFF23 => {
+                let was_enabled = self.ch4.length_counter.enabled;
+                let extra = self.length_extra_clock();
                 self.ch4.write(a, v);
+
+                if a == 0xFF23
+                    && (v & 0x80) == 0
+                    && self.ch4.length_counter.enable_clock(was_enabled, extra)
+                {
+                    self.is_ch_4_active = false;
+                }
 
                 // Handle trigger
                 if a == 0xFF23 && (v & 0x80) != 0 {
