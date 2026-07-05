@@ -283,7 +283,7 @@ impl Memory for APU {
                     | ((self.is_ch_1_active as u8) << 0)
                     | 0x70
             }
-            0xFF30..=0xFF3F => self.ch3.read(a),
+            0xFF30..=0xFF3F => self.ch3.read_wave(a, self.is_ch_3_active, self.mode),
             _ => 0xFF,
         }
     }
@@ -441,7 +441,7 @@ impl Memory for APU {
                     self.frame_sequencer = 7;
                 }
             }
-            0xFF30..=0xFF3F => self.ch3.write(a, v),
+            0xFF30..=0xFF3F => self.ch3.write_wave(a, v, self.is_ch_3_active, self.mode),
             _ => {}
         }
 

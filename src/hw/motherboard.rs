@@ -167,7 +167,6 @@ impl Motherboard {
     /// clock every dot (base-domain gated by the divider); the bus transfer
     /// resolves on the last dot.
     fn run_dots(&mut self) {
-        let div = self.timer.div();
         for dot in 0..4u8 {
             self.pins.transfer = dot == 3;
             let base_dot = self.clock.tick(self.sysbus.double_speed());
@@ -176,6 +175,13 @@ impl Motherboard {
             ticked.merge(self.timer.advance(base_dot));
             ticked.merge(self.ppu.advance(base_dot));
             ticked.merge(self.sysbus.advance(base_dot));
+
+            // The APU is a base-clock device: advance its frame sequencer and
+            // channel frequency timers once per base dot, before the transfer
+            // resolves so a wave-RAM read observes the current sample position.
+            if base_dot {
+                self.apu.advance(self.timer.div(), self.sysbus.double_speed());
+            }
 
             if self.pins.transfer {
                 ticked.merge(self.timer.bus(&mut self.pins));
@@ -191,8 +197,6 @@ impl Motherboard {
                 self.step_hdma_hblank();
             }
         }
-        // APU frame sequencer advances once per M-cycle off the DIV edge.
-        self.apu.advance(div, self.sysbus.double_speed());
 
         // A write to 0xFF50 disables the boot ROM; forward to the PPU.
         if self.sysbus.take_boot_disabled() {

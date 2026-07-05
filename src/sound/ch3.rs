@@ -1,4 +1,5 @@
 use crate::components::memory::Memory;
+use crate::components::mode::GBMode;
 use crate::sound::length_counter::LengthCounter;
 use bitflags::bitflags;
 
@@ -47,7 +48,8 @@ impl CH3 {
     pub fn tick_frequency(&mut self) {
         if self.frequency_timer > 0 {
             self.frequency_timer -= 1;
-        } else {
+        }
+        if self.frequency_timer == 0 {
             // Reload timer: (2048 - period) * 2
             self.frequency_timer = (2048 - self.period) * 2;
 
@@ -57,8 +59,9 @@ impl CH3 {
     }
 
     pub fn trigger(&mut self) {
-        // Reset frequency timer
-        self.frequency_timer = (2048 - self.period) * 2;
+        // The wave channel waits an extra 6 T-cycles after a trigger before it
+        // fetches the first sample, so its position lags a plain reload.
+        self.frequency_timer = (2048 - self.period) * 2 + 6;
 
         // Reset sample position
         self.sample_index = 0;
@@ -77,6 +80,30 @@ impl CH3 {
             for i in 0..4 {
                 self.wave_ram[i] = self.wave_ram[base + i];
             }
+        }
+    }
+
+    /// Wave-RAM read. While the channel is on, the CGB returns the byte the
+    /// channel is currently reading (any address maps to it); the DMG blocks
+    /// the read. While off, wave RAM is directly addressable.
+    pub fn read_wave(&self, a: u16, active: bool, mode: GBMode) -> u8 {
+        if !active {
+            self.wave_ram[a as usize - 0xFF30]
+        } else if mode == GBMode::CGB {
+            self.wave_ram[(self.sample_index >> 1) as usize]
+        } else {
+            0xFF
+        }
+    }
+
+    /// Wave-RAM write. Mirrors `read_wave`: while the channel is on, the CGB
+    /// redirects the write to the byte currently being read and the DMG drops
+    /// it; while off, wave RAM is directly addressable.
+    pub fn write_wave(&mut self, a: u16, v: u8, active: bool, mode: GBMode) {
+        if !active {
+            self.wave_ram[a as usize - 0xFF30] = v;
+        } else if mode == GBMode::CGB {
+            self.wave_ram[(self.sample_index >> 1) as usize] = v;
         }
     }
 
@@ -119,13 +146,6 @@ impl Memory for CH3 {
             0xFF1D => 0xFF,
             // NR34: Period High & Control
             0xFF1E => (self.length_counter.enabled as u8) << 6 | 0xBF,
-            0xFF30..=0xFF3F => {
-                if !self.dac_enabled {
-                    self.wave_ram[a as usize - 0xFF30]
-                } else {
-                    0xFF
-                }
-            }
             _ => 0xFF,
         }
     }
@@ -156,11 +176,6 @@ impl Memory for CH3 {
 
                 if trigger {
                     self.trigger();
-                }
-            }
-            0xFF30..=0xFF3F => {
-                if !self.dac_enabled {
-                    self.wave_ram[a as usize - 0xFF30] = v;
                 }
             }
             _ => panic!("Write to unsupported CH3 address ({:#06x})!", a),
