@@ -123,6 +123,7 @@ pub struct Input {
     pub b: Key,
     pub select: Key,
     pub start: Key,
+    pub screenshot: Key,
 }
 
 impl Input {
@@ -136,6 +137,7 @@ impl Input {
             b: Key::Character(SmolStr::new("x")),
             select: Key::Character(SmolStr::new("c")),
             start: Key::Character(SmolStr::new("v")),
+            screenshot: Key::Character(SmolStr::new("p")),
         }
     }
 }

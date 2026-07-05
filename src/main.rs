@@ -1,15 +1,16 @@
 #[macro_use]
 extern crate num_derive;
 
+use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
 use crate::components::prelude::*;
-use crate::config::{Config, Input};
+use crate::config::Config;
 use crate::context::Context;
 use crate::framebuffer::{create_framebuffer_pair, FramebufferReader};
 use crate::mbc::header::{CGBFlag, Header};
 use clap::Parser;
 use pollster::FutureExt;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -19,7 +20,7 @@ use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::Key;
+use winit::keyboard::{Key, SmolStr};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{Window, WindowId};
 
@@ -48,6 +49,7 @@ struct App {
     input_tx: Sender<(JoypadButton, bool)>,
     framebuffer_reader: FramebufferReader,
     occluded: bool,
+    dump_frame: bool
 }
 
 impl ApplicationHandler for App {
@@ -75,6 +77,21 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested if window_id == context.window().id() => {
                 let frame_data = self.framebuffer_reader.get_latest_frame();
+
+                if self.dump_frame {
+                    let file = File::create("./frame.png").unwrap();
+                    let w = &mut BufWriter::new(file);
+                    let mut encoder = png::Encoder::new(w, SCREEN_W as u32, SCREEN_H as u32);
+
+                    encoder.set_color(png::ColorType::Rgba);
+                    encoder.set_depth(png::BitDepth::Eight);
+                    encoder.set_compression(png::Compression::NoCompression);
+
+                    let mut writer = encoder.write_header().unwrap();
+                    writer.write_image_data(&frame_data).unwrap();
+                    self.dump_frame = false;
+                }
+
                 context.update(frame_data);
                 context.render();
             }
@@ -93,18 +110,14 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
                     if event.state == ElementState::Pressed {
-                        send_input(
+                        self.send_input(
                             event.key_without_modifiers(),
                             true,
-                            self.config.input.clone(),
-                            self.input_tx.clone(),
                         );
                     } else if event.state == ElementState::Released {
-                        send_input(
+                        self.send_input(
                             event.key_without_modifiers(),
                             false,
-                            self.config.input.clone(),
-                            self.input_tx.clone(),
                         );
                     }
                 }
@@ -120,6 +133,26 @@ impl ApplicationHandler for App {
 
         if let Some(context) = &self.context {
             context.window().request_redraw();
+        }
+    }
+}
+
+impl App {
+    pub fn send_input(&mut self, key: Key, pressed: bool) {
+        let input = &self.config.input;
+        let input_tx = &self.input_tx;
+
+        match key {
+            key if key == input.up => input_tx.send((JoypadButton::UP, pressed)).unwrap(),
+            key if key == input.left => input_tx.send((JoypadButton::LEFT, pressed)).unwrap(),
+            key if key == input.down => input_tx.send((JoypadButton::DOWN, pressed)).unwrap(),
+            key if key == input.right => input_tx.send((JoypadButton::RIGHT, pressed)).unwrap(),
+            key if key == input.a => input_tx.send((JoypadButton::A, pressed)).unwrap(),
+            key if key == input.b => input_tx.send((JoypadButton::B, pressed)).unwrap(),
+            key if key == input.select => input_tx.send((JoypadButton::SELECT, pressed)).unwrap(),
+            key if key == input.start => input_tx.send((JoypadButton::START, pressed)).unwrap(),
+            key if key == input.screenshot => self.dump_frame = true,
+            _ => (),
         }
     }
 }
@@ -189,6 +222,7 @@ fn main() {
         input_tx,
         framebuffer_reader,
         occluded: false,
+        dump_frame: false,
     };
 
     // Start CPU
@@ -233,18 +267,4 @@ fn main() {
     });
 
     let _ = event_loop.run_app(&mut app);
-}
-
-pub fn send_input(key: Key, pressed: bool, input: Input, input_tx: Sender<(JoypadButton, bool)>) {
-    match key {
-        key if key == input.up => input_tx.send((JoypadButton::UP, pressed)).unwrap(),
-        key if key == input.left => input_tx.send((JoypadButton::LEFT, pressed)).unwrap(),
-        key if key == input.down => input_tx.send((JoypadButton::DOWN, pressed)).unwrap(),
-        key if key == input.right => input_tx.send((JoypadButton::RIGHT, pressed)).unwrap(),
-        key if key == input.a => input_tx.send((JoypadButton::A, pressed)).unwrap(),
-        key if key == input.b => input_tx.send((JoypadButton::B, pressed)).unwrap(),
-        key if key == input.select => input_tx.send((JoypadButton::SELECT, pressed)).unwrap(),
-        key if key == input.start => input_tx.send((JoypadButton::START, pressed)).unwrap(),
-        _ => (),
-    }
 }
