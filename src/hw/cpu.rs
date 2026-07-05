@@ -181,6 +181,7 @@ pub struct Cpu {
     ime: bool,
     ime_pending: bool,
     halted: bool,
+    halt_bug: bool,
     speed_switch: bool,
     micro: VecDeque<MicroOp>,
 }
@@ -197,6 +198,7 @@ impl Cpu {
             ime: false,
             ime_pending: false,
             halted: false,
+            halt_bug: false,
             speed_switch: false,
             micro,
         }
@@ -949,6 +951,12 @@ impl Cpu {
         self.halted = false;
     }
 
+    /// Arm the HALT bug: the next opcode fetch reads the byte after HALT
+    /// without advancing PC, so it is decoded twice.
+    pub fn trigger_halt_bug(&mut self) {
+        self.halt_bug = true;
+    }
+
     pub fn take_speed_switch(&mut self) -> bool {
         std::mem::take(&mut self.speed_switch)
     }
@@ -1015,7 +1023,11 @@ impl Cpu {
         match self.micro.pop_front().expect("micro-op queue underflow") {
             MicroOp::Fetch => {
                 self.ir = pins.data;
-                self.reg.pc = self.reg.pc.wrapping_add(1);
+                if self.halt_bug {
+                    self.halt_bug = false;
+                } else {
+                    self.reg.pc = self.reg.pc.wrapping_add(1);
+                }
                 if self.ime_pending {
                     self.ime_pending = false;
                     self.ime = true;

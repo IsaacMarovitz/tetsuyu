@@ -127,10 +127,18 @@ impl Motherboard {
     // -- one M-cycle -------------------------------------------------------
 
     fn m_cycle(&mut self) -> bool {
+        let was_halted = self.cpu.is_halted();
         self.cpu.run_free_acts();
 
         if self.cpu.is_halted() {
             if self.ic.pending() != Interrupts::empty() {
+                // Executing HALT with an interrupt already pending but IME
+                // clear does not halt; it arms the HALT bug so the next fetch
+                // reads the following byte twice. A wake from an earlier HALT
+                // (was_halted) is the ordinary resume path.
+                if !was_halted && !self.cpu.ime() {
+                    self.cpu.trigger_halt_bug();
+                }
                 self.cpu.wake();
             } else {
                 self.step_oam_dma();
