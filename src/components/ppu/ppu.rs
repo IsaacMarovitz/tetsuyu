@@ -21,6 +21,7 @@ pub struct PPU {
     mode3_len: u32,
     draw_start: u32,
     draw_x: u8,
+    pixel_delay: [u32; SCREEN_W],
     cycle_count: u32,
     vblanked_lines: u32,
     scy: u8,
@@ -62,6 +63,7 @@ impl PPU {
             mode3_len: 0,
             draw_start: 0,
             draw_x: 0,
+            pixel_delay: [0; SCREEN_W],
             cycle_count: 0,
             vblanked_lines: 0,
             scy: 0x00,
@@ -109,19 +111,19 @@ impl PPU {
                     if self.window_visible() {
                         self.mode3_len += 6;
                     }
-                    self.mode3_len += self.mode3_sprite_penalty();
+                    self.mode3_len += self.build_sprite_stalls();
                     self.draw_start = 92 + (self.scx % 8) as u32; // 80 (mode 2) + 12 warmup + fine scroll
                     self.draw_x = 0;
                     self.update_stat_line();
                 }
             }
             PPUMode::Draw => {
-                let target_x = self
-                    .cycle_count
-                    .saturating_sub(self.draw_start)
-                    .min(SCREEN_W as u32) as u8;
-
-                while self.draw_x < target_x {
+                while (self.draw_x as usize) < SCREEN_W
+                    && self.draw_start
+                        + self.draw_x as u32
+                        + self.pixel_delay[self.draw_x as usize]
+                        < self.cycle_count
+                {
                     self.draw_bg_pixel(self.draw_x as usize);
                     self.draw_x += 1;
                 }
@@ -203,7 +205,13 @@ impl PPU {
         self.stat_line = line;
     }
 
-    fn mode3_sprite_penalty(&self) -> u32 {
+    fn build_sprite_stalls(&mut self) -> u32 {
+        // Each object fetch stalls the pixel FIFO at the object's screen X, so
+        // every later BG pixel (and any mid-Mode-3 BGP change) is pushed right
+        // by the penalty. Recording the stall positionally reproduces that
+        // shift; the returned total keeps Mode 3's overall length correct.
+        self.pixel_delay = [0; SCREEN_W];
+
         // DMG skips object fetches entirely when objects are disabled; CGB
         // still fetches them during Mode 3 (only pixel mixing checks LCDC),
         // so disabling objects shortens Mode 3 on DMG only.
@@ -212,7 +220,7 @@ impl PPU {
         }
 
         let sprite_size: i32 = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
-        let mut penalty = 0;
+        let mut total = 0;
         let mut count = 0;
 
         for i in 0..40 {
@@ -221,7 +229,12 @@ impl PPU {
             let ly = self.ly as i32 + 16;
             if ly >= y && ly < y + sprite_size {
                 let x = self.oam[oam_i + 1] as u32;
-                penalty += 11 - ((x + self.scx as u32) % 8).min(5);
+                let penalty = 11 - ((x + self.scx as u32) % 8).min(5);
+                let start = (x as i32 - 8).clamp(0, SCREEN_W as i32 - 1) as usize;
+                for slot in self.pixel_delay[start..].iter_mut() {
+                    *slot += penalty;
+                }
+                total += penalty;
                 count += 1;
                 if count == 10 {
                     break;
@@ -229,7 +242,7 @@ impl PPU {
             }
         }
 
-        penalty
+        total
     }
 
     fn window_visible(&mut self) -> bool {
