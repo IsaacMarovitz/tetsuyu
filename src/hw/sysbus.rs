@@ -3,7 +3,6 @@ use super::interrupt::Interrupts;
 use crate::components::joypad::{Joypad, JoypadButton};
 use crate::components::memory::Memory;
 use crate::components::mode::GBMode;
-use crate::components::prelude::Interrupts as LegacyIrq;
 use crate::components::serial::Serial;
 use crate::config::Config;
 use crate::mbc::header::Header;
@@ -197,9 +196,9 @@ impl Chip for SystemBus {
     fn advance(&mut self, _base_dot: bool) -> Ticked {
         // Drain the untimed ports' interrupt requests.
         let mut bits = self.serial.interrupts.bits();
-        self.serial.interrupts = LegacyIrq::empty();
+        self.serial.interrupts = Interrupts::empty();
         bits |= self.joypad.interrupts.bits();
-        self.joypad.interrupts = LegacyIrq::empty();
+        self.joypad.interrupts = Interrupts::empty();
         Ticked {
             irq: Interrupts::from_bits_truncate(bits),
             hblank_edge: false,

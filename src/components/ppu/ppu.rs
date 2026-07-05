@@ -1,3 +1,4 @@
+use crate::hw::interrupt::Interrupts;
 use crate::components::ppu::bgpi::BGPI;
 use crate::components::ppu::cc::ColorCorrection;
 use crate::components::ppu::structs::*;
