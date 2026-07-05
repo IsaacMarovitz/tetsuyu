@@ -715,18 +715,18 @@ impl Memory for PPU {
             0xFF4F => if self.mode == GBMode::DMG { 0xFF } else { 0xFE | self.vram_bank as u8 },
             0xFF68 => if self.mode == GBMode::DMG { 0xFF } else { self.bcps.read() | 0x40 },
             0xFF69 => {
-                if self.ppu_mode != PPUMode::Draw {
-                    self.bcpd[self.bcps.address as usize]
-                } else {
+                if self.mode == GBMode::DMG || self.ppu_mode == PPUMode::Draw {
                     0xFF
+                } else {
+                    self.bcpd[self.bcps.address as usize]
                 }
             }
             0xFF6A => if self.mode == GBMode::DMG { 0xFF } else { self.ocps.read() | 0x40 },
             0xFF6B => {
-                if self.ppu_mode != PPUMode::Draw {
-                    self.ocpd[self.ocps.address as usize]
-                } else {
+                if self.mode == GBMode::DMG || self.ppu_mode == PPUMode::Draw {
                     0xFF
+                } else {
+                    self.ocpd[self.ocps.address as usize]
                 }
             }
             0xFF6C => 0xFE | self.opri as u8,
@@ -766,11 +766,6 @@ impl Memory for PPU {
             0xFF41 => {
                 let sanitised = v & 0b1111_1000 | (self.lcds.bits() & 0b0000_0100);
                 self.lcds = LCDS::from_bits_truncate(sanitised);
-                if self.mode == GBMode::DMG {
-                    // DMG STAT-write bug: the write drops the internal line for
-                    // one cycle, so any still-true source re-triggers the edge.
-                    self.stat_line = false;
-                }
                 self.check_lyc();
             }
             0xFF42 => self.scy = v,

@@ -7,7 +7,7 @@ pub enum Priority {
     Normal,
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum PPUMode {
     OAMScan = 2,
     Draw = 3,
