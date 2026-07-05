@@ -2778,6 +2778,7 @@ dependencies = [
  "librashader",
  "num-derive",
  "num-traits",
+ "png",
  "pollster",
  "serde",
  "toml",

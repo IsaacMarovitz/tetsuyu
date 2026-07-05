@@ -1,3 +1,4 @@
+use crate::hw::interrupt::Interrupts;
 use crate::components::prelude::*;
 use bitflags::bitflags;
 
