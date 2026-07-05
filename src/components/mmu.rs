@@ -27,6 +27,8 @@ pub struct MMU {
     oam_dma_progress: u16,
     oam_dma_timer: u32,
     oam_dma_active: bool,
+    oam_dma_latch: u8,
+    oam_dma_reading: bool,
 
     hdma_src: u16,
     hdma_dst: u16,
@@ -92,6 +94,8 @@ impl MMU {
             oam_dma_progress: 0,
             oam_dma_timer: 0,
             oam_dma_active: false,
+            oam_dma_latch: 0,
+            oam_dma_reading: false,
 
             hdma_src: 0,
             hdma_dst: 0,
@@ -142,16 +146,32 @@ impl MMU {
         }
 
         self.oam_dma_timer += cycles;
+        self.oam_dma_reading = true;
         while self.oam_dma_timer >= 4 && self.oam_dma_progress < 0xA0 {
             self.oam_dma_timer -= 4;
             let byte = self.read(self.oam_dma_src + self.oam_dma_progress);
+            self.oam_dma_latch = byte;
             self.ppu.write_oam(self.oam_dma_progress, byte);
             self.oam_dma_progress += 1;
         }
+        self.oam_dma_reading = false;
 
         if self.oam_dma_progress >= 0xA0 {
             self.oam_dma_active = false;
         }
+    }
+
+    fn oam_dma_conflict(&self, a: u16) -> bool {
+        if self.mode != GBMode::DMG || !self.oam_dma_active || self.oam_dma_reading {
+            return false;
+        }
+        let bus = |x: u16| match x {
+            0x8000..=0x9FFF => 1u8,
+            0x0000..=0x7FFF | 0xA000..=0xFDFF => 0,
+            _ => 2,
+        };
+        let b = bus(a);
+        b != 2 && b == bus(self.oam_dma_src)
     }
 
     fn start_hdma(&mut self, v: u8) {
@@ -207,6 +227,10 @@ impl MMU {
 
 impl Memory for MMU {
     fn read(&self, a: u16) -> u8 {
+        if self.oam_dma_conflict(a) {
+            return self.oam_dma_latch;
+        }
+
         match a {
             0x0000..=0x00FF => {
                 if self.boot_rom_enabled {
