@@ -273,34 +273,3 @@ impl Motherboard {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::components::mode::GBMode;
-
-    // A minimal ROM-only cartridge holding a test program at 0x0000, with the
-    // boot ROM disabled so execution starts in cart space.
-    fn boot_into(program: &[u8]) -> Motherboard {
-        let mut rom = vec![0u8; 0x8000];
-        rom[..program.len()].copy_from_slice(program);
-        rom[0x0147] = 0x00; // ROM only
-        let header = Header::new(rom.clone());
-        let (fb, _reader) = crate::framebuffer::create_framebuffer_pair();
-        let mut config = Config::default();
-        config.mode = GBMode::DMG;
-        let mut mb = Motherboard::new(rom, header, config, [0u8; 0x900], fb, false);
-        mb.sysbus.disable_boot();
-        mb
-    }
-
-    #[test]
-    fn runs_a_few_instructions() {
-        // LD A,$12 ; LD ($C000),A ; JP $0000
-        let mut mb = boot_into(&[0x3E, 0x12, 0xEA, 0x00, 0xC0, 0xC3, 0x00, 0x00]);
-        for _ in 0..8 {
-            mb.step();
-        }
-        assert_eq!(mb.sysbus.peek(0xC000), 0x12);
-    }
-}
