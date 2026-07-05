@@ -432,8 +432,13 @@ impl Memory for APU {
             }
             // NR52: Audio Master Control
             0xFF26 => {
+                let was_enabled = self.audio_enabled;
                 set_apu_control = true;
                 self.audio_enabled = (v >> 7) == 0x01;
+                
+                if !was_enabled && self.audio_enabled {
+                    self.frame_sequencer = 7;
+                }
             }
             0xFF30..=0xFF3F => self.ch3.write(a, v),
             _ => {}
