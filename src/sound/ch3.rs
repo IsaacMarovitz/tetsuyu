@@ -11,6 +11,7 @@ pub struct CH3 {
     wave_ram: [u8; 16],
     timer: PeriodTimer,
     pub sample_index: u8,
+    just_fetched: bool,
     pub length_counter: LengthCounter,
 }
 
@@ -33,6 +34,7 @@ impl CH3 {
             wave_ram: [0; 16],
             timer: PeriodTimer::new(),
             sample_index: 0,
+            just_fetched: false,
             length_counter: LengthCounter::new(),
         }
     }
@@ -43,13 +45,18 @@ impl CH3 {
         self.period = 0;
         self.timer.set(0);
         self.sample_index = 0;
+        self.just_fetched = false;
         self.length_counter.clear();
     }
 
     pub fn tick_frequency(&mut self) {
         // Reload period: (2048 - period) * 2. Advance one of 32 samples.
+        // `just_fetched` marks the single tick on which a new sample byte is
+        // read from wave RAM; the DMG only exposes wave RAM to the CPU then.
+        self.just_fetched = false;
         if self.timer.tick((2048 - self.period) * 2) {
             self.sample_index = (self.sample_index + 1) & 0x1F;
+            self.just_fetched = true;
         }
     }
 
@@ -60,6 +67,7 @@ impl CH3 {
 
         // Reset sample position
         self.sample_index = 0;
+        self.just_fetched = false;
     }
 
     pub fn corrupt_wave_ram(&mut self) {
@@ -79,12 +87,13 @@ impl CH3 {
     }
 
     /// Wave-RAM read. While the channel is on, the CGB returns the byte the
-    /// channel is currently reading (any address maps to it); the DMG blocks
-    /// the read. While off, wave RAM is directly addressable.
+    /// channel is currently reading (any address maps to it). The DMG only
+    /// exposes that byte during the single tick it fetches a sample, blocking
+    /// with 0xFF otherwise. While off, wave RAM is directly addressable.
     pub fn read_wave(&self, a: u16, active: bool, mode: GBMode) -> u8 {
         if !active {
             self.wave_ram[a as usize - 0xFF30]
-        } else if mode == GBMode::CGB {
+        } else if mode == GBMode::CGB || self.just_fetched {
             self.wave_ram[(self.sample_index >> 1) as usize]
         } else {
             0xFF
@@ -92,12 +101,13 @@ impl CH3 {
     }
 
     /// Wave-RAM write. Mirrors `read_wave`: while the channel is on, the CGB
-    /// redirects the write to the byte currently being read and the DMG drops
-    /// it; while off, wave RAM is directly addressable.
+    /// redirects the write to the byte currently being read, and the DMG only
+    /// accepts it during the single tick it fetches a sample; while off, wave
+    /// RAM is directly addressable.
     pub fn write_wave(&mut self, a: u16, v: u8, active: bool, mode: GBMode) {
         if !active {
             self.wave_ram[a as usize - 0xFF30] = v;
-        } else if mode == GBMode::CGB {
+        } else if mode == GBMode::CGB || self.just_fetched {
             self.wave_ram[(self.sample_index >> 1) as usize] = v;
         }
     }

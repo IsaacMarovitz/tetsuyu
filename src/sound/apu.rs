@@ -291,16 +291,21 @@ impl Memory for APU {
     fn write(&mut self, a: u16, v: u8) {
         let mut set_apu_control = false;
 
-        // Ignore writes to 0xFF10-0xFF25 when APU is disabled
-        if a >= 0xFF10 && a <= 0xFF25 {
-            if !self.audio_enabled {
-                // DMG still lets length data through while powered off; the
-                // length registers are the low 6 bits of NRx1.
-                let is_length = matches!(a, 0xFF11 | 0xFF16 | 0xFF1B | 0xFF20);
-                if !(self.mode == GBMode::DMG && is_length) {
-                    return;
+        // While the APU is off, writes to 0xFF10-0xFF25 are ignored. On DMG the
+        // length load (low bits of NRx1) is the one exception: it still takes
+        // effect, but nothing else in the register does — so load only the
+        // length and return, leaving duty and the trigger/enable logic alone.
+        if a >= 0xFF10 && a <= 0xFF25 && !self.audio_enabled {
+            if self.mode == GBMode::DMG {
+                match a {
+                    0xFF11 => self.ch1.length_counter.load((v & 0x3F) as u16, 64),
+                    0xFF16 => self.ch2.length_counter.load((v & 0x3F) as u16, 64),
+                    0xFF1B => self.ch3.length_counter.load(v as u16, 256),
+                    0xFF20 => self.ch4.length_counter.load((v & 0x3F) as u16, 64),
+                    _ => {}
                 }
             }
+            return;
         }
 
         match a {
@@ -457,10 +462,28 @@ impl Memory for APU {
                 self.vin_right = false;
                 self.panning = Panning::empty();
 
+                // On DMG the length counters are unaffected by power; only CGB
+                // clears them. Snapshot the counts and restore them after the
+                // channel clears when running as DMG.
+                let preserve_length = self.mode == GBMode::DMG;
+                let lengths = [
+                    self.ch1.length_counter.counter,
+                    self.ch2.length_counter.counter,
+                    self.ch3.length_counter.counter,
+                    self.ch4.length_counter.counter,
+                ];
+
                 self.ch1.clear();
                 self.ch2.clear();
                 self.ch3.clear();
                 self.ch4.clear();
+
+                if preserve_length {
+                    self.ch1.length_counter.counter = lengths[0];
+                    self.ch2.length_counter.counter = lengths[1];
+                    self.ch3.length_counter.counter = lengths[2];
+                    self.ch4.length_counter.counter = lengths[3];
+                }
             }
         }
     }
