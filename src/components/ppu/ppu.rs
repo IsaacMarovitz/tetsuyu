@@ -454,10 +454,10 @@ impl PPU {
             let px = self.read(sprite_address + 1).wrapping_sub(8);
             let tile_number = self.read(sprite_address + 2)
                 & if self.lcdc.contains(LCDC::OBJ_SIZE) {
-                    0xFE
-                } else {
-                    0xFF
-                };
+                0xFE
+            } else {
+                0xFF
+            };
             let tile_attributes = Attributes::from_bits_retain(self.read(sprite_address + 3));
 
             if py <= 0xFF - sprite_size + 1 {
@@ -766,6 +766,7 @@ impl Memory for PPU {
                 }
             }
             0xFF40 => {
+                let was_on = self.lcdc.contains(LCDC::LCD_ENABLE);
                 self.lcdc = LCDC::from_bits(v).unwrap();
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
                     self.reset_ly();
@@ -780,6 +781,14 @@ impl Memory for PPU {
                             self.framebuffer.clear();
                         }
                     }
+                } else if !was_on {
+                    // Enabling the LCD restarts at the beginning of scanline 0,
+                    // so LY only reaches 1 a full line (456 dots) later. The
+                    // enabling write lands on the last dot of its M-cycle, which
+                    // therefore goes uncounted, so seed the count with it.
+                    self.reset_ly();
+                    self.ppu_mode = PPUMode::OAMScan;
+                    self.cycle_count = 4;
                 }
             }
             0xFF41 => {
