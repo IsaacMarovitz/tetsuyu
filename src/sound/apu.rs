@@ -127,9 +127,10 @@ impl APU {
         self.frame_sequencer & 1 == 0
     }
 
-    pub fn cycle(&mut self, div: u8) {
-        let div_bit = (div >> 4) & 1;
-        let old_div_bit = (self.div_apu >> 4) & 1;
+    pub fn cycle(&mut self, div: u8, double_speed: bool) {
+        let bit = 4 + double_speed as u8;
+        let div_bit = (div >> bit) & 1;
+        let old_div_bit = (self.div_apu >> bit) & 1;
 
         if old_div_bit == 1 && div_bit == 0 {
             self.on_div_apu_tick();
@@ -435,7 +436,7 @@ impl Memory for APU {
                 let was_enabled = self.audio_enabled;
                 set_apu_control = true;
                 self.audio_enabled = (v >> 7) == 0x01;
-                
+
                 if !was_enabled && self.audio_enabled {
                     self.frame_sequencer = 7;
                 }

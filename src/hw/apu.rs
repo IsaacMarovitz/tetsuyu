@@ -19,8 +19,8 @@ impl Apu {
     }
 
     /// Advance the APU, driven by the DIV-APU edge (falling bit 4/5).
-    pub fn advance(&mut self, div: u8) {
-        self.core.cycle(div);
+    pub fn advance(&mut self, div: u8, double_speed: bool) {
+        self.core.cycle(div, double_speed);
     }
 
     pub fn bus(&mut self, pins: &mut Pins) {

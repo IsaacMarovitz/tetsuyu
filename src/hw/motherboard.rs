@@ -192,7 +192,7 @@ impl Motherboard {
             }
         }
         // APU frame sequencer advances once per M-cycle off the DIV edge.
-        self.apu.advance(div);
+        self.apu.advance(div, self.sysbus.double_speed());
 
         // A write to 0xFF50 disables the boot ROM; forward to the PPU.
         if self.sysbus.take_boot_disabled() {

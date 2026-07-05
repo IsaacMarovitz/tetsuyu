@@ -127,7 +127,7 @@ impl MMU {
             self.step_hdma();
         }
 
-        self.apu.cycle(self.timer.div());
+        self.apu.cycle(self.timer.div(), self.double_speed);
 
         self.intf |= self.serial.interrupts;
         self.serial.interrupts = Interrupts::empty();

@@ -964,6 +964,11 @@ impl Cpu {
         let (vector, bit) = pending.highest()?;
         self.ime = false;
         self.micro.clear();
+        // Dispatch is 5 M-cycles on hardware, measured from *after* the
+        // interrupted instruction's opcode fetch. Offering here at `front ==
+        // Fetch` discards that fetch M-cycle (the prefetch of the next opcode),
+        // so one extra internal cycle stands in for it to keep the total right.
+        self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Exec(Effect::SpDec));
@@ -1010,14 +1015,6 @@ impl Cpu {
         match self.micro.pop_front().expect("micro-op queue underflow") {
             MicroOp::Fetch => {
                 self.ir = pins.data;
-                if std::env::var_os("TETSUYU_TRACE").is_some() {
-                    println!(
-                        "{:04X}: {:02X}  AF={:02X}{:02X} BC={:04X} DE={:04X} HL={:04X} SP={:04X}",
-                        self.reg.pc, self.ir,
-                        self.reg.a, self.reg.f,
-                        self.reg.get_bc(), self.reg.get_de(), self.reg.get_hl(), self.reg.sp,
-                    );
-                }
                 self.reg.pc = self.reg.pc.wrapping_add(1);
                 if self.ime_pending {
                     self.ime_pending = false;
