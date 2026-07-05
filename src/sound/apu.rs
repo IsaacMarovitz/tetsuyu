@@ -16,6 +16,8 @@ pub struct APU {
     frame_sequencer: u8,
     left_volume: u8,
     right_volume: u8,
+    vin_left: bool,
+    vin_right: bool,
     panning: Panning,
     ch1: CH1,
     ch2: CH2,
@@ -68,6 +70,8 @@ impl APU {
             frame_sequencer: 0,
             left_volume: 0,
             right_volume: 0,
+            vin_left: false,
+            vin_right: false,
             panning: Panning::empty(),
             ch1: CH1::new(),
             ch2: CH2::new(),
@@ -255,7 +259,12 @@ impl Memory for APU {
             0xFF1A..=0xFF1E => self.ch3.read(a),
             0xFF1F..=0xFF23 => self.ch4.read(a),
             // NR50: Master Volume & VIN
-            0xFF24 => (self.left_volume & 0b0000_0111) << 4 | (self.right_volume & 0b0000_0111),
+            0xFF24 => {
+                (self.vin_left as u8) << 7
+                    | (self.left_volume & 0b0000_0111) << 4
+                    | (self.vin_right as u8) << 3
+                    | (self.right_volume & 0b0000_0111)
+            }
             // NR51: Sound Panning
             0xFF25 => self.panning.bits(),
             // NR52: Audio Master Control
@@ -367,7 +376,9 @@ impl Memory for APU {
             // NR50: Master Volume & VIN
             0xFF24 => {
                 if self.audio_enabled {
+                    self.vin_left = (v & 0x80) != 0;
                     self.left_volume = (v >> 4) & 0b0000_0111;
+                    self.vin_right = (v & 0x08) != 0;
                     self.right_volume = v & 0b0000_0111;
                 }
             }
@@ -394,6 +405,8 @@ impl Memory for APU {
                 self.is_ch_4_active = false;
                 self.left_volume = 0;
                 self.right_volume = 0;
+                self.vin_left = false;
+                self.vin_right = false;
                 self.panning = Panning::empty();
 
                 self.ch1.clear();
