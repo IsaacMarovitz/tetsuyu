@@ -1,7 +1,9 @@
 window_w = 640
 window_h = 576
-print_serial = false
-boot_rom = ""
+print_serial = true
+headless = false
+cgb_boot_rom = ""
+dmg_boot_rom = ""
 shader_path = "./slang-shaders/nearest.slangp"
 mode = "DMG"
 

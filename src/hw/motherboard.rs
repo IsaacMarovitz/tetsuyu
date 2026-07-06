@@ -44,7 +44,7 @@ impl Motherboard {
             ic: InterruptController::new(),
             timer: Timer::new(),
             ppu: Ppu::new(config.clone(), framebuffer, rom_is_cgb),
-            apu: Apu::new(config.apu_config, config.mode),
+            apu: Apu::new(config.clone()),
             dma: Dma::new(mode),
             sysbus: SystemBus::new(rom, header, &config, boot_rom),
         }

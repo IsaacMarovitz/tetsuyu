@@ -1,5 +1,5 @@
 use crate::components::memory::Memory;
-use crate::config::APUConfig;
+use crate::config::{APUConfig, Config};
 use crate::sound::prelude::*;
 use bitflags::bitflags;
 use crate::components::mode::GBMode;
@@ -51,16 +51,16 @@ bitflags! {
 }
 
 impl APU {
-    pub fn new(config: APUConfig, mode: GBMode) -> Self {
-        let synth = if config.master_enabled {
+    pub fn new(config: Config) -> Self {
+        let synth = if config.apu_config.master_enabled && !config.headless {
             Some(Synth::new())
         } else {
             None
         };
 
         Self {
-            config,
-            mode,
+            config: config.apu_config,
+            mode: config.mode,
             audio_enabled: true,
             is_ch_1_active: false,
             is_ch_2_active: false,

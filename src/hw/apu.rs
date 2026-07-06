@@ -1,7 +1,6 @@
 use super::bus::{BusDir, Pins};
 use crate::components::memory::Memory;
-use crate::components::mode::GBMode;
-use crate::config::APUConfig;
+use crate::config::Config;
 use crate::sound::apu::APU as CoreApu;
 
 /// APU as a bus peer. Its frame sequencer is clocked by the timer's DIV, so the
@@ -12,9 +11,9 @@ pub struct Apu {
 }
 
 impl Apu {
-    pub fn new(config: APUConfig, mode: GBMode) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
-            core: CoreApu::new(config, mode),
+            core: CoreApu::new(config),
         }
     }
 

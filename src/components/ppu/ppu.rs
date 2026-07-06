@@ -1,6 +1,7 @@
 use crate::hw::interrupt::Interrupts;
 use crate::components::ppu::bgpi::BGPI;
 use crate::components::ppu::cc::ColorCorrection;
+use crate::components::ppu::fetcher::*;
 use crate::components::ppu::structs::*;
 use crate::components::prelude::*;
 use crate::config::{Color, Config, PPUConfig, Palette};
@@ -11,6 +12,12 @@ pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
+/// (V) DMG asserts the next visible line's mode-2 STAT condition this many
+/// dots before the line starts (late in the previous line's HBlank). The
+/// mealybug m3 handlers are cycle-calibrated against this early edge.
+/// Calibrated against m3_bgp_change row boundaries.
+const EARLY_MODE2_DOTS: u32 = 4;
+
 pub struct PPU {
     mode: GBMode,
     rom_is_cgb: bool,
@@ -18,10 +25,6 @@ pub struct PPU {
     ppu_config: PPUConfig,
     cc: ColorCorrection,
     ppu_mode: PPUMode,
-    mode3_len: u32,
-    draw_start: u32,
-    draw_x: u8,
-    pixel_delay: [u32; SCREEN_W],
     cycle_count: u32,
     vblanked_lines: u32,
     scy: u8,
@@ -44,11 +47,19 @@ pub struct PPU {
     vram_bank: usize,
     oam: [u8; 0xA0],
     opri: bool,
-    bgprio: [Priority; SCREEN_W],
     pub interrupts: Interrupts,
     framebuffer: FramebufferWriter,
     pub entered_hblank: bool,
     stat_line: bool,
+    // --- pixel-FIFO renderer (docs/ppu-fifo-design.md §3, §7) ---
+    bg_fifo: PixelFifo<BgPixel>,
+    obj_line: [ObjPixel; SCREEN_W],
+    fetcher: Fetcher,
+    shifter: Shifter,
+    sprites: Vec<SelectedSprite>,
+    window_active: bool,
+    /// DMG BGP write artifact: `old | new`, visible for exactly one dot.
+    bgp_glitch: Option<u8>,
 }
 
 impl PPU {
@@ -60,10 +71,6 @@ impl PPU {
             ppu_config: config.ppu_config,
             cc: ColorCorrection::new(),
             ppu_mode: PPUMode::OAMScan,
-            mode3_len: 0,
-            draw_start: 0,
-            draw_x: 0,
-            pixel_delay: [0; SCREEN_W],
             cycle_count: 0,
             vblanked_lines: 0,
             scy: 0x00,
@@ -86,11 +93,17 @@ impl PPU {
             vram_bank: 0,
             oam: [0; 0xA0],
             opri: true,
-            bgprio: [Priority::Normal; SCREEN_W],
             interrupts: Interrupts::empty(),
             framebuffer,
             entered_hblank: false,
             stat_line: false,
+            bg_fifo: PixelFifo::new(),
+            obj_line: [ObjPixel::default(); SCREEN_W],
+            fetcher: Fetcher::new(),
+            shifter: Shifter::new(),
+            sprites: Vec::with_capacity(10),
+            window_active: false,
+            bgp_glitch: None,
         }
     }
 
@@ -107,57 +120,44 @@ impl PPU {
 
                 if self.cycle_count >= 80 {
                     self.ppu_mode = PPUMode::Draw;
-                    self.mode3_len = 172 + (self.scx % 8) as u32;
-                    if self.window_visible() {
-                        self.mode3_len += 6;
-                    }
-                    self.mode3_len += self.build_sprite_stalls();
-                    self.draw_start = 92 + (self.scx % 8) as u32; // 80 (mode 2) + 12 warmup + fine scroll
-                    self.draw_x = 0;
+                    self.start_mode3_fifo();
                     self.update_stat_line();
                 }
             }
             PPUMode::Draw => {
-                while (self.draw_x as usize) < SCREEN_W
-                    && self.draw_start
-                        + self.draw_x as u32
-                        + self.pixel_delay[self.draw_x as usize]
-                        < self.cycle_count
-                {
-                    self.draw_bg_pixel(self.draw_x as usize);
-                    self.draw_x += 1;
-                }
-
-                if self.cycle_count >= 80 + self.mode3_len {
-                    self.ppu_mode = PPUMode::HBlank;
-                    self.entered_hblank = true;
-                    self.update_stat_line();
-
-                    while self.draw_x < SCREEN_W as u8 {
-                        self.draw_bg_pixel(self.draw_x as usize);
-                        self.draw_x += 1;
+                // Sub-dot-accurate renderer: step the fetcher/shifter one dot at
+                // a time. Mode 3 ends inside `mode3_dot` when 160 visible pixels
+                // have been emitted, so its length is emergent.
+                for _ in 0..cycles {
+                    if self.ppu_mode != PPUMode::Draw {
+                        break;
                     }
-
-                    if self.lcdc.contains(LCDC::OBJ_ENABLE) {
-                        self.draw_sprites();
-                    }
+                    self.mode3_dot();
                 }
             }
             PPUMode::HBlank => {
+                // Late in HBlank the next visible line's mode-2 STAT condition
+                // asserts early; re-evaluate the line inside that window so the
+                // edge fires at the right dot.
+                if self.cycle_count >= 456 - EARLY_MODE2_DOTS && self.ly < 143 {
+                    self.update_stat_line();
+                }
                 if self.cycle_count >= 456 {
                     self.cycle_count -= 456;
                     self.inc_ly();
-                    self.check_lyc();
 
+                    // Set the new mode before re-evaluating the STAT line so
+                    // the early-asserted mode-2 condition hands over to the
+                    // real one without a one-dot dip. A dip here fires a
+                    // second, spurious STAT interrupt at line start.
                     if self.ly > 143 {
                         self.ppu_mode = PPUMode::VBlank;
                         self.interrupts |= Interrupts::V_BLANK;
-                        self.update_stat_line();
                         self.framebuffer.submit_frame();
                     } else {
                         self.ppu_mode = PPUMode::OAMScan;
-                        self.update_stat_line();
                     }
+                    self.check_lyc();
                 }
             }
             PPUMode::VBlank => {
@@ -193,11 +193,22 @@ impl PPU {
     fn update_stat_line(&mut self) {
         // All enabled STAT sources feed one internal line; the LCD interrupt
         // fires only on its rising edge (STAT blocking).
+        //
+        // DMG quirk: the mode-2 condition for the *next* visible line asserts
+        // EARLY_MODE2_DOTS before the line starts (late in the previous line's
+        // HBlank). The mealybug m3 handlers are cycle-calibrated against this
+        // early edge; without it every mid-scanline write lands ~4 dots late.
+        let early_mode2 = self.lcds.contains(LCDS::MODE_2_SELECT)
+            && self.ppu_mode == PPUMode::HBlank
+            && self.ly < 143
+            && self.cycle_count >= 456 - EARLY_MODE2_DOTS;
+
         let line = (self.lcds.contains(LCDS::LYC_SELECT)
             && self.lcds.contains(LCDS::LYC_EQUALS))
             || (self.lcds.contains(LCDS::MODE_0_SELECT) && self.ppu_mode == PPUMode::HBlank)
             || (self.lcds.contains(LCDS::MODE_1_SELECT) && self.ppu_mode == PPUMode::VBlank)
-            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan);
+            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan)
+            || early_mode2;
 
         if line && !self.stat_line {
             self.interrupts |= Interrupts::LCD;
@@ -205,44 +216,497 @@ impl PPU {
         self.stat_line = line;
     }
 
-    fn build_sprite_stalls(&mut self) -> u32 {
-        // Each object fetch stalls the pixel FIFO at the object's screen X, so
-        // every later BG pixel (and any mid-Mode-3 BGP change) is pushed right
-        // by the penalty. Recording the stall positionally reproduces that
-        // shift; the returned total keeps Mode 3's overall length correct.
-        self.pixel_delay = [0; SCREEN_W];
+    // =====================================================================
+    // Pixel-FIFO renderer (docs/ppu-fifo-design.md §7).
+    //
+    // Points marked (V) encode a timing/priority choice the design doc flags
+    // as needing validation against the mealybug references; they are the
+    // first knobs to turn during harness-gated accuracy work.
+    // =====================================================================
 
-        // DMG skips object fetches entirely when objects are disabled; CGB
-        // still fetches them during Mode 3 (only pixel mixing checks LCDC),
-        // so disabling objects shortens Mode 3 on DMG only.
-        if self.mode == GBMode::DMG && !self.lcdc.contains(LCDC::OBJ_ENABLE) {
-            return 0;
-        }
+    /// Set up the FIFO renderer for one Mode 3 (called at the OAMScan→Draw
+    /// edge). Selects this line's sprites and resets the fetcher/shifter/FIFO.
+    fn start_mode3_fifo(&mut self) {
+        self.bg_fifo.clear();
+        self.obj_line = [ObjPixel::default(); SCREEN_W];
+        self.fetcher = Fetcher::new();
+        self.shifter = Shifter::new();
+        self.shifter.discard = self.scx % 8;
+        self.window_active = false;
+        self.bgp_glitch = None;
+        self.select_sprites();
+    }
 
-        let sprite_size: i32 = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
-        let mut total = 0;
-        let mut count = 0;
-
-        for i in 0..40 {
-            let oam_i = i * 4;
-            let y = self.oam[oam_i] as i32;
-            let ly = self.ly as i32 + 16;
-            if ly >= y && ly < y + sprite_size {
-                let x = self.oam[oam_i + 1] as u32;
-                let penalty = 11 - ((x + self.scx as u32) % 8).min(5);
-                let start = (x as i32 - 8).clamp(0, SCREEN_W as i32 - 1) as usize;
-                for slot in self.pixel_delay[start..].iter_mut() {
-                    *slot += penalty;
-                }
-                total += penalty;
-                count += 1;
-                if count == 10 {
+    /// Mode 2 result: up to 10 sprites overlapping this line, in OAM order.
+    fn select_sprites(&mut self) {
+        self.sprites.clear();
+        let size = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
+        let line = self.ly as i32 + 16;
+        for i in 0..40u8 {
+            let o = i as usize * 4;
+            let y = self.oam[o] as i32;
+            if line >= y && line < y + size {
+                self.sprites.push(SelectedSprite {
+                    oam_index: i * 4,
+                    x: self.oam[o + 1],
+                    y: self.oam[o],
+                    tile: self.oam[o + 2],
+                    attr: Attributes::from_bits_retain(self.oam[o + 3]),
+                    fetched: false,
+                });
+                if self.sprites.len() == 10 {
                     break;
                 }
             }
         }
+    }
 
-        total
+    /// Advance the renderer by one dot (§7.3).
+    fn mode3_dot(&mut self) {
+        // A window trigger may clear the BG FIFO before anything shifts.
+        self.check_window_trigger();
+
+        // Begin a sprite fetch if one is due (stalls the shifter until done).
+        if !self.fetcher.in_sprite_fetch() {
+            self.try_start_sprite();
+        }
+
+        // One dot of the active fetcher (sprite sub-fetch has priority).
+        if self.fetcher.in_sprite_fetch() {
+            self.sprite_fetch_step();
+        } else {
+            self.bg_fetch_step();
+        }
+
+        // Shift one pixel unless a sprite fetch is stalling us or the BG FIFO
+        // has nothing ready yet.
+        if !self.fetcher.in_sprite_fetch() && !self.bg_fifo.is_empty() {
+            self.shift_pixel();
+        }
+
+        // The window comparator position ticks on every Mode 3 dot the
+        // shifter isn't stalled by a sprite fetch.
+        if !self.fetcher.in_sprite_fetch() {
+            self.shifter.pos = self.shifter.pos.wrapping_add(1);
+        }
+
+        // The BGP write artifact lives for exactly the one dot after the write
+        // resolves; whether or not a pixel was emitted on it, it's gone now.
+        self.bgp_glitch = None;
+
+        // Mode 3 ends the dot the 160th visible pixel is emitted; its length is
+        // therefore emergent rather than a formula.
+        if self.shifter.emitted >= SCREEN_W as u8 {
+            self.ppu_mode = PPUMode::HBlank;
+            self.entered_hblank = true;
+            self.update_stat_line();
+        }
+    }
+
+    /// One dot of the background/window fetch cycle (2 dots per step; Push is a
+    /// single dot that only succeeds into an empty FIFO).
+    fn bg_fetch_step(&mut self) {
+        match self.fetcher.step {
+            FetchStep::TileId => {
+                if self.fetcher.substep == 1 {
+                    self.bg_fetch_tile_id();
+                    self.fetcher.step = FetchStep::TileLow;
+                }
+                self.fetcher.substep ^= 1;
+            }
+            FetchStep::TileLow => {
+                if self.fetcher.substep == 1 {
+                    self.fetcher.tile_low = self.bg_fetch_plane(0);
+                    self.fetcher.step = FetchStep::TileHigh;
+                }
+                self.fetcher.substep ^= 1;
+            }
+            FetchStep::TileHigh => {
+                if self.fetcher.substep == 1 {
+                    self.fetcher.tile_high = self.bg_fetch_plane(1);
+                    if !self.fetcher.done_dummy {
+                        // Hardware discards the line's first fetch the moment
+                        // it completes and restarts against the same column:
+                        // the 12-dot warm-up is two clean 6-dot fetches, with
+                        // no extra push dot, putting the first pixel on the
+                        // LCD at dot 92.
+                        self.fetcher.done_dummy = true;
+                        self.fetcher.restart_bg();
+                        return;
+                    }
+                    self.fetcher.step = FetchStep::Push;
+                }
+                self.fetcher.substep ^= 1;
+            }
+            FetchStep::Push => {
+                if self.bg_fifo.is_empty() {
+                    let row = self.assemble_bg_row();
+                    self.bg_fifo.push_row(row);
+                    self.fetcher.tile_x = self.fetcher.tile_x.wrapping_add(1);
+                    self.fetcher.restart_bg();
+                }
+                // else: FIFO still draining — idle this dot.
+            }
+        }
+    }
+
+    /// Fetch the tile id (and CGB attribute) for the fetcher's current column.
+    fn bg_fetch_tile_id(&mut self) {
+        let (base, tx, ty) = if self.fetcher.fetching_window {
+            let base = if self.lcdc.contains(LCDC::WINDOW_AREA) { 0x9C00 } else { 0x9800 };
+            (base, self.fetcher.tile_x as u16 & 31, (self.wly as u16 >> 3) & 31)
+        } else {
+            let base = if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) { 0x9C00 } else { 0x9800 };
+            let tx = ((self.scx as u16 / 8) + self.fetcher.tile_x as u16) & 31;
+            let ty = ((self.scy.wrapping_add(self.ly) as u16) >> 3) & 31;
+            (base, tx, ty)
+        };
+        let addr = base + ty * 32 + tx;
+        self.fetcher.tile_id = self.read_vram(addr, 0);
+        self.fetcher.tile_attr = if self.mode == GBMode::CGB {
+            self.read_vram(addr, 1)
+        } else {
+            0
+        };
+    }
+
+    /// Row within the current BG/window tile (0..7), honouring CGB Y-flip.
+    fn bg_row_in_tile(&self) -> u16 {
+        let py = if self.fetcher.fetching_window {
+            self.wly
+        } else {
+            self.scy.wrapping_add(self.ly)
+        };
+        let row = (py % 8) as u16;
+        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
+        if self.mode == GBMode::CGB && attr.contains(Attributes::Y_FLIP) {
+            7 - row
+        } else {
+            row
+        }
+    }
+
+    /// Address + bank of the current BG/window tile's data row.
+    fn bg_tile_data_addr(&self) -> (u16, usize) {
+        let base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) { 0x8000 } else { 0x8800 };
+        let offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
+            self.fetcher.tile_id as i16
+        } else {
+            (self.fetcher.tile_id as i8) as i16 + 128
+        } as u16
+            * 16;
+        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
+        let bank = if self.mode == GBMode::CGB && attr.contains(Attributes::BANK) { 1 } else { 0 };
+        (base + offset + self.bg_row_in_tile() * 2, bank)
+    }
+
+    fn bg_fetch_plane(&self, plane: u16) -> u8 {
+        let (addr, bank) = self.bg_tile_data_addr();
+        self.read_vram(addr + plane, bank)
+    }
+
+    /// Turn the two latched bit-planes into 8 BG pixels, index 0 = leftmost.
+    fn assemble_bg_row(&self) -> [BgPixel; 8] {
+        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
+        let xflip = self.mode == GBMode::CGB && attr.contains(Attributes::X_FLIP);
+        let mut row = [BgPixel::default(); 8];
+        for (i, cell) in row.iter_mut().enumerate() {
+            let bit = if xflip { i as u8 } else { 7 - i as u8 };
+            let lo = (self.fetcher.tile_low >> bit) & 1;
+            let hi = (self.fetcher.tile_high >> bit) & 1;
+            *cell = BgPixel { color: (hi << 1) | lo, cgb_attr: self.fetcher.tile_attr };
+        }
+        row
+    }
+
+    /// Emit (or discard) one pixel from the head of the BG FIFO.
+    fn shift_pixel(&mut self) {
+        let bg = match self.bg_fifo.pop() {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Discard pending pixels: SCX%8 fine scroll at line start, or the
+        // left-edge clip of a WX<7 window. (A mid-line window trigger requires
+        // the fine-scroll discard to have finished, so the two uses of this
+        // counter can never overlap.)
+        if self.shifter.discard > 0 {
+            self.shifter.discard -= 1;
+            return;
+        }
+
+        let x = self.shifter.emitted as usize;
+        let obj = self.obj_line[x];
+        self.emit_pixel(x, bg, obj);
+        self.shifter.emitted += 1;
+    }
+
+    /// Resolve BG-vs-OBJ priority for one pixel and write it (§7 mix stage).
+    /// The priority decision mirrors the legacy `draw_sprites` `skip` logic so
+    /// both renderers agree.
+    fn emit_pixel(&mut self, x: usize, bg: BgPixel, obj: ObjPixel) {
+        let bg_attr = Attributes::from_bits_retain(bg.cgb_attr);
+        let bg_disabled = !self.use_cgb_mode() && !self.lcdc.contains(LCDC::WINDOW_PRIORITY);
+        let bg_color = if bg_disabled { 0 } else { bg.color };
+
+        let prio = if bg_color == 0 {
+            Priority::Color0
+        } else if bg_attr.contains(Attributes::PRIORITY) {
+            Priority::Priority
+        } else {
+            Priority::Normal
+        };
+
+        let obj_present = obj.color != 0 && self.lcdc.contains(LCDC::OBJ_ENABLE);
+        let bg_wins = if !obj_present {
+            true
+        } else {
+            match self.mode {
+                GBMode::CGB => {
+                    if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
+                        if prio == Priority::Color0 {
+                            false
+                        } else if !obj.bg_prio && prio != Priority::Priority {
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        obj.bg_prio && prio != Priority::Color0
+                    }
+                }
+                GBMode::DMG => obj.bg_prio && prio != Priority::Color0,
+            }
+        };
+
+        if bg_wins {
+            self.emit_bg(x, bg_color, bg_attr, bg_disabled);
+        } else {
+            self.emit_obj(x, obj);
+        }
+    }
+
+    fn emit_bg(&mut self, x: usize, color: u8, attr: Attributes, bg_disabled: bool) {
+        if self.mode == GBMode::CGB {
+            if bg_disabled {
+                self.set_rgb_mapped(x, 0x7FFF);
+                return;
+            }
+            let palette_no = if self.use_cgb_mode() {
+                (attr.bits() & 0b0000_0111) as usize
+            } else {
+                0
+            };
+            let final_color = if !self.use_cgb_mode() {
+                ((self.bgp >> (color * 2)) & 0x03) as usize
+            } else {
+                color as usize
+            };
+            let pa = palette_no * 8 + final_color * 2;
+            let c = (self.bcpd[pa] as u16) | ((self.bcpd[pa + 1] as u16) << 8) & 0x7FFF;
+            self.set_rgb_mapped(x, c);
+        } else {
+            // The pixel emitted on the dot a BGP write lands shows old|new.
+            let pal = self.bgp_glitch.unwrap_or(self.bgp);
+            let c = Self::grey_to_l(self.ppu_config.palette, pal, color as usize);
+            self.framebuffer
+                .set_pixel(c.r(), c.g(), c.b(), x, self.ly as usize);
+        }
+    }
+
+    fn emit_obj(&mut self, x: usize, obj: ObjPixel) {
+        if self.mode == GBMode::CGB {
+            let palette_no = if self.use_cgb_mode() {
+                (obj.cgb_attr & 0b0000_0111) as usize
+            } else if obj.palette {
+                1
+            } else {
+                0
+            };
+            let final_color = if !self.use_cgb_mode() {
+                let obp = if obj.palette { self.obp1 } else { self.obp0 };
+                ((obp >> (obj.color * 2)) & 0x03) as usize
+            } else {
+                obj.color as usize
+            };
+            let pa = palette_no * 8 + final_color * 2;
+            let c = (self.ocpd[pa] as u16) | ((self.ocpd[pa + 1] as u16) << 8) & 0x7FFF;
+            self.set_rgb_mapped(x, c);
+        } else {
+            let c = if obj.palette {
+                Self::grey_to_l(self.ppu_config.palette, self.obp1, obj.color as usize)
+            } else {
+                Self::grey_to_l(self.ppu_config.palette, self.obp0, obj.color as usize)
+            };
+            self.framebuffer
+                .set_pixel(c.r(), c.g(), c.b(), x, self.ly as usize);
+        }
+    }
+
+    /// Begin a sprite fetch if a selected sprite is due at the current position
+    /// and the BG FIFO has produced a tile to align against (§7.4).
+    fn try_start_sprite(&mut self) {
+        // (V) DMG suppresses OBJ fetches entirely when objects are disabled;
+        // CGB still fetches (only mixing checks LCDC), so this shortens Mode 3
+        // on DMG only.
+        if self.mode == GBMode::DMG && !self.lcdc.contains(LCDC::OBJ_ENABLE) {
+            return;
+        }
+        if self.bg_fifo.is_empty() {
+            return;
+        }
+
+        let target = self.shifter.emitted as i16;
+        let mut chosen: Option<usize> = None;
+        for (i, s) in self.sprites.iter().enumerate() {
+            if s.fetched {
+                continue;
+            }
+            // (V) A sprite is due once the pixel about to be emitted has reached
+            // its screen X (x-8); left-clipped sprites (x<8) fire at x=0.
+            if (s.x as i16 - 8) <= target {
+                match chosen {
+                    None => chosen = Some(i),
+                    Some(j) => {
+                        let o = &self.sprites[j];
+                        if s.x < o.x || (s.x == o.x && s.oam_index < o.oam_index) {
+                            chosen = Some(i);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(i) = chosen {
+            self.sprites[i].fetched = true;
+            self.fetcher.sprite = Some(self.sprites[i]);
+            self.fetcher.sprite_step = FetchStep::TileId;
+            self.fetcher.sprite_substep = 0;
+        }
+    }
+
+    /// One dot of an in-progress sprite fetch (6 dots total, no Push step).
+    fn sprite_fetch_step(&mut self) {
+        let s = match self.fetcher.sprite {
+            Some(s) => s,
+            None => return,
+        };
+        match self.fetcher.sprite_step {
+            FetchStep::TileId => {
+                // Tile number came from OAM; this access reads nothing new.
+                if self.fetcher.sprite_substep == 1 {
+                    self.fetcher.sprite_step = FetchStep::TileLow;
+                }
+                self.fetcher.sprite_substep ^= 1;
+            }
+            FetchStep::TileLow => {
+                if self.fetcher.sprite_substep == 1 {
+                    self.fetcher.sprite_low = self.sprite_plane(&s, 0);
+                    self.fetcher.sprite_step = FetchStep::TileHigh;
+                }
+                self.fetcher.sprite_substep ^= 1;
+            }
+            FetchStep::TileHigh => {
+                if self.fetcher.sprite_substep == 1 {
+                    self.fetcher.sprite_high = self.sprite_plane(&s, 1);
+                    self.mix_sprite(&s);
+                    self.fetcher.sprite = None; // resume shifting next dot
+                }
+                self.fetcher.sprite_substep ^= 1;
+            }
+            FetchStep::Push => self.fetcher.sprite = None,
+        }
+    }
+
+    fn oam_top(s: &SelectedSprite) -> u8 {
+        s.y.wrapping_sub(16)
+    }
+
+    fn sprite_plane(&self, s: &SelectedSprite, plane: u16) -> u8 {
+        let size: u8 = if self.lcdc.contains(LCDC::OBJ_SIZE) { 16 } else { 8 };
+        // Mask the line offset into the *current* sprite height: OBJ_SIZE can
+        // change between OAM selection and this fetch (m3_lcdc_obj_size_change),
+        // and hardware fetches with the height in effect at fetch time.
+        let mut row = self.ly.wrapping_sub(Self::oam_top(s)) & (size - 1);
+        if s.attr.contains(Attributes::Y_FLIP) {
+            row = size - 1 - row;
+        }
+        let tile = if size == 16 { s.tile & 0xFE } else { s.tile };
+        let addr = 0x8000u16 + tile as u16 * 16 + row as u16 * 2;
+        let bank = if self.mode == GBMode::CGB && s.attr.contains(Attributes::BANK) { 1 } else { 0 };
+        self.read_vram(addr + plane, bank)
+    }
+
+    /// Mix a freshly-fetched sprite into the per-line OBJ overlay. The first
+    /// (highest-priority) sprite to cover a pixel keeps it, matching the OBJ
+    /// FIFO's "don't overwrite a non-transparent pixel" rule.
+    fn mix_sprite(&mut self, s: &SelectedSprite) {
+        let base = s.x as i16 - 8;
+        let xflip = s.attr.contains(Attributes::X_FLIP);
+        let palette = s.attr.contains(Attributes::PALETTE_NO_0);
+        let bg_prio = s.attr.contains(Attributes::PRIORITY);
+        for i in 0..8i16 {
+            let sx = base + i;
+            if sx < 0 || sx >= SCREEN_W as i16 {
+                continue;
+            }
+            let bit = if xflip { i as u8 } else { 7 - i as u8 };
+            let lo = (self.fetcher.sprite_low >> bit) & 1;
+            let hi = (self.fetcher.sprite_high >> bit) & 1;
+            let color = (hi << 1) | lo;
+            if color == 0 {
+                continue;
+            }
+            let slot = &mut self.obj_line[sx as usize];
+            if slot.color != 0 {
+                continue; // an earlier sprite already owns this pixel
+            }
+            *slot = ObjPixel {
+                color,
+                palette,
+                bg_prio,
+                cgb_attr: s.attr.bits(),
+            };
+        }
+    }
+
+    /// Fire the window the dot the shifter's position counter *equals* WX
+    /// (§7.5). Hardware performs this comparison every dot against the live
+    /// WX value, so a mid-line WX write moves the target: if the counter has
+    /// already passed the new value, the equality never holds and the window
+    /// does not start on this line (m3_wx_*_change). WX 0..6 match during the
+    /// pre-emission warm-up dots; WX >= 167 can never match (the counter tops
+    /// out at 166).
+    fn check_window_trigger(&mut self) {
+        if self.window_active || self.fetcher.in_sprite_fetch() {
+            return;
+        }
+        if !self.lcdc.contains(LCDC::WINDOW_ENABLE) || self.wy > self.ly {
+            return;
+        }
+        // (V) The WX<7 + fine-scroll (SCX%8 != 0) glitch and the WX=166 quirk
+        // are not yet modelled.
+        if self.shifter.discard != 0 {
+            return;
+        }
+        // WX >= 167 never starts a window (documented); the guard is needed
+        // explicitly because the position counter wraps up from its -1 start.
+        if self.wx >= 167 {
+            return;
+        }
+        if self.shifter.pos == self.wx {
+            self.window_active = true;
+            self.fetcher.fetching_window = true;
+            self.fetcher.tile_x = 0;
+            self.fetcher.done_dummy = true; // no warm-up fetch on window restart
+            self.fetcher.restart_bg();
+            self.bg_fifo.clear();
+            // WX 0..6: the window still starts at the screen's left edge, but
+            // its first 7-WX pixels fall off the left side and are clipped.
+            if self.wx < 7 {
+                self.shifter.discard = 7 - self.wx;
+            }
+        }
     }
 
     fn window_visible(&mut self) -> bool {
@@ -285,362 +749,6 @@ impl PPU {
 
         self.framebuffer
             .set_pixel(color[0], color[1], color[2], x, self.ly as usize);
-    }
-
-    fn draw_bg_pixel(&mut self, x: usize) {
-        // ┌──────────────────┬──────────────────┬──────────────────┐
-        // │ TILE_DATA_AREA   │        1         │        0         │
-        // ╞══════════════════╪══════════════════╪══════════════════╡
-        // │ Range 0-127      │ $8000 - $87FF    │ $8800 - $8FFF    │
-        // ├──────────────────┼──────────────────┼──────────────────┤
-        // │ Range 128-255    │ $8800 - $8FFF    │ $9000 - $97FF    │
-        // └──────────────────┴──────────────────┴──────────────────┘
-        let tile_data_base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-            0x8000
-        } else {
-            0x8800
-        };
-
-        // WX (Window Space) -> WX (Screen Space)
-        let wx = self.wx.wrapping_sub(7);
-
-        // Only show window if it's enabled and it intersects current scanline
-        let in_window_y = self.window_visible();
-
-        let in_window_x = x as u8 >= wx;
-
-        let (px, py) = if in_window_y && in_window_x {
-            let px = x as u8 - wx;
-            let py = self.wly;
-            (px, py)
-        } else {
-            let px = self.scx.wrapping_add(x as u8);
-            let py = self.scy.wrapping_add(self.ly);
-            (px, py)
-        };
-
-        // Check if BG/Window is disabled (DMG game with LCDC bit 0 off)
-        let bg_disabled = !self.use_cgb_mode() && !self.lcdc.contains(LCDC::WINDOW_PRIORITY);
-
-        if bg_disabled {
-            // BG is disabled: draw color 0 from BGP and set priority to Color0
-            self.bgprio[x] = Priority::Color0;
-
-            if self.mode == GBMode::CGB {
-                // In CGB mode, use white when BG is disabled
-                self.set_rgb_mapped(x, 0x7FFF);
-            } else {
-                let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, 0);
-                self.framebuffer.set_pixel(
-                    color.r(),
-                    color.g(),
-                    color.b(),
-                    x,
-                    self.ly as usize,
-                );
-            }
-            return; // Skip all the tile reading logic
-        }
-
-        // Tile Map Base Address
-        let tile_map_base = if in_window_y && in_window_x {
-            if self.lcdc.contains(LCDC::WINDOW_AREA) {
-                0x9C00
-            } else {
-                0x9800
-            }
-        } else if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) {
-            0x9C00
-        } else {
-            0x9800
-        };
-
-        let tile_index_y = (py as u16 >> 3) & 31;
-        let tile_index_x = (px as u16 >> 3) & 31;
-
-        // Location of Tile Attributes
-        let tile_address = tile_map_base + tile_index_y * 32 + tile_index_x;
-        let tile_index = self.read_vram(tile_address, 0);
-
-        // If we're using the secondary address mode,
-        // we need to interpret this tile index as signed
-        let tile_offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-            tile_index as i16
-        } else {
-            (tile_index as i8) as i16 + 128
-        } as u16
-            * 16;
-
-        let tile_data_location = tile_data_base + tile_offset;
-        let tile_attributes = if self.mode == GBMode::CGB {
-            Attributes::from_bits_retain(self.read_vram(tile_address, 1))
-        } else {
-            // BG Tiles don't get attributes on DMG
-            Attributes::empty()
-        };
-
-        let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
-            7 - py % 8
-        } else {
-            py % 8
-        };
-        let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
-            7 - px % 8
-        } else {
-            px % 8
-        };
-        let tile_data_address = tile_data_location + ((tile_y * 2) as u16);
-        let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
-            1
-        } else {
-            0
-        };
-
-        let tile_data = {
-            let a = self.read_vram(tile_data_address, bank);
-            let b = self.read_vram(tile_data_address + 1, bank);
-            [a, b]
-        };
-
-        let color_l = if tile_data[0] & (0x80 >> tile_x) != 0 {
-            1
-        } else {
-            0
-        };
-        let color_h = if tile_data[1] & (0x80 >> tile_x) != 0 {
-            2
-        } else {
-            0
-        };
-        let color = color_h | color_l;
-
-        self.bgprio[x] = if color == 0 {
-            Priority::Color0
-        } else {
-            if tile_attributes.contains(Attributes::PRIORITY) {
-                Priority::Priority
-            } else {
-                Priority::Normal
-            }
-        };
-
-        if self.mode == GBMode::CGB {
-            let palette_no_1 = if self.use_cgb_mode() {
-                (tile_attributes.bits() & 0b0000_0111) as usize
-            } else {
-                0
-            };
-
-            let final_color = if !self.use_cgb_mode() {
-                ((self.bgp >> (color * 2)) & 0x03) as usize
-            } else {
-                color
-            };
-
-            let palette_address = palette_no_1 * 8 + final_color * 2;
-
-            let color: u16 = (self.bcpd[palette_address] as u16)
-                | ((self.bcpd[palette_address + 1] as u16) << 8) & 0x7FFF;
-
-            self.set_rgb_mapped(x, color);
-        } else {
-            let color = Self::grey_to_l(self.ppu_config.palette, self.bgp, color);
-            self.framebuffer
-                .set_pixel(color.r(), color.g(), color.b(), x, self.ly as usize);
-        }
-    }
-
-    fn draw_sprites(&mut self) {
-        let sprite_size = if self.lcdc.contains(LCDC::OBJ_SIZE) {
-            16
-        } else {
-            8
-        };
-        let mut object_count: u8 = 0;
-
-        // Track which sprite has "claimed" each pixel position (regardless of whether it actually drew)
-        let mut sprite_pixels: [(Option<u16>, Option<u8>); SCREEN_W] = [(None, None); SCREEN_W];
-
-        for i in 0..40 {
-            let sprite_address = 0xFE00 + (i as u16) * 4;
-            let py = self.read(sprite_address).wrapping_sub(16);
-            let px = self.read(sprite_address + 1).wrapping_sub(8);
-            let tile_number = self.read(sprite_address + 2)
-                & if self.lcdc.contains(LCDC::OBJ_SIZE) {
-                0xFE
-            } else {
-                0xFF
-            };
-            let tile_attributes = Attributes::from_bits_retain(self.read(sprite_address + 3));
-
-            if py <= 0xFF - sprite_size + 1 {
-                if self.ly < py || self.ly > py + sprite_size - 1 {
-                    continue;
-                }
-            } else {
-                if self.ly > py.wrapping_add(sprite_size) - 1 {
-                    continue;
-                }
-            }
-
-            if px >= (SCREEN_W as u8) && px <= (0xFF - 7) {
-                continue;
-            }
-
-            let tile_y = if tile_attributes.contains(Attributes::Y_FLIP) {
-                sprite_size - 1 - self.ly.wrapping_sub(py)
-            } else {
-                self.ly.wrapping_sub(py)
-            };
-
-            let tile_data_address = 0x8000_u16 + tile_number as u16 * 16 + tile_y as u16 * 2;
-            let bank = if self.mode == GBMode::CGB && tile_attributes.contains(Attributes::BANK) {
-                1
-            } else {
-                0
-            };
-
-            let tile_data = {
-                let a = self.read_vram(tile_data_address, bank);
-                let b = self.read_vram(tile_data_address + 1, bank);
-                [a, b]
-            };
-
-            object_count += 1;
-            if object_count > 10 {
-                continue;
-            }
-
-            for x in 0..8 {
-                let screen_x = px.wrapping_add(x);
-                if screen_x >= (SCREEN_W as u8) {
-                    continue;
-                }
-
-                let tile_x = if tile_attributes.contains(Attributes::X_FLIP) {
-                    7 - x
-                } else {
-                    x
-                };
-
-                let color_low = if tile_data[0] & (0x80 >> tile_x) != 0 {
-                    1
-                } else {
-                    0
-                };
-                let color_high = if tile_data[1] & (0x80 >> tile_x) != 0 {
-                    2
-                } else {
-                    0
-                };
-                let color = color_high | color_low;
-                if color == 0 {
-                    continue;
-                }
-
-                // Check sprite-to-sprite priority
-                let screen_x_usize = screen_x as usize;
-                if let (Some(prev_addr), Some(prev_px)) = sprite_pixels[screen_x_usize] {
-                    let skip = if self.use_cgb_mode() {
-                        // CGB ROM: respect OPRI register
-                        if self.opri {
-                            // OAM priority
-                            prev_addr < sprite_address
-                        } else {
-                            // X-coordinate priority
-                            prev_px < px || (prev_px == px && prev_addr < sprite_address)
-                        }
-                    } else {
-                        // DMG ROM: always use X-coordinate priority
-                        prev_px < px || (prev_px == px && prev_addr < sprite_address)
-                    };
-
-                    if skip {
-                        continue;
-                    }
-                }
-
-                // Mark this pixel as claimed BEFORE checking BG priority
-                // This prevents lower-priority sprites from drawing even if this one is blocked
-                sprite_pixels[screen_x_usize] = (Some(sprite_address), Some(px));
-
-                let prio = self.bgprio[screen_x as usize];
-                let skip = match self.mode {
-                    GBMode::CGB => {
-                        if self.lcdc.contains(LCDC::WINDOW_PRIORITY) {
-                            if prio == Priority::Color0 {
-                                false
-                            } else if !tile_attributes.contains(Attributes::PRIORITY)
-                                && prio != Priority::Priority
-                            {
-                                false
-                            } else {
-                                true
-                            }
-                        } else {
-                            tile_attributes.contains(Attributes::PRIORITY)
-                                && prio != Priority::Color0
-                        }
-                    }
-                    GBMode::DMG => {
-                        tile_attributes.contains(Attributes::PRIORITY) && prio != Priority::Color0
-                    }
-                };
-
-                if skip {
-                    continue;
-                }
-
-                if self.mode == GBMode::CGB {
-                    let palette_no = if self.use_cgb_mode() {
-                        (tile_attributes.bits() & 0b0000_0111) as usize
-                    } else {
-                        if tile_attributes.contains(Attributes::PALETTE_NO_0) {
-                            1
-                        } else {
-                            0
-                        }
-                    };
-
-                    let final_color = if !self.use_cgb_mode() {
-                        // DMG game: remap color through OBP0/OBP1
-                        let obp = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
-                            self.obp1
-                        } else {
-                            self.obp0
-                        };
-                        ((obp >> (color * 2)) & 0x03) as usize
-                    } else {
-                        color
-                    };
-
-                    let palette_address = palette_no * 8 + final_color * 2;
-
-                    let color: u16 = (self.ocpd[palette_address] as u16)
-                        | ((self.ocpd[palette_address + 1] as u16) << 8) & 0x7FFF;
-
-                    self.set_rgb_mapped(screen_x as usize, color);
-                } else {
-                    let color = if tile_attributes.contains(Attributes::PALETTE_NO_0) {
-                        Self::grey_to_l(self.ppu_config.palette, self.obp1, color)
-                    } else {
-                        Self::grey_to_l(self.ppu_config.palette, self.obp0, color)
-                    };
-
-                    self.framebuffer.set_pixel(
-                        color.r(),
-                        color.g(),
-                        color.b(),
-                        screen_x as usize,
-                        self.ly as usize,
-                    );
-                }
-            }
-        }
-    }
-
-    pub fn clear_vram(&mut self) {
-        self.vram = [0; 0x4000];
     }
 
     pub fn disable_boot_rom(&mut self) {
@@ -796,13 +904,16 @@ impl Memory for PPU {
                         }
                     }
                 } else if !was_on {
-                    // Enabling the LCD restarts at the beginning of scanline 0,
-                    // so LY only reaches 1 a full line (456 dots) later. The
-                    // enabling write lands on the last dot of its M-cycle, which
-                    // therefore goes uncounted, so seed the count with it.
+                    // Enabling the LCD restarts at the beginning of scanline 0.
+                    // The seed sets the permanent phase between the PPU's dot
+                    // counter and the CPU's M-cycle grid (a line is 456 ≡ 0 mod
+                    // 4 dots, so it never re-aligns). The value encodes the
+                    // hardware phase pinned by the mealybug m3 suite; the
+                    // first-frame enable quirks (short line 0, mode-0 readback)
+                    // are not yet modelled.
                     self.reset_ly();
                     self.ppu_mode = PPUMode::OAMScan;
-                    self.cycle_count = 4;
+                    self.cycle_count = 5;
                 }
             }
             0xFF41 => {
@@ -817,7 +928,16 @@ impl Memory for PPU {
                 self.lc = v;
                 self.check_lyc();
             }
-            0xFF47 => self.bgp = v,
+            0xFF47 => {
+                // DMG: a BGP write landing during Mode 3 leaves `old | new`
+                // visible for the single dot the write occupies before the new
+                // value takes over — the 1-px slivers the mealybug
+                // m3_bgp_change reference pins down. CGB does not glitch.
+                if self.mode == GBMode::DMG && self.ppu_mode == PPUMode::Draw {
+                    self.bgp_glitch = Some(self.bgp | v);
+                }
+                self.bgp = v;
+            }
             0xFF48 => self.obp0 = v,
             0xFF49 => self.obp1 = v,
             0xFF4A => self.wy = v,

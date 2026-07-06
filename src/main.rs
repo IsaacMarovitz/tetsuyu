@@ -20,7 +20,7 @@ use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key, SmolStr};
+use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{Window, WindowId};
 
@@ -229,37 +229,39 @@ fn main() {
     // Start CPU
     thread::spawn(move || {
         let mut mb =
-            hw::motherboard::Motherboard::from_config(buffer, header, config, framebuffer_writer);
+            hw::motherboard::Motherboard::from_config(buffer, header, config.clone(), framebuffer_writer);
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 
         loop {
-            // https://github.com/mohanson/gameboy/blob/master/src/cpu.rs#L13
-            if step_cycles > STEP_CYCLES {
-                step_cycles -= STEP_CYCLES;
-                let now = Instant::now();
-                let duration = now.duration_since(step_zero);
-                let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
-                // println!("[CPU] Sleeping {}ms", milliseconds);
-                thread::sleep(Duration::from_millis(milliseconds as u64));
-                step_zero = step_zero
-                    .checked_add(Duration::from_millis(u64::from(STEP_TIME)))
-                    .unwrap();
+            if !config.headless {
+                // https://github.com/mohanson/gameboy/blob/master/src/cpu.rs#L13
+                if step_cycles > STEP_CYCLES {
+                    step_cycles -= STEP_CYCLES;
+                    let now = Instant::now();
+                    let duration = now.duration_since(step_zero);
+                    let milliseconds = STEP_TIME.saturating_sub(duration.as_millis() as u32);
+                    // println!("[CPU] Sleeping {}ms", milliseconds);
+                    thread::sleep(Duration::from_millis(milliseconds as u64));
+                    step_zero = step_zero
+                        .checked_add(Duration::from_millis(u64::from(STEP_TIME)))
+                        .unwrap();
 
-                if now.checked_duration_since(step_zero).is_some() {
-                    step_zero = now;
-                }
-            }
-
-            match input_rx.try_recv() {
-                Ok(v) => {
-                    if v.1 {
-                        mb.joypad_down(v.0);
-                    } else {
-                        mb.joypad_up(v.0);
+                    if now.checked_duration_since(step_zero).is_some() {
+                        step_zero = now;
                     }
                 }
-                Err(_) => {}
+
+                match input_rx.try_recv() {
+                    Ok(v) => {
+                        if v.1 {
+                            mb.joypad_down(v.0);
+                        } else {
+                            mb.joypad_up(v.0);
+                        }
+                    }
+                    Err(_) => {}
+                }
             }
 
             let cycles = mb.step();

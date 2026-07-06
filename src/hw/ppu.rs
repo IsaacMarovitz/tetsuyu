@@ -51,10 +51,12 @@ impl Ppu {
         self.core.oam_corrupt_inc();
     }
 
-    /// Forwarded from a write to 0xFF50: mirrors the legacy hand-off (clears
-    /// VRAM and drops the PPU's boot-rom palette behaviour).
+    /// Forwarded from a write to 0xFF50: drops the PPU's boot-rom palette
+    /// behaviour. VRAM is deliberately left untouched — hardware does not
+    /// clear it at hand-off, and the boot ROM's logo tiles ($01-$19) remain
+    /// visible to the game until overwritten (several mealybug tests render
+    /// the leftover ® tile as sprite/BG content).
     pub fn on_boot_rom_disabled(&mut self) {
-        self.core.clear_vram();
         self.core.disable_boot_rom();
     }
 }
