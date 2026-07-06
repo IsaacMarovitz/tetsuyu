@@ -7,12 +7,12 @@
 //! represent that without severe aliasing, since it assumes the table
 //! content is a static, low-frequency periodic waveform.
 
+use crate::CLOCK_FREQUENCY;
 use crate::sound::ch3::CH3;
 use blip_buf::BlipBuf;
 use fundsp::prelude::*;
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::{Arc, Mutex};
-use crate::CLOCK_FREQUENCY;
 
 const FLUSH_CYCLES: u32 = 4096;
 const BLIP_CAPACITY: u32 = 4096;
@@ -79,8 +79,8 @@ impl Ch3BlipProducer {
         let occupied = RING_CAPACITY - self.producer.slots();
         let error = occupied as f64 - self.target_fill as f64;
         let normalized_error = error / self.target_fill as f64;
-        let correction =
-            (1.0 - DRIFT_GAIN * normalized_error).clamp(1.0 - MAX_DRIFT_CORRECTION, 1.0 + MAX_DRIFT_CORRECTION);
+        let correction = (1.0 - DRIFT_GAIN * normalized_error)
+            .clamp(1.0 - MAX_DRIFT_CORRECTION, 1.0 + MAX_DRIFT_CORRECTION);
         self.blip
             .set_rates(CLOCK_FREQUENCY as f64, self.base_sample_rate * correction);
     }

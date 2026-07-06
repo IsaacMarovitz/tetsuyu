@@ -7,11 +7,13 @@
 //! so a failed load fails one test rather than the whole runner.
 
 use crate::components::mode::GBMode;
+use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
 use crate::config::Config;
-use crate::framebuffer::{create_framebuffer_pair, FramebufferReader};
+use crate::framebuffer::{FramebufferReader, create_framebuffer_pair};
 use crate::hw::motherboard::Motherboard;
 use crate::mbc::header::{CGBFlag, Header};
 use std::fs;
+use std::path::Path;
 
 /// Condition that ends a [`Harness::run_until`] run.
 #[derive(Debug, Clone, Copy)]
@@ -116,16 +118,6 @@ impl Harness {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Reference-image comparison — the migration instrument (docs/ppu-fifo-design.md
-// §4 step 1). Runs a ROM headless and diffs the framebuffer against a reference
-// PNG, reporting exact-match % and the first differing pixel. This is the
-// instrument every FIFO bring-up step is gated on.
-// ---------------------------------------------------------------------------
-
-use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
-use std::path::Path;
-
 /// A decoded reference image, expanded to 8-bit RGBA.
 pub struct RefImage {
     pub width: usize,
@@ -139,8 +131,8 @@ impl RefImage {
     /// ship as.
     pub fn load_png(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
-        let file =
-            fs::File::open(path).map_err(|e| format!("open reference \"{}\": {e}", path.display()))?;
+        let file = fs::File::open(path)
+            .map_err(|e| format!("open reference \"{}\": {e}", path.display()))?;
         // The mealybug references are 1-/2-bit indexed or grayscale PNGs; expand
         // paletted + low-bit-depth pixels to straight 8-bit channels (and strip
         // any 16-bit down to 8) so the byte handling below is uniform.
@@ -191,11 +183,10 @@ impl RefImage {
             }
             png::ColorType::Rgba => rgba.copy_from_slice(&raw[..px * 4]),
             png::ColorType::Indexed => {
-                let palette = reader
-                    .info()
-                    .palette
-                    .as_ref()
-                    .ok_or_else(|| format!("\"{}\": indexed PNG has no palette", path.display()))?;
+                let palette =
+                    reader.info().palette.as_ref().ok_or_else(|| {
+                        format!("\"{}\": indexed PNG has no palette", path.display())
+                    })?;
                 for i in 0..px {
                     let idx = raw[i] as usize;
                     rgba[i * 4] = palette.get(idx * 3).copied().unwrap_or(0);
@@ -206,7 +197,11 @@ impl RefImage {
             }
         }
 
-        Ok(Self { width: w, height: h, rgba })
+        Ok(Self {
+            width: w,
+            height: h,
+            rgba,
+        })
     }
 }
 
@@ -286,7 +281,9 @@ pub fn run_and_compare(
     if h.run_until(StopCondition::Frames(frames), (frames + 20) * FRAME_CYCLES)
         == RunOutcome::TimedOut
     {
-        return Err(format!("{rom_path}: did not reach {frames} frames in budget"));
+        return Err(format!(
+            "{rom_path}: did not reach {frames} frames in budget"
+        ));
     }
     compare_frame(h.framebuffer(), &reference)
 }
@@ -294,8 +291,8 @@ pub fn run_and_compare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
     use crate::config::Color;
+    use std::collections::HashSet;
 
     fn project_config() -> Option<Config> {
         let s = fs::read_to_string("./config.toml").ok()?;

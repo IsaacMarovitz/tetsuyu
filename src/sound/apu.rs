@@ -1,8 +1,8 @@
 use crate::components::memory::Memory;
+use crate::components::mode::GBMode;
 use crate::config::{APUConfig, Config};
 use crate::sound::prelude::*;
 use bitflags::bitflags;
-use crate::components::mode::GBMode;
 
 pub struct APU {
     config: APUConfig,
@@ -216,7 +216,11 @@ impl APU {
         // 0 while inactive so the on/off transition itself is captured as a
         // proper band-limited step.
         let active = self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled;
-        let amplitude = if active { self.ch3.current_amplitude() } else { 0 };
+        let amplitude = if active {
+            self.ch3.current_amplitude()
+        } else {
+            0
+        };
 
         synth.ch3.feed(
             amplitude,

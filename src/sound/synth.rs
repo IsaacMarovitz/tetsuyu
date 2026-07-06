@@ -1,11 +1,11 @@
+use crate::sound::ch3_blip::{Ch3BlipNode, Ch3BlipProducer, ch3_blip_pair};
+use crate::sound::lfsr_noise::lfsr_noise_controlled;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
+use fundsp::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use fundsp::prelude::*;
-use crate::sound::ch3_blip::{ch3_blip_pair, Ch3BlipNode, Ch3BlipProducer};
-use crate::sound::lfsr_noise::lfsr_noise_controlled;
 
 #[derive(Clone)]
 pub struct PulseChannel {
@@ -53,7 +53,7 @@ impl WaveChannel {
         };
         (channel, node)
     }
-    
+
     pub fn feed(&self, amplitude: i32, pan_left: bool, pan_right: bool) {
         if let Ok(mut producer) = self.producer.lock() {
             producer.feed(amplitude);
@@ -199,7 +199,7 @@ impl Synth {
                 ((var(&ch1.freq) | var(&ch1.duty)) >> pulse()) * var(&ch1.vol) * constant(0.25);
             let ch2_mono =
                 ((var(&ch2.freq) | var(&ch2.duty)) >> pulse()) * var(&ch2.vol) * constant(0.25);
-            
+
             let ch3_mono = An(ch3_node) * constant(0.25);
 
             let ch4_mono = (var(&ch4.freq) | var(&ch4.width))

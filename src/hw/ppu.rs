@@ -1,6 +1,6 @@
-use crate::components::memory::Memory;
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use super::interrupt::Interrupts;
+use crate::components::memory::Memory;
 use crate::components::ppu::ppu::PPU as CorePpu;
 use crate::config::Config;
 use crate::framebuffer::FramebufferWriter;

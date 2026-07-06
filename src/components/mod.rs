@@ -7,7 +7,5 @@ pub mod serial;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::components::{
-        joypad::*, memory::*, mode::*, ppu::*, registers::*, serial::*
-    };
+    pub use crate::components::{joypad::*, memory::*, mode::*, ppu::*, registers::*, serial::*};
 }

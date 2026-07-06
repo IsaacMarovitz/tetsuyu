@@ -6,7 +6,7 @@ use crate::components::mode::GBMode;
 use crate::components::serial::Serial;
 use crate::config::Config;
 use crate::mbc::header::Header;
-use crate::mbc::mode::{MBCMode, MBC};
+use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::prelude::*;
 
 /// Everything on the bus that is passive memory or an untimed port: the

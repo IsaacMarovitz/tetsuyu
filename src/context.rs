@@ -147,8 +147,7 @@ impl Context {
                 self.surface.configure(&self.device, &self.config);
                 frame
             }
-            CurrentSurfaceTexture::Outdated
-            | CurrentSurfaceTexture::Lost => {
+            CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
                 self.surface.configure(&self.device, &self.config);
                 return;
             }
@@ -157,7 +156,9 @@ impl Context {
             | CurrentSurfaceTexture::Validation => return,
         };
 
-        let output_view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let output_view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device

@@ -6,9 +6,9 @@ mod ch3_blip;
 mod ch4;
 mod length_counter;
 mod lfsr_noise;
+mod period_timer;
 mod synth;
 mod volume_envelope;
-mod period_timer;
 
 #[allow(unused_imports)]
 mod prelude {

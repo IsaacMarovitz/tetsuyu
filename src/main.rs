@@ -5,15 +5,15 @@ use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
 use crate::components::prelude::*;
 use crate::config::Config;
 use crate::context::Context;
-use crate::framebuffer::{create_framebuffer_pair, FramebufferReader};
+use crate::framebuffer::{FramebufferReader, create_framebuffer_pair};
 use crate::mbc::header::{CGBFlag, Header};
 use clap::Parser;
 use pollster::FutureExt;
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{process, thread};
 use winit::application::ApplicationHandler;
@@ -50,7 +50,7 @@ struct App {
     input_tx: Sender<(JoypadButton, bool)>,
     framebuffer_reader: FramebufferReader,
     occluded: bool,
-    dump_frame: bool
+    dump_frame: bool,
 }
 
 impl ApplicationHandler for App {
@@ -111,15 +111,9 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
                     if event.state == ElementState::Pressed {
-                        self.send_input(
-                            event.key_without_modifiers(),
-                            true,
-                        );
+                        self.send_input(event.key_without_modifiers(), true);
                     } else if event.state == ElementState::Released {
-                        self.send_input(
-                            event.key_without_modifiers(),
-                            false,
-                        );
+                        self.send_input(event.key_without_modifiers(), false);
                     }
                 }
             }
@@ -228,8 +222,12 @@ fn main() {
 
     // Start CPU
     thread::spawn(move || {
-        let mut mb =
-            hw::motherboard::Motherboard::from_config(buffer, header, config.clone(), framebuffer_writer);
+        let mut mb = hw::motherboard::Motherboard::from_config(
+            buffer,
+            header,
+            config.clone(),
+            framebuffer_writer,
+        );
         let mut step_cycles = 0;
         let mut step_zero = Instant::now();
 

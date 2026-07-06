@@ -1,5 +1,5 @@
-use crate::hw::interrupt::Interrupts;
 use crate::components::prelude::*;
+use crate::hw::interrupt::Interrupts;
 use std::io::Write;
 
 // TODO: Handle serial properly
@@ -9,7 +9,7 @@ pub struct Serial {
     sc: u8,
     output: Vec<u8>,
     print: bool,
-    mode: GBMode
+    mode: GBMode,
 }
 
 impl Serial {
@@ -20,7 +20,7 @@ impl Serial {
             sc: 0,
             output: Vec::new(),
             print,
-            mode
+            mode,
         }
     }
 

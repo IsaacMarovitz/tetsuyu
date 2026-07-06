@@ -1,5 +1,3 @@
-//! Pixel-FIFO PPU state (see `docs/ppu-fifo-design.md` §3 and §7).
-//!
 //! This module holds the *data* for the sub-dot-accurate renderer — the two
 //! pixel FIFOs, the background/window/sprite fetcher, and the LCD shifter. The
 //! per-dot logic that drives them lives on `PPU` (in `ppu.rs`), so it can reach
@@ -86,7 +84,7 @@ impl<T: Copy + Default> PixelFifo<T> {
     }
 }
 
-/// The background/window/sprite fetcher (§7.1).
+/// The background/window/sprite fetcher
 pub struct Fetcher {
     pub step: FetchStep,
     /// 0 or 1 within the current 2-dot step; the access resolves on substep 1.
@@ -94,7 +92,7 @@ pub struct Fetcher {
     /// Fetcher column within the current line's map row.
     pub tile_x: u8,
     pub fetching_window: bool,
-    /// The dummy first fetch primes the pipeline and is discarded (§7.2).
+    /// The dummy first fetch primes the pipeline and is discarded
     pub done_dummy: bool,
     // Latched bytes / attribute for the in-progress BG tile.
     pub tile_id: u8,
@@ -141,7 +139,7 @@ impl Fetcher {
     }
 }
 
-/// The LCD shifter (§7.2/§7.3).
+/// The LCD shifter
 pub struct Shifter {
     /// Screen X of the next visible pixel to emit (0..160). Mode 3 ends at 160.
     pub emitted: u8,
@@ -168,7 +166,7 @@ impl Shifter {
     }
 }
 
-/// A sprite chosen during the Mode 2 OAM scan (§2.4); up to 10 per line.
+/// A sprite chosen during the Mode 2 OAM scan, up to 10 per line.
 #[derive(Copy, Clone)]
 pub struct SelectedSprite {
     /// OAM byte index (0, 4, 8, …) — stable order + priority tie-break.

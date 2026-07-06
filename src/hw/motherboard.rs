@@ -222,7 +222,8 @@ impl Motherboard {
             // The APU is a base-clock device: advance its frame sequencer and
             // channel frequency timers once per base dot.
             if base_dot {
-                self.apu.advance(self.timer.div(), self.sysbus.double_speed());
+                self.apu
+                    .advance(self.timer.div(), self.sysbus.double_speed());
             }
 
             self.ic.request(ticked.irq);

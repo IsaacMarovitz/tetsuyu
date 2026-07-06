@@ -152,7 +152,8 @@ impl Chip for Dma {
                     self.hdma_src = (self.hdma_src & 0xFF00) | (pins.data as u16 & 0xF0)
                 }
                 (0xFF53, BusDir::Write) if cgb => {
-                    self.hdma_dst = 0x8000 | (self.hdma_dst & 0x00FF) | (((pins.data as u16 & 0x1F) << 8))
+                    self.hdma_dst =
+                        0x8000 | (self.hdma_dst & 0x00FF) | ((pins.data as u16 & 0x1F) << 8)
                 }
                 (0xFF54, BusDir::Write) if cgb => {
                     self.hdma_dst = (self.hdma_dst & 0xFF00) | (pins.data as u16 & 0xF0)

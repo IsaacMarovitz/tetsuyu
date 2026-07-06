@@ -9,25 +9,74 @@ use std::collections::VecDeque;
 // --------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum R8 { B, C, D, E, H, L, A }
+pub enum R8 {
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    A,
+}
 
 #[derive(Clone, Copy)]
-pub enum R16 { Bc, De, Hl, Sp }
+pub enum R16 {
+    Bc,
+    De,
+    Hl,
+    Sp,
+}
 
 #[derive(Clone, Copy)]
-pub enum R16Stk { Bc, De, Hl, Af }
+pub enum R16Stk {
+    Bc,
+    De,
+    Hl,
+    Af,
+}
 
 #[derive(Clone, Copy)]
-pub enum Cond { Nz, Z, Nc, C }
+pub enum Cond {
+    Nz,
+    Z,
+    Nc,
+    C,
+}
 
 #[derive(Clone, Copy)]
-pub enum AluOp { Add, Adc, Sub, Sbc, And, Xor, Or, Cp }
+pub enum AluOp {
+    Add,
+    Adc,
+    Sub,
+    Sbc,
+    And,
+    Xor,
+    Or,
+    Cp,
+}
 
 #[derive(Clone, Copy)]
-pub enum RotOp { Rlc, Rrc, Rl, Rr, Sla, Sra, Swap, Srl }
+pub enum RotOp {
+    Rlc,
+    Rrc,
+    Rl,
+    Rr,
+    Sla,
+    Sra,
+    Swap,
+    Srl,
+}
 
 #[derive(Clone, Copy)]
-pub enum Addr { Bc, De, Hl, HighZ, HighC, Wz, Sp }
+pub enum Addr {
+    Bc,
+    De,
+    Hl,
+    HighZ,
+    HighC,
+    Wz,
+    Sp,
+}
 
 #[derive(Clone, Copy)]
 pub enum Byte {
@@ -308,21 +357,32 @@ impl Cpu {
         let carry_in = self.flag(Flags::C) as u8;
         match op {
             AluOp::Add | AluOp::Adc => {
-                let cin = if matches!(op, AluOp::Adc) { carry_in } else { 0 };
+                let cin = if matches!(op, AluOp::Adc) {
+                    carry_in
+                } else {
+                    0
+                };
                 let r = a.wrapping_add(v).wrapping_add(cin);
                 self.reg.set_flag(Flags::Z, r == 0);
                 self.reg.set_flag(Flags::N, false);
-                self.reg.set_flag(Flags::H, (a & 0xF) + (v & 0xF) + cin > 0xF);
-                self.reg.set_flag(Flags::C, a as u16 + v as u16 + cin as u16 > 0xFF);
+                self.reg
+                    .set_flag(Flags::H, (a & 0xF) + (v & 0xF) + cin > 0xF);
+                self.reg
+                    .set_flag(Flags::C, a as u16 + v as u16 + cin as u16 > 0xFF);
                 self.reg.a = r;
             }
             AluOp::Sub | AluOp::Sbc | AluOp::Cp => {
-                let cin = if matches!(op, AluOp::Sbc) { carry_in } else { 0 };
+                let cin = if matches!(op, AluOp::Sbc) {
+                    carry_in
+                } else {
+                    0
+                };
                 let r = a.wrapping_sub(v).wrapping_sub(cin);
                 self.reg.set_flag(Flags::Z, r == 0);
                 self.reg.set_flag(Flags::N, true);
                 self.reg.set_flag(Flags::H, (a & 0xF) < (v & 0xF) + cin);
-                self.reg.set_flag(Flags::C, (a as u16) < v as u16 + cin as u16);
+                self.reg
+                    .set_flag(Flags::C, (a as u16) < v as u16 + cin as u16);
                 if !matches!(op, AluOp::Cp) {
                     self.reg.a = r;
                 }
@@ -374,7 +434,8 @@ impl Cpu {
         let hl = self.reg.get_hl();
         let r = hl.wrapping_add(v);
         self.reg.set_flag(Flags::N, false);
-        self.reg.set_flag(Flags::H, (hl & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
+        self.reg
+            .set_flag(Flags::H, (hl & 0x0FFF) + (v & 0x0FFF) > 0x0FFF);
         self.reg.set_flag(Flags::C, hl as u32 + v as u32 > 0xFFFF);
         self.reg.set_hl(r);
     }
@@ -440,26 +501,64 @@ impl Cpu {
 
     fn exec(&mut self, e: Effect) {
         match e {
-            Effect::LdR(d, s) => { let v = self.r8(s); self.set_r8(d, v); }
-            Effect::LdRZ(d) => { let v = self.z; self.set_r8(d, v); }
-            Effect::Alu(op, s) => { let v = self.r8(s); self.alu(op, v); }
-            Effect::AluZ(op) => { let v = self.z; self.alu(op, v); }
-            Effect::IncR(r) => { let v = self.inc8(self.r8(r)); self.set_r8(r, v); }
-            Effect::DecR(r) => { let v = self.dec8(self.r8(r)); self.set_r8(r, v); }
+            Effect::LdR(d, s) => {
+                let v = self.r8(s);
+                self.set_r8(d, v);
+            }
+            Effect::LdRZ(d) => {
+                let v = self.z;
+                self.set_r8(d, v);
+            }
+            Effect::Alu(op, s) => {
+                let v = self.r8(s);
+                self.alu(op, v);
+            }
+            Effect::AluZ(op) => {
+                let v = self.z;
+                self.alu(op, v);
+            }
+            Effect::IncR(r) => {
+                let v = self.inc8(self.r8(r));
+                self.set_r8(r, v);
+            }
+            Effect::DecR(r) => {
+                let v = self.dec8(self.r8(r));
+                self.set_r8(r, v);
+            }
             Effect::IncZ => self.z = self.inc8(self.z),
             Effect::DecZ => self.z = self.dec8(self.z),
-            Effect::Inc16(r) => { let v = self.r16(r); self.note_oam_glitch(v); self.set_r16(r, v.wrapping_add(1)); }
-            Effect::Dec16(r) => { let v = self.r16(r); self.note_oam_glitch(v); self.set_r16(r, v.wrapping_sub(1)); }
-            Effect::AddHl(r) => { let v = self.r16(r); self.add_hl(v); }
+            Effect::Inc16(r) => {
+                let v = self.r16(r);
+                self.note_oam_glitch(v);
+                self.set_r16(r, v.wrapping_add(1));
+            }
+            Effect::Dec16(r) => {
+                let v = self.r16(r);
+                self.note_oam_glitch(v);
+                self.set_r16(r, v.wrapping_sub(1));
+            }
+            Effect::AddHl(r) => {
+                let v = self.r16(r);
+                self.add_hl(v);
+            }
             Effect::AccRot(op) => {
                 let v = self.rotate(op, self.reg.a);
                 self.reg.a = v;
                 self.reg.set_flag(Flags::Z, false);
             }
-            Effect::Rot(op, r) => { let v = self.rotate(op, self.r8(r)); self.set_r8(r, v); }
+            Effect::Rot(op, r) => {
+                let v = self.rotate(op, self.r8(r));
+                self.set_r8(r, v);
+            }
             Effect::RotZ(op) => self.z = self.rotate(op, self.z),
-            Effect::Bit(n, r) => { let v = self.r8(r); self.bit(n, v); }
-            Effect::BitZ(n) => { let v = self.z; self.bit(n, v); }
+            Effect::Bit(n, r) => {
+                let v = self.r8(r);
+                self.bit(n, v);
+            }
+            Effect::BitZ(n) => {
+                let v = self.z;
+                self.bit(n, v);
+            }
             Effect::Res(n, r) => self.set_r8(r, self.r8(r) & !(1 << n)),
             Effect::ResZ(n) => self.z &= !(1 << n),
             Effect::Set(n, r) => self.set_r8(r, self.r8(r) | (1 << n)),
@@ -498,19 +597,37 @@ impl Cpu {
                 let e = self.z as i8 as i16;
                 self.reg.pc = (self.reg.pc as i16).wrapping_add(e) as u16;
             }
-            Effect::SpDec => { self.note_oam_glitch(self.reg.sp); self.reg.sp = self.reg.sp.wrapping_sub(1); }
-            Effect::SpInc => { self.note_oam_glitch(self.reg.sp); self.reg.sp = self.reg.sp.wrapping_add(1); }
+            Effect::SpDec => {
+                self.note_oam_glitch(self.reg.sp);
+                self.reg.sp = self.reg.sp.wrapping_sub(1);
+            }
+            Effect::SpInc => {
+                self.note_oam_glitch(self.reg.sp);
+                self.reg.sp = self.reg.sp.wrapping_add(1);
+            }
             Effect::WzInc => {
                 let v = self.wz().wrapping_add(1);
                 self.w = (v >> 8) as u8;
                 self.z = v as u8;
             }
             Effect::LdSpHl => self.reg.sp = self.reg.get_hl(),
-            Effect::AddSpE => { let v = self.add_sp_e(); self.reg.sp = v; }
-            Effect::LdHlSpE => { let v = self.add_sp_e(); self.reg.set_hl(v); }
+            Effect::AddSpE => {
+                let v = self.add_sp_e();
+                self.reg.sp = v;
+            }
+            Effect::LdHlSpE => {
+                let v = self.add_sp_e();
+                self.reg.set_hl(v);
+            }
             Effect::Ei => self.ime_pending = true,
-            Effect::Di => { self.ime = false; self.ime_pending = false; }
-            Effect::Reti => { self.reg.pc = self.wz(); self.ime = true; }
+            Effect::Di => {
+                self.ime = false;
+                self.ime_pending = false;
+            }
+            Effect::Reti => {
+                self.reg.pc = self.wz();
+                self.ime = true;
+            }
             Effect::Halt => self.halted = true,
             Effect::Stop => self.speed_switch = true,
             Effect::DecodeCb => self.decode_cb(),
@@ -1075,8 +1192,14 @@ impl Cpu {
                 self.reg.pc = self.reg.pc.wrapping_add(1);
                 false
             }
-            MicroOp::LoadZ(_) => { self.z = pins.data; false }
-            MicroOp::LoadW(_) => { self.w = pins.data; false }
+            MicroOp::LoadZ(_) => {
+                self.z = pins.data;
+                false
+            }
+            MicroOp::LoadW(_) => {
+                self.w = pins.data;
+                false
+            }
             MicroOp::Store(_, _) => false,
             MicroOp::Internal => false,
             MicroOp::Exec(_) => unreachable!("Exec drained in setup"),

@@ -1,5 +1,5 @@
-use crate::hw::interrupt::Interrupts;
 use crate::components::prelude::*;
+use crate::hw::interrupt::Interrupts;
 use bitflags::bitflags;
 
 bitflags! {
