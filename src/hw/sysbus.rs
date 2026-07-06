@@ -90,6 +90,11 @@ impl SystemBus {
         self.boot_rom_enabled = false;
     }
 
+    /// Bytes the program has transmitted over the serial port.
+    pub fn serial_output(&self) -> &[u8] {
+        self.serial.output()
+    }
+
     fn owns(a: u16) -> bool {
         matches!(a,
             0x0000..=0x7FFF

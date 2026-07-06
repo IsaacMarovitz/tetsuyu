@@ -102,6 +102,17 @@ impl Motherboard {
         self.sysbus.joypad_up(b);
     }
 
+    /// Read a byte of CPU-addressable memory without side effects (cartridge,
+    /// WRAM, HRAM, and the sysbus-owned registers). For inspection/testing.
+    pub fn peek(&self, a: u16) -> u8 {
+        self.sysbus.peek(a)
+    }
+
+    /// Bytes the program has transmitted over the serial port.
+    pub fn serial_output(&self) -> &[u8] {
+        self.sysbus.serial_output()
+    }
+
     /// Run one instruction; returns the elapsed T-cycles (4 per M-cycle).
     pub fn step(&mut self) -> u32 {
         let mut mcycles = 0u32;

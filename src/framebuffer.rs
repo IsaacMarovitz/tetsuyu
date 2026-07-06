@@ -66,6 +66,7 @@ impl FramebufferWriter {
 pub struct FramebufferReader {
     frame_receiver: Receiver<Frame>,
     current_frame: Frame,
+    frames_seen: u64,
 }
 
 impl FramebufferReader {
@@ -73,14 +74,26 @@ impl FramebufferReader {
         Self {
             frame_receiver,
             current_frame: Frame::new(),
+            frames_seen: 0,
         }
     }
 
-    pub fn get_latest_frame(&mut self) -> &[u8] {
+    /// Drain any pending frames into `current_frame`, counting them. Returns the
+    /// total number of frames produced since construction.
+    pub fn poll(&mut self) -> u64 {
         while let Ok(frame) = self.frame_receiver.try_recv() {
             self.current_frame = frame;
+            self.frames_seen += 1;
         }
+        self.frames_seen
+    }
 
+    pub fn frames_seen(&self) -> u64 {
+        self.frames_seen
+    }
+
+    pub fn get_latest_frame(&mut self) -> &[u8] {
+        self.poll();
         &self.current_frame.data[..]
     }
 }

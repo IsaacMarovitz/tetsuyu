@@ -28,6 +28,7 @@ mod components;
 mod config;
 mod context;
 mod framebuffer;
+mod harness;
 mod hw;
 mod mbc;
 mod sound;
