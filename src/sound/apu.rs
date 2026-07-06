@@ -210,16 +210,16 @@ impl APU {
     }
 
     fn update_channel_3(&self, synth: &Synth) {
+        // Channel 3 is fed as cycle-accurate DAC amplitude events (see
+        // `sound::ch3_blip`) rather than a frequency + wavetable snapshot, so
+        // PCM-style wave RAM content is reproduced without aliasing. Report
+        // 0 while inactive so the on/off transition itself is captured as a
+        // proper band-limited step.
         let active = self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled;
-        let vol = if active { 1.0 } else { 0.0 };
+        let amplitude = if active { self.ch3.current_amplitude() } else { 0 };
 
-        let shift = self.ch3.get_volume_shift();
-        let wave = self.ch3.wave_as_f32(shift);
-
-        synth.ch3.update(
-            65536.0 / (2048.0 - self.ch3.period as f32),
-            vol,
-            &wave,
+        synth.ch3.feed(
+            amplitude,
             self.panning.contains(Panning::CH3_LEFT),
             self.panning.contains(Panning::CH3_RIGHT),
         );

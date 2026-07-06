@@ -2,6 +2,7 @@ pub mod apu;
 mod ch1;
 mod ch2;
 mod ch3;
+mod ch3_blip;
 mod ch4;
 mod length_counter;
 mod lfsr_noise;

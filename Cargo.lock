@@ -298,6 +298,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "blip_buf"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d01761ce5061c5345c211c47958ee76989241021a9e3c16d3c0a35a309462fb5"
+
+[[package]]
 name = "block2"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2439,6 +2445,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtrb"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ade083ccbb4bf536df69d1f6432cc23deb7acccff86b183f3923a6fd56a1153"
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2772,6 +2784,7 @@ name = "tetsuyu"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.13.0",
+ "blip_buf",
  "clap",
  "cpal",
  "fundsp",
@@ -2780,6 +2793,7 @@ dependencies = [
  "num-traits",
  "png",
  "pollster",
+ "rtrb",
  "serde",
  "toml",
  "wgpu",

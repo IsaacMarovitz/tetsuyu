@@ -17,3 +17,5 @@ toml = "1.1"
 pollster = "0.4"
 librashader = { version = "0.12", default-features = false, features = ["runtime-wgpu", "presets"] }
 png = "0.18"
+blip_buf = "0.1.6"
+rtrb = "0.3.4"

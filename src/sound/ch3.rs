@@ -127,19 +127,19 @@ impl CH3 {
         }
     }
 
-    pub fn wave_as_f32(&self, shift: u8) -> [f32; 32] {
-        const U4_MAX: f32 = 0b1111 as f32;
-        let mut wave: [f32; 32] = [0f32; 32];
+    pub const AMPLITUDE_SCALE: i32 = 30_000;
 
-        for i in 0..self.wave_ram.len() {
-            let hi = (self.wave_ram[i] & 0b1111_0000) >> 4;
-            let lo = self.wave_ram[i] & 0b0000_1111;
+    pub fn current_amplitude(&self) -> i32 {
+        let byte = self.wave_ram[(self.sample_index >> 1) as usize];
+        let nibble = if self.sample_index & 1 == 0 {
+            (byte & 0b1111_0000) >> 4
+        } else {
+            byte & 0b0000_1111
+        };
+        let shift = self.get_volume_shift();
+        let shifted = (nibble >> shift) as i32;
 
-            wave[i * 2] = (((hi >> shift) as f32 / U4_MAX) * 2.0) - 1.0;
-            wave[(i * 2) + 1] = (((lo >> shift) as f32 / U4_MAX) * 2.0) - 1.0;
-        }
-
-        wave
+        (shifted * 2 - 15) * Self::AMPLITUDE_SCALE / 15
     }
 }
 

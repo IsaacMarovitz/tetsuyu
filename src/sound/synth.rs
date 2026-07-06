@@ -1,9 +1,10 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use fundsp::prelude::*;
+use crate::sound::ch3_blip::{ch3_blip_pair, Ch3BlipNode, Ch3BlipProducer};
 use crate::sound::lfsr_noise::lfsr_noise_controlled;
 
 #[derive(Clone)]
@@ -37,32 +38,26 @@ impl PulseChannel {
 
 #[derive(Clone)]
 pub struct WaveChannel {
-    pub freq: Shared,
-    pub vol: Shared,
-    pub wave: Arc<AtomicTable>,
     pub l: Shared,
     pub r: Shared,
+    producer: Arc<Mutex<Ch3BlipProducer>>,
 }
 
 impl WaveChannel {
-    fn new() -> Self {
-        Self {
-            freq: shared(0.0),
-            vol: shared(0.0),
-            wave: Arc::new(AtomicTable::new(&[0.0; 32])),
+    fn new(sample_rate: u32) -> (Self, Ch3BlipNode) {
+        let (producer, node) = ch3_blip_pair(sample_rate);
+        let channel = Self {
             l: shared(0.0),
             r: shared(0.0),
-        }
+            producer: Arc::new(Mutex::new(producer)),
+        };
+        (channel, node)
     }
-
-    pub fn update(&self, freq: f32, vol: f32, wave: &[f32], pan_left: bool, pan_right: bool) {
-        self.freq.set_value(freq);
-        self.vol.set_value(vol);
-
-        for i in 0..wave.len() {
-            self.wave.set(i, wave[i]);
+    
+    pub fn feed(&self, amplitude: i32, pan_left: bool, pan_right: bool) {
+        if let Ok(mut producer) = self.producer.lock() {
+            producer.feed(amplitude);
         }
-
         self.l.set_value(if pan_left { 1.0 } else { 0.0 });
         self.r.set_value(if pan_right { 1.0 } else { 0.0 });
     }
@@ -129,22 +124,24 @@ impl Synth {
     pub fn new() -> Self {
         let host = cpal::default_host();
 
-        let ch1 = PulseChannel::new();
-        let ch2 = PulseChannel::new();
-        let ch3 = WaveChannel::new();
-        let ch4 = NoiseChannel::new();
-        let global = GlobalMix::new();
-
         let device = host
             .default_output_device()
             .expect("Failed to find a default output device");
         let config = device.default_output_config().unwrap();
+        let sample_rate = config.sample_rate();
+
+        let ch1 = PulseChannel::new();
+        let ch2 = PulseChannel::new();
+        let (ch3, ch3_node) = WaveChannel::new(sample_rate);
+        let ch4 = NoiseChannel::new();
+        let global = GlobalMix::new();
 
         match config.sample_format() {
             cpal::SampleFormat::F32 => Synth::run_audio::<f32>(
                 ch1.clone(),
                 ch2.clone(),
                 ch3.clone(),
+                ch3_node,
                 ch4.clone(),
                 global.clone(),
                 device,
@@ -154,6 +151,7 @@ impl Synth {
                 ch1.clone(),
                 ch2.clone(),
                 ch3.clone(),
+                ch3_node,
                 ch4.clone(),
                 global.clone(),
                 device,
@@ -163,6 +161,7 @@ impl Synth {
                 ch1.clone(),
                 ch2.clone(),
                 ch3.clone(),
+                ch3_node,
                 ch4.clone(),
                 global.clone(),
                 device,
@@ -184,6 +183,7 @@ impl Synth {
         ch1: PulseChannel,
         ch2: PulseChannel,
         ch3: WaveChannel,
+        ch3_node: Ch3BlipNode,
         ch4: NoiseChannel,
         global: GlobalMix,
         device: Device,
@@ -199,9 +199,8 @@ impl Synth {
                 ((var(&ch1.freq) | var(&ch1.duty)) >> pulse()) * var(&ch1.vol) * constant(0.25);
             let ch2_mono =
                 ((var(&ch2.freq) | var(&ch2.duty)) >> pulse()) * var(&ch2.vol) * constant(0.25);
-
-            let ch3_synth: AtomicSynth<f32> = AtomicSynth::new(ch3.wave);
-            let ch3_mono = var(&ch3.freq) >> An(ch3_synth) * var(&ch3.vol) * constant(0.25);
+            
+            let ch3_mono = An(ch3_node) * constant(0.25);
 
             let ch4_mono = (var(&ch4.freq) | var(&ch4.width))
                 >> lfsr_noise_controlled() * var(&ch4.vol) * constant(0.25);
