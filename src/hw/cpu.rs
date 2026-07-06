@@ -941,10 +941,6 @@ impl Cpu {
 
     // -- boundary / interrupt ---------------------------------------------
 
-    pub fn at_instruction_boundary(&self) -> bool {
-        matches!(self.micro.front(), Some(MicroOp::Fetch))
-    }
-
     pub fn is_halted(&self) -> bool {
         self.halted
     }
@@ -980,18 +976,38 @@ impl Cpu {
         self.ime
     }
 
+    /// Fetch-time interrupt servicing. The decap'd decode ROM shows the ISR
+    /// has no standalone check point — "ISR servicing is done at fetch-time":
+    /// the decision is made during a generic fetch, and on accept the fetched
+    /// opcode is discarded and the 5 M-cycle ISR follows (M0 internal with the
+    /// PC re-adjusted past the discarded fetch, M1 internal, M2/M3 push PC,
+    /// M4 vector fetch). Called by the motherboard immediately after every
+    /// completed generic fetch.
+    ///
+    /// The decision uses IME as it was *before* this fetch: `ei` latches one
+    /// M-cycle late, so its own trailing fetch must not observe it. The
+    /// pending `ei` promotion therefore happens here, after the decision.
+    ///
+    /// Both halves are pinned by hardware tests: blargg interrupt_time
+    /// measures the taken-interrupt cost (fetch shared with the untaken path
+    /// + 5 ISR cycles), and the mealybug m3 suite pins that a request rising
+    /// *during* a fetch M-cycle is serviced by that very fetch.
     pub fn offer_interrupt(&mut self, pending: Interrupts) -> Option<Interrupts> {
-        if !self.ime || !self.at_instruction_boundary() {
+        let ime_at_fetch = self.ime;
+        if self.ime_pending {
+            self.ime_pending = false;
+            self.ime = true;
+        }
+        if !ime_at_fetch {
             return None;
         }
         let (vector, bit) = pending.highest()?;
         self.ime = false;
+        self.ime_pending = false;
+        // Hardware M0: IDU PC- — undo the discarded opcode's PC increment so
+        // the pushed return address re-executes it after reti.
+        self.reg.pc = self.reg.pc.wrapping_sub(1);
         self.micro.clear();
-        // Dispatch is 5 M-cycles on hardware, measured from *after* the
-        // interrupted instruction's opcode fetch. Offering here at `front ==
-        // Fetch` discards that fetch M-cycle (the prefetch of the next opcode),
-        // so one extra internal cycle stands in for it to keep the total right.
-        self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Exec(Effect::SpDec));
@@ -1043,10 +1059,9 @@ impl Cpu {
                 } else {
                     self.reg.pc = self.reg.pc.wrapping_add(1);
                 }
-                if self.ime_pending {
-                    self.ime_pending = false;
-                    self.ime = true;
-                }
+                // A pending `ei` is promoted in `offer_interrupt`, which the
+                // motherboard calls after every completed fetch, so the ISR
+                // decision at this fetch still sees the pre-`ei` IME.
                 self.decode();
                 true
             }

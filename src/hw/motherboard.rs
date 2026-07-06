@@ -167,13 +167,6 @@ impl Motherboard {
         // OAM DMA moves one byte per M-cycle, concurrent with the CPU.
         self.step_oam_dma();
 
-        if self.cpu.at_instruction_boundary() {
-            let pending = self.ic.pending();
-            if let Some(bit) = self.cpu.offer_interrupt(pending) {
-                self.ic.acknowledge(bit);
-            }
-        }
-
         self.cpu.setup(&mut self.pins);
         self.run_dots();
 
@@ -185,29 +178,34 @@ impl Motherboard {
 
         let fetched = self.cpu.complete(&self.pins);
         self.pins.transfer = false;
+
+        // Interrupt servicing is decided at fetch time: a request that rose at
+        // any dot of this fetch M-cycle (the PPU/timer requests merged during
+        // run_dots above) converts the just-fetched opcode into the ISR's
+        // first internal cycle. Sub-M-cycle sampling within the fetch is not
+        // modelled; mooneye's intr tests would pin that edge.
+        if fetched {
+            let pending = self.ic.pending();
+            if let Some(bit) = self.cpu.offer_interrupt(pending) {
+                self.ic.acknowledge(bit);
+            }
+        }
         fetched
     }
 
     /// Advance the four T-cycles of an M-cycle. Chips advance their internal
-    /// clock every dot (base-domain gated by the divider); the bus transfer
-    /// resolves on the last dot.
+    /// clock every dot (base-domain gated by the divider). The bus transfer
+    /// resolves on the last dot *before* the chips advance through it: the bus
+    /// settles during the M-cycle's final T-cycle, so the PPU pixel clocked on
+    /// that dot (and the timer/APU state stepped on it) already observes the
+    /// written value. This is what makes a mid-Mode-3 palette write's
+    /// transitional value land on the hardware-correct pixel.
     fn run_dots(&mut self) {
         for dot in 0..4u8 {
             self.pins.transfer = dot == 3;
             let base_dot = self.clock.tick(self.sysbus.double_speed());
 
             let mut ticked = Ticked::default();
-            ticked.merge(self.timer.advance(base_dot));
-            ticked.merge(self.ppu.advance(base_dot));
-            ticked.merge(self.sysbus.advance(base_dot));
-
-            // The APU is a base-clock device: advance its frame sequencer and
-            // channel frequency timers once per base dot, before the transfer
-            // resolves so a wave-RAM read observes the current sample position.
-            if base_dot {
-                self.apu.advance(self.timer.div(), self.sysbus.double_speed());
-            }
-
             if self.pins.transfer {
                 ticked.merge(self.timer.bus(&mut self.pins));
                 ticked.merge(self.ic.bus(&mut self.pins));
@@ -215,6 +213,16 @@ impl Motherboard {
                 ticked.merge(self.dma.bus(&mut self.pins));
                 self.apu.bus(&mut self.pins);
                 ticked.merge(self.sysbus.bus(&mut self.pins));
+            }
+
+            ticked.merge(self.timer.advance(base_dot));
+            ticked.merge(self.ppu.advance(base_dot));
+            ticked.merge(self.sysbus.advance(base_dot));
+
+            // The APU is a base-clock device: advance its frame sequencer and
+            // channel frequency timers once per base dot.
+            if base_dot {
+                self.apu.advance(self.timer.div(), self.sysbus.double_speed());
             }
 
             self.ic.request(ticked.irq);
