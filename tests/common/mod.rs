@@ -29,6 +29,7 @@ fn test_config() -> Option<&'static Config> {
         let s = fs::read_to_string("./config.toml").ok()?;
         let mut config: Config = toml::from_str(&s).ok()?;
         config.headless = true;
+        config.print_serial = false;
 
         // Mealybug palette
         config.ppu_config.palette.dark = Color::new(0x000000);
@@ -58,8 +59,14 @@ pub fn setup_harness(rom_path: &str, mode: GBMode) -> Option<Harness> {
 pub enum StopCondition {
     /// The CPU executed `LD B,B` (0x40), the test-ROM magic breakpoint.
     MagicBreak,
+    /// Stop when Blargg's status byte at $A000 changes from $80 (running) to a result code.
+    BlarggStatus,
     /// At least this many frames (VBlanks) have been produced.
     Frames(u64),
+    /// At least this many T-cycles have elapsed.
+    Cycles(u64),
+    /// Stop only when the absolute end of the trimmed serial buffer matches an expected string.
+    SerialEndsWithAny(&'static [&'static str]),
 }
 
 /// Why a run ended.
@@ -75,6 +82,8 @@ pub struct Harness {
     mb: Motherboard,
     fb: FramebufferReader,
     cycles: u64,
+    /// Latch to prevent BlarggStatus from exiting early during ROM initialization.
+    blargg_started: bool,
 }
 
 impl Harness {
@@ -101,7 +110,7 @@ impl Harness {
         let (writer, fb) = create_framebuffer_pair();
         let mb = Motherboard::new(rom, header, config, boot_rom, writer, rom_is_cgb);
 
-        Ok(Self { mb, fb, cycles: 0 })
+        Ok(Self { mb, fb, cycles: 0, blargg_started: false })
     }
 
     /// Step one instruction at a time until `stop` is met or `max_cycles`
@@ -111,11 +120,7 @@ impl Harness {
             self.cycles += self.mb.step() as u64;
             let frames = self.fb.poll();
 
-            let met = match stop {
-                StopCondition::MagicBreak => self.mb.magic_break(),
-                StopCondition::Frames(n) => frames >= n,
-            };
-            if met {
+            if self.check_stop_condition(stop, frames) {
                 return RunOutcome::Met;
             }
             if self.cycles >= max_cycles {
@@ -124,16 +129,58 @@ impl Harness {
         }
     }
 
+    /// Step one instruction at a time indefinitely until `stop` is met.
+    /// Has no cycle constraints or execution timeout limits.
+    pub fn run_until_unbounded(&mut self, stop: StopCondition) {
+        loop {
+            self.cycles += self.mb.step() as u64;
+            let frames = self.fb.poll();
+
+            if self.check_stop_condition(stop, frames) {
+                break;
+            }
+        }
+    }
+
+    /// Centralized stop-condition evaluation logic shared by execution runners.
+    fn check_stop_condition(&mut self, stop: StopCondition, frames: u64) -> bool {
+        match stop {
+            StopCondition::MagicBreak => self.mb.magic_break(),
+            StopCondition::Frames(n) => frames >= n,
+            StopCondition::Cycles(n) => self.cycles >= n,
+            StopCondition::BlarggStatus => {
+                let status = self.mb.peek(0xA000);
+                let has_sig = self.mb.peek(0xA001) == 0xDE
+                    && self.mb.peek(0xA002) == 0xB0
+                    && self.mb.peek(0xA003) == 0x61;
+
+                // Latch true only when the test suite officially flags it has started running
+                if has_sig && status == 0x80 {
+                    self.blargg_started = true;
+                }
+
+                // Only exit when it has safely initialized and status changes away from 0x80
+                has_sig && self.blargg_started && status != 0x80
+            },
+            StopCondition::SerialEndsWithAny(substrings) => {
+                let out = self.serial();
+
+                // Trim trailing whitespaces, carriage returns, and newlines from the end edge
+                let mut len = out.len();
+                while len > 0 && (out[len - 1] == b'\n' || out[len - 1] == b'\r' || out[len - 1] == b' ' || out[len - 1] == b'\t') {
+                    len -= 1;
+                }
+                let trimmed = &out[..len];
+
+                // Verify if the strict end of the current buffer matches our termination goals
+                substrings.iter().any(|&sub| trimmed.ends_with(sub.as_bytes()))
+            }
+        }
+    }
+
     /// Read one byte of CPU-addressable memory (no side effects).
     pub fn peek(&self, addr: u16) -> u8 {
         self.mb.peek(addr)
-    }
-
-    /// Read `len` consecutive bytes starting at `start`.
-    pub fn read_range(&self, start: u16, len: usize) -> Vec<u8> {
-        (0..len)
-            .map(|i| self.mb.peek(start.wrapping_add(i as u16)))
-            .collect()
     }
 
     /// Bytes transmitted over the serial port so far.
