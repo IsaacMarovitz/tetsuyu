@@ -203,6 +203,11 @@ pub enum Effect {
     SetPcWz,
     SetPcHl,
     SetPc(u16),
+    /// Set PC to the vector latched at the start of the low-byte push cycle.
+    SetPcIsr,
+    /// Arm the ISR vector latch: run as a free act at the start of the low-byte
+    /// push M-cycle, it flags the motherboard to sample live `IE & IF` now.
+    IsrArmLatch,
     JrZ,
     SpDec,
     SpInc,
@@ -236,6 +241,14 @@ pub struct Cpu {
     /// Set when the CPU decodes `LD B,B` (0x40), the mooneye/gameboy-doctor
     /// "magic breakpoint" opcode used by test ROMs to signal completion.
     magic_break: bool,
+    /// Vector latched mid-dispatch (at the start of the low-byte push M-cycle);
+    /// consumed by the trailing `SetPcIsr`. `$0000` when the dispatch was
+    /// cancelled by an IE write landing on the high-byte push.
+    isr_vector: u16,
+    /// Set once the ISR high-byte push completes, cleared when the vector is
+    /// latched. While set, the *next* M-cycle is the ISR low-byte push, and the
+    /// motherboard samples live `IE & IF` at its start to pick the vector.
+    isr_latch_armed: bool,
     micro: VecDeque<MicroOp>,
 }
 
@@ -255,6 +268,8 @@ impl Cpu {
             oam_glitch: false,
             speed_switch: false,
             magic_break: false,
+            isr_vector: 0,
+            isr_latch_armed: false,
             micro,
         }
     }
@@ -597,6 +612,8 @@ impl Cpu {
             Effect::SetPcWz => self.reg.pc = self.wz(),
             Effect::SetPcHl => self.reg.pc = self.reg.get_hl(),
             Effect::SetPc(v) => self.reg.pc = v,
+            Effect::SetPcIsr => self.reg.pc = self.isr_vector,
+            Effect::IsrArmLatch => self.isr_latch_armed = true,
             Effect::JrZ => {
                 let e = self.z as i8 as i16;
                 self.reg.pc = (self.reg.pc as i16).wrapping_add(e) as u16;
@@ -1138,35 +1155,81 @@ impl Cpu {
     /// M-cycle late, so its own trailing fetch must not observe it. The
     /// pending `ei` promotion therefore happens here, after the decision.
     ///
+    /// The *vector* is not chosen here. Hardware re-reads `IE & IF` mid-dispatch
+    /// (after the high PC byte is pushed), so an IE write landing on that push
+    /// can still cancel or redirect the dispatch. That decision — and the IF
+    /// acknowledge — is deferred to [`MicroOp::IsrLatch`], resolved by the
+    /// motherboard against the live interrupt controller. This returns `true`
+    /// when a dispatch was started so the caller knows an ISR is in flight;
+    /// IF is *not* acknowledged here.
+    ///
     /// Both halves are pinned by hardware tests: blargg interrupt_time
     /// measures the taken-interrupt cost (fetch shared with the untaken path
-    /// + 5 ISR cycles), and the mealybug m3 suite pins that a request rising
-    /// *during* a fetch M-cycle is serviced by that very fetch.
-    pub fn offer_interrupt(&mut self, pending: Interrupts) -> Option<Interrupts> {
+    /// + 5 ISR cycles), the mealybug m3 suite pins that a request rising
+    /// *during* a fetch M-cycle is serviced by that very fetch, and mooneye
+    /// `ie_push` pins the mid-dispatch IE re-read.
+    pub fn offer_interrupt(&mut self, pending: Interrupts) -> bool {
         let ime_at_fetch = self.ime;
         if self.ime_pending {
             self.ime_pending = false;
             self.ime = true;
         }
         if !ime_at_fetch {
-            return None;
+            return false;
         }
-        let (vector, bit) = pending.highest()?;
+        if pending.highest().is_none() {
+            return false;
+        }
         self.ime = false;
         self.ime_pending = false;
         // Hardware M0: IDU PC- — undo the discarded opcode's PC increment so
         // the pushed return address re-executes it after reti.
         self.reg.pc = self.reg.pc.wrapping_sub(1);
+        self.isr_vector = 0;
+        self.isr_latch_armed = false;
         self.micro.clear();
+        // The canonical 5 M-cycles: two internal, push PC high, push PC low,
+        // set PC = vector (then the vector-fetch shares the terminal Fetch).
+        // The vector is *not* chosen up front. `IsrArmLatch` runs as a free act
+        // at the very start of the low-byte push cycle, flagging the motherboard
+        // to sample live `IE & IF` then — after the high-byte push landed and
+        // before the low-byte push write — so an IE write on the high push can
+        // still cancel or redirect the dispatch without adding a cycle.
         self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Exec(Effect::SpDec));
         self.push(MicroOp::Store(Addr::Sp, Byte::PcHigh));
+        self.push(MicroOp::Exec(Effect::IsrArmLatch));
         self.push(MicroOp::Exec(Effect::SpDec));
         self.push(MicroOp::Store(Addr::Sp, Byte::PcLow));
-        self.push(MicroOp::Exec(Effect::SetPc(vector)));
+        self.push(MicroOp::Exec(Effect::SetPcIsr));
         self.push(MicroOp::Fetch);
-        Some(bit)
+        true
+    }
+
+    /// True when the ISR vector latch is armed (the high-byte push completed and
+    /// the low-byte push M-cycle is starting). The motherboard samples live
+    /// `IE & IF` and calls [`Self::latch_isr_vector`] when this holds. Consumes
+    /// the arm flag.
+    pub fn take_isr_latch(&mut self) -> bool {
+        std::mem::take(&mut self.isr_latch_armed)
+    }
+
+    /// Resolve the ISR vector mid-dispatch. `pending` is the live `IE & IF` at
+    /// this cycle. Returns the bit to acknowledge in IF, or `None` when every
+    /// enabled bit was cleared (a write to IE on the high-byte push cancelled
+    /// the dispatch): the vector stays `$0000` and IF is left untouched.
+    pub fn latch_isr_vector(&mut self, pending: Interrupts) -> Option<Interrupts> {
+        match pending.highest() {
+            Some((vector, bit)) => {
+                self.isr_vector = vector;
+                Some(bit)
+            }
+            None => {
+                self.isr_vector = 0x0000;
+                None
+            }
+        }
     }
 
     // -- M-cycle interface -------------------------------------------------

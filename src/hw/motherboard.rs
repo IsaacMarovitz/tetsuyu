@@ -182,6 +182,19 @@ impl Motherboard {
             }
         }
 
+        // ISR vector latch: at the start of the low-byte push M-cycle (armed as
+        // a free act just drained by run_free_acts), decide the interrupt vector
+        // from live IE & IF — after the high PC byte was pushed on the previous
+        // cycle (an IE write there has already landed) and before the low byte
+        // is pushed. Acknowledge the serviced bit; if the push cleared every
+        // enabled bit the dispatch is cancelled (vector $0000, IF kept).
+        if self.cpu.take_isr_latch() {
+            let pending = self.ic.pending();
+            if let Some(bit) = self.cpu.latch_isr_vector(pending) {
+                self.ic.acknowledge(bit);
+            }
+        }
+
         // OAM DMA moves one byte per M-cycle, concurrent with the CPU.
         self.step_oam_dma();
 
@@ -216,13 +229,14 @@ impl Motherboard {
         // Interrupt servicing is decided at fetch time: a request that rose at
         // any dot of this fetch M-cycle (the PPU/timer requests merged during
         // run_dots above) converts the just-fetched opcode into the ISR's
-        // first internal cycle. Sub-M-cycle sampling within the fetch is not
-        // modelled; mooneye's intr tests would pin that edge.
+        // first internal cycle. The IF acknowledge and vector selection are
+        // deferred to the mid-dispatch IsrLatch cycle (handled above), so an IE
+        // write during the PC push can still cancel or redirect the dispatch.
+        // Sub-M-cycle sampling within the fetch is not modelled; mooneye's intr
+        // tests would pin that edge.
         if fetched {
             let pending = self.ic.pending();
-            if let Some(bit) = self.cpu.offer_interrupt(pending) {
-                self.ic.acknowledge(bit);
-            }
+            self.cpu.offer_interrupt(pending);
         }
         fetched
     }

@@ -68,17 +68,24 @@ mod blargg {
 
     test_suite![
         run_blargg_test,
+        // DMG Only
         dmg_sound => ("dmg_sound/dmg_sound", GBMode::DMG),
-        cgb_sound => ("cgb_sound/cgb_sound", GBMode::CGB),
-        interrupt_time => ("interrupt_time/interrupt_time", GBMode::DMG),
-        mem_timing2 => ("mem_timing-2/mem_timing", GBMode::DMG),
         oam_bug => ("oam_bug/oam_bug", GBMode::DMG),
+        // CGB Only
+        cgb_sound => ("cgb_sound/cgb_sound", GBMode::CGB),
+        interrupt_time => ("interrupt_time/interrupt_time", GBMode::CGB),
+        // Cross-model
+        mem_timing2 => ("mem_timing-2/mem_timing", GBMode::DMG),
+        mem_timing2_cgb => ("mem_timing-2/mem_timing", GBMode::CGB),
     ];
 
     test_suite![
         run_serial_blargg_test,
         cpu_instrs => ("cpu_instrs/cpu_instrs", GBMode::DMG),
+        cpu_instrs_cgb => ("cpu_instrs/cpu_instrs", GBMode::CGB),
         instr_timing => ("instr_timing/instr_timing", GBMode::DMG),
+        instr_timing_cgb => ("instr_timing/instr_timing", GBMode::CGB),
         mem_timing => ("mem_timing/mem_timing", GBMode::DMG),
+        mem_timing_cgb => ("mem_timing/mem_timing", GBMode::CGB),
     ];
 }
