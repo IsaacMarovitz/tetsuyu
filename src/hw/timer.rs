@@ -1,6 +1,27 @@
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use super::interrupt::Interrupts;
 
+/// State of the TIMA overflow → reload sequence. When TIMA overflows from an
+/// increment it does not reload from TMA immediately: for the M-cycle after the
+/// overflow TIMA reads `$00` (cycle A of the Pandocs description), and only on
+/// the following M-cycle (cycle B) is TMA copied into TIMA and the interrupt
+/// requested. CPU writes interact specially with each phase, so the phase is
+/// modelled explicitly rather than as a bare countdown.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reload {
+    /// No overflow in flight.
+    None,
+    /// Cycle A: TIMA just overflowed and reads `$00`. `dots` counts down the
+    /// remaining T-cycles of this M-cycle; at the boundary we advance to
+    /// `Pending`. A TIMA write during this phase cancels the whole sequence
+    /// (the overflow "didn't happen").
+    Overflowed { dots: u8 },
+    /// Cycle B: TMA is being copied into TIMA and the interrupt raised. Held
+    /// for one M-cycle. A TIMA write here is ignored (TMA wins); a TMA write
+    /// here lands in TIMA too.
+    Reloading { dots: u8 },
+}
+
 /// DIV/TIMA timer as a peer chip. The internal 16-bit counter advances one
 /// step per dot (CPU-clock domain). DIV is the high byte; TIMA is clocked on
 /// the falling edge of a selected counter bit, which is what makes the DIV /
@@ -10,10 +31,8 @@ pub struct Timer {
     tima: u8,
     tma: u8,
     tac: u8,
-    /// T-cycles remaining until a TIMA overflow reloads TMA and raises the
-    /// interrupt. 0 means no reload pending. Hardware delays this by one
-    /// M-cycle: TIMA reads 0x00 during the window.
-    reload: u8,
+    /// The overflow/reload phase (see [`Reload`]).
+    reload: Reload,
 }
 
 impl Timer {
@@ -23,7 +42,7 @@ impl Timer {
             tima: 0,
             tma: 0,
             tac: 0,
-            reload: 0,
+            reload: Reload::None,
         }
     }
 
@@ -48,13 +67,15 @@ impl Timer {
         before && !self.mux()
     }
 
-    /// Clock TIMA once. On overflow TIMA wraps to 0x00 and the TMA reload +
-    /// interrupt are scheduled one M-cycle later, rather than happening now.
+    /// Clock TIMA once. On overflow TIMA wraps to `$00` and enters the
+    /// `Overflowed` phase: the TMA reload + interrupt are deferred one M-cycle
+    /// (cycle B) rather than happening now. A manual TIMA write never triggers
+    /// this — only an increment can.
     fn tima_tick(&mut self) {
         let (v, overflow) = self.tima.overflowing_add(1);
         self.tima = v;
         if overflow {
-            self.reload = 4;
+            self.reload = Reload::Overflowed { dots: 4 };
         }
     }
 }
@@ -65,14 +86,35 @@ impl Chip for Timer {
         // (the timer runs at the CPU rate, so double-speed halves nothing here).
         let mut ticked = Ticked::default();
 
-        // A pending overflow reloads TMA and raises the interrupt after its
-        // 4-T-cycle delay.
-        if self.reload > 0 {
-            self.reload -= 1;
-            if self.reload == 0 {
-                self.tima = self.tma;
-                ticked.irq |= Interrupts::TIMER;
+        // Step the overflow → reload sequence. Each phase lasts one M-cycle
+        // (4 dots); the transitions happen at the M-cycle boundary.
+        match self.reload {
+            Reload::Overflowed { dots } => {
+                let dots = dots - 1;
+                if dots == 0 {
+                    // Enter cycle B: copy TMA into TIMA and raise the interrupt.
+                    // The load is held for the whole M-cycle (Reloading), so a
+                    // TMA write landing this cycle is reflected in TIMA too.
+                    self.tima = self.tma;
+                    ticked.irq |= Interrupts::TIMER;
+                    self.reload = Reload::Reloading { dots: 4 };
+                } else {
+                    self.reload = Reload::Overflowed { dots };
+                }
             }
+            Reload::Reloading { dots } => {
+                // TIMA constantly copies TMA through cycle B; re-apply it each
+                // dot so a mid-cycle TMA write is picked up, and a TIMA write
+                // during this cycle is overwritten.
+                self.tima = self.tma;
+                let dots = dots - 1;
+                self.reload = if dots == 0 {
+                    Reload::None
+                } else {
+                    Reload::Reloading { dots }
+                };
+            }
+            Reload::None => {}
         }
 
         if self.set_counter(self.counter.wrapping_add(1)) {
@@ -95,16 +137,31 @@ impl Chip for Timer {
             },
             0xFF05 if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = self.tima,
-                // Writing TIMA during the reload window cancels the reload.
-                BusDir::Write => {
-                    self.reload = 0;
-                    self.tima = pins.data;
-                }
+                BusDir::Write => match self.reload {
+                    // Cycle A: the write cancels the overflow entirely — the
+                    // reload and interrupt never happen and the written value
+                    // sticks.
+                    Reload::Overflowed { .. } => {
+                        self.reload = Reload::None;
+                        self.tima = pins.data;
+                    }
+                    // Cycle B: the write is ignored; TIMA is being driven from
+                    // TMA for the whole cycle and ends up equal to it.
+                    Reload::Reloading { .. } => {}
+                    Reload::None => self.tima = pins.data,
+                },
                 BusDir::Idle => {}
             },
             0xFF06 if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = self.tma,
-                BusDir::Write => self.tma = pins.data,
+                BusDir::Write => {
+                    self.tma = pins.data;
+                    // Cycle B holds TIMA's load line from TMA, so a TMA write
+                    // this cycle lands in TIMA on the same cycle.
+                    if matches!(self.reload, Reload::Reloading { .. }) {
+                        self.tima = pins.data;
+                    }
+                }
                 BusDir::Idle => {}
             },
             0xFF07 if pins.selected(true) => match pins.dir {
