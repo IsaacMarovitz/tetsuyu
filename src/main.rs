@@ -248,7 +248,12 @@ fn main() {
             }
 
             let cycles = mb.step();
-            step_cycles += cycles;
+            // Pace against the base clock, which runs at a constant rate in
+            // both speed modes. `step` returns CPU T-cycles; in double speed
+            // those tick at twice the base rate, so two of them equal one unit
+            // of real-time budget. Without this the limiter throttles double
+            // speed to the base cycle throughput and the user sees half speed.
+            step_cycles += if mb.double_speed() { cycles / 2 } else { cycles };
         }
     });
 

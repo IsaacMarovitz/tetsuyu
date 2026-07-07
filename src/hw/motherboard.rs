@@ -124,6 +124,13 @@ impl Motherboard {
         self.cpu.magic_break()
     }
 
+    /// Whether the machine is currently in CGB double-speed mode. The frame
+    /// limiter uses this: `step` reports CPU T-cycles, which run at twice the
+    /// base-clock rate in double speed, so real-time pacing must account for it.
+    pub fn double_speed(&self) -> bool {
+        self.sysbus.double_speed()
+    }
+
     /// Run one instruction; returns the elapsed T-cycles (4 per M-cycle).
     pub fn step(&mut self) -> u32 {
         let mut mcycles = 0u32;
