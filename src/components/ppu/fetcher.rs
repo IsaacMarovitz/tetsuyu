@@ -37,6 +37,10 @@ pub struct ObjPixel {
     pub bg_prio: bool,
     /// CGB OBJ attribute byte. Unused on DMG.
     pub cgb_attr: u8,
+    /// OAM byte index of the sprite that owns this pixel. Used to resolve
+    /// overlaps under CGB OAM-priority mode (OPRI=0), where the lower-index
+    /// object wins regardless of X.
+    pub oam_index: u8,
 }
 
 /// A fixed-capacity (≤8) ring buffer of pixels.
@@ -101,10 +105,13 @@ pub struct Fetcher {
     pub tile_attr: u8,
     // Sprite sub-fetch state (runs to completion before the shifter resumes).
     pub sprite: Option<SelectedSprite>,
-    pub sprite_step: FetchStep,
-    pub sprite_substep: u8,
     pub sprite_low: u8,
     pub sprite_high: u8,
+    /// Dots remaining in the current OBJ's Mode-3 penalty. The OBJ fetch stalls
+    /// the shifter for this many dots (the Pandocs OBJ penalty: an optional
+    /// per-tile alignment wait plus the flat 6-dot tile fetch). The pixels are
+    /// mixed and the sprite cleared when it reaches 0.
+    pub sprite_stall: u8,
 }
 
 impl Fetcher {
@@ -120,10 +127,9 @@ impl Fetcher {
             tile_high: 0,
             tile_attr: 0,
             sprite: None,
-            sprite_step: FetchStep::TileId,
-            sprite_substep: 0,
             sprite_low: 0,
             sprite_high: 0,
+            sprite_stall: 0,
         }
     }
 
@@ -146,13 +152,16 @@ pub struct Shifter {
     /// Fine-scroll pixels still to discard at line start (SCX % 8), reused for
     /// the left-edge clip of a WX<7 window.
     pub discard: u8,
-    /// The shifter's position counter, compared against WX every dot for the
-    /// window trigger. Hardware starts it with Mode 3 itself: it reads 0 on
-    /// the second Mode 3 dot and ticks every dot thereafter, pausing only
-    /// while a sprite fetch stalls the shifter — so it stays in lockstep with
-    /// `emitted` (the visible pixel at screen X has pos = X + 11). The start
-    /// is pinned to one-dot resolution by m3_wx_6_change's WX = LY sweep.
-    /// Initialised to 255 (= -1) and ticked before the first comparison.
+    /// The window trigger counter (Pandocs "Window rendering criteria"):
+    /// initialised to 0 at Mode 3 start, it increments 7 times before the first
+    /// pixel is rendered (covering the fine-scroll discards) and then once per
+    /// pixel, and the window activates on the dot it equals WX. So the pixel at
+    /// screen X is reached when the counter is X + 7, putting the window's first
+    /// column at screen `WX - 7`. Ticks every non-sprite-stalled Mode 3 dot;
+    /// held while a sprite fetch stalls the shifter. Initialised to 251 (= -5)
+    /// and ticked before the first comparison so the pre-render increments land
+    /// the window's first pixel at `WX - 7`. Pinned to one-dot resolution by
+    /// m3_window_timing's WX = LY sweep and m3_wx_*_change.
     pub pos: u8,
 }
 
@@ -161,7 +170,7 @@ impl Shifter {
         Self {
             emitted: 0,
             discard: 0,
-            pos: 255,
+            pos: 251,
         }
     }
 }

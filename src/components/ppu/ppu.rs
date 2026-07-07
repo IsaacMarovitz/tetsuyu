@@ -71,6 +71,17 @@ pub struct PPU {
     window_y_condition: bool,
     /// DMG BGP write artifact: `old | new`, visible for exactly one dot.
     bgp_glitch: Option<u8>,
+    /// Set when the LCD is enabled, cleared when the first Mode 3 of the frame
+    /// begins. During this window the freshly-enabled PPU scans OAM for line 0
+    /// but STAT still reports mode 0 (and the mode-2 STAT source does not fire):
+    /// the "mode-0 readback" first-frame quirk pinned by mooneye stat_lyc_onoff.
+    first_line_after_on: bool,
+    /// BG/window tile columns (keyed by `(px + scx) >> 3`) already charged the
+    /// once-per-tile OBJ alignment penalty this Mode 3. The Pandocs OBJ penalty
+    /// algorithm charges the alignment wait only for the first object whose
+    /// leftmost pixel lands in a given tile; later objects in the same tile pay
+    /// only the flat 6-dot fetch. Reset at each Mode 3 start.
+    obj_penalty_tiles: Vec<i16>,
 }
 
 impl PPU {
@@ -116,6 +127,8 @@ impl PPU {
             window_line_active: false,
             window_y_condition: false,
             bgp_glitch: None,
+            first_line_after_on: false,
+            obj_penalty_tiles: Vec::with_capacity(21),
         }
     }
 
@@ -147,6 +160,8 @@ impl PPU {
             PPUMode::OAMScan if self.cycle_count == 80 => {
                 // 80 dots of OAM scan complete: begin Mode 3.
                 self.ppu_mode = PPUMode::Draw;
+                // The first-frame mode-0 readback window ends here.
+                self.first_line_after_on = false;
                 self.start_mode3_fifo();
                 self.update_stat_line();
             }
@@ -203,6 +218,14 @@ impl PPU {
     }
 
     fn check_lyc(&mut self) {
+        // The LY=LYC comparator only runs while the PPU is on. With the LCD
+        // off the comparison "clock" is stopped: the LYC_EQUALS bit is frozen
+        // at its last value and neither an LYC write nor the forced LY=0 may
+        // change it (mooneye stat_lyc_onoff). It is re-evaluated when the PPU
+        // is turned back on.
+        if !self.lcdc.contains(LCDC::LCD_ENABLE) {
+            return;
+        }
         if self.ly == self.lc {
             self.lcds |= LCDS::LYC_EQUALS;
         } else {
@@ -214,11 +237,14 @@ impl PPU {
 
     fn update_stat_line(&mut self) {
         // All enabled STAT sources feed one internal line; the LCD interrupt
-        // fires only on its rising edge (STAT blocking).
+        // fires only on its rising edge (STAT blocking). During the first-line
+        // mode-0 readback window the mode-2 source is suppressed even though the
+        // PPU is internally scanning OAM (mooneye stat_lyc_onoff).
+        let mode2 = self.ppu_mode == PPUMode::OAMScan && !self.first_line_after_on;
         let line = (self.lcds.contains(LCDS::LYC_SELECT) && self.lcds.contains(LCDS::LYC_EQUALS))
             || (self.lcds.contains(LCDS::MODE_0_SELECT) && self.ppu_mode == PPUMode::HBlank)
             || (self.lcds.contains(LCDS::MODE_1_SELECT) && self.ppu_mode == PPUMode::VBlank)
-            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan);
+            || (self.lcds.contains(LCDS::MODE_2_SELECT) && mode2);
 
         if line && !self.stat_line {
             self.interrupts |= Interrupts::LCD;
@@ -242,6 +268,7 @@ impl PPU {
             self.window_y_condition = true;
         }
         self.bgp_glitch = None;
+        self.obj_penalty_tiles.clear();
         self.select_sprites();
     }
 
@@ -611,43 +638,67 @@ impl PPU {
 
         if let Some(i) = chosen {
             self.sprites[i].fetched = true;
-            self.fetcher.sprite = Some(self.sprites[i]);
-            self.fetcher.sprite_step = FetchStep::TileId;
-            self.fetcher.sprite_substep = 0;
+            let s = self.sprites[i];
+            self.fetcher.sprite = Some(s);
+            self.fetcher.sprite_stall = self.obj_penalty(&s);
         }
     }
 
-    /// One dot of an in-progress sprite fetch (6 dots total, no Push step).
+    /// The Mode-3 penalty (in dots) an object incurs, per the Pandocs "OBJ
+    /// penalty algorithm". "The Pixel" is the object's leftmost pixel at screen
+    /// X `x - 8`. A flat 6 dots for the tile fetch, plus — only for the first
+    /// object whose Pixel lands in a given BG/window tile — an alignment wait
+    /// equal to `(pixels strictly right of The Pixel in its tile) - 2`, floored
+    /// at 0. An OAM X of 0 is a fixed 11-dot penalty regardless of SCX.
+    fn obj_penalty(&mut self, s: &SelectedSprite) -> u8 {
+        if s.x == 0 {
+            return 11;
+        }
+
+        // Screen X of The Pixel, and which BG/window tile column it sits in.
+        // Horizontal scroll (outside the window) shifts the tile grid by
+        // SCX % 8; the window's grid is aligned to the screen.
+        let px = s.x as i16 - 8;
+        let scroll = if self.fetcher.fetching_window {
+            0
+        } else {
+            (self.scx % 8) as i16
+        };
+        let tile_key = (px + scroll).div_euclid(8);
+
+        let mut penalty = 6u8;
+        if !self.obj_penalty_tiles.contains(&tile_key) {
+            self.obj_penalty_tiles.push(tile_key);
+            // Offset of The Pixel within its tile (0 = leftmost). Pixels
+            // strictly to its right = 7 - offset; minus 2, floored at 0.
+            let offset = (px + scroll).rem_euclid(8);
+            let align = (7 - offset - 2).max(0) as u8;
+            penalty += align;
+        }
+        penalty
+    }
+
+    /// One dot of an in-progress OBJ penalty stall. The shifter is frozen for
+    /// `sprite_stall` dots (see `obj_penalty`); on the last dot the object's
+    /// tile planes are read and mixed into the OBJ overlay, then the fetcher is
+    /// released so the shifter resumes next dot.
     fn sprite_fetch_step(&mut self) {
         let s = match self.fetcher.sprite {
             Some(s) => s,
             None => return,
         };
-        match self.fetcher.sprite_step {
-            FetchStep::TileId => {
-                // Tile number came from OAM; this access reads nothing new.
-                if self.fetcher.sprite_substep == 1 {
-                    self.fetcher.sprite_step = FetchStep::TileLow;
-                }
-                self.fetcher.sprite_substep ^= 1;
-            }
-            FetchStep::TileLow => {
-                if self.fetcher.sprite_substep == 1 {
-                    self.fetcher.sprite_low = self.sprite_plane(&s, 0);
-                    self.fetcher.sprite_step = FetchStep::TileHigh;
-                }
-                self.fetcher.sprite_substep ^= 1;
-            }
-            FetchStep::TileHigh => {
-                if self.fetcher.sprite_substep == 1 {
-                    self.fetcher.sprite_high = self.sprite_plane(&s, 1);
-                    self.mix_sprite(&s);
-                    self.fetcher.sprite = None; // Resume shifting next dot
-                }
-                self.fetcher.sprite_substep ^= 1;
-            }
-            FetchStep::Push => self.fetcher.sprite = None,
+
+        if self.fetcher.sprite_stall > 1 {
+            self.fetcher.sprite_stall -= 1;
+            return;
         }
+
+        // Final penalty dot: fetch the planes and mix.
+        self.fetcher.sprite_low = self.sprite_plane(&s, 0);
+        self.fetcher.sprite_high = self.sprite_plane(&s, 1);
+        self.mix_sprite(&s);
+        self.fetcher.sprite_stall = 0;
+        self.fetcher.sprite = None; // Resume shifting next dot
     }
 
     fn oam_top(s: &SelectedSprite) -> u8 {
@@ -677,14 +728,22 @@ impl PPU {
         self.read_vram(addr + plane, bank)
     }
 
-    /// Mix a freshly-fetched sprite into the per-line OBJ overlay. The first
-    /// (highest-priority) sprite to cover a pixel keeps it, matching the OBJ
-    /// FIFO's "don't overwrite a non-transparent pixel" rule.
+    /// Mix a freshly-fetched sprite into the per-line OBJ overlay.
+    ///
+    /// Objects are fetched in X order (ties by OAM index), so under coordinate
+    /// priority — DMG, and CGB with OPRI=1 ($FF6C bit 0 set) — the first object
+    /// to cover a pixel is the highest-priority one and keeps it. Under CGB
+    /// OAM priority (OPRI=0) the winner is instead the lowest OAM index
+    /// regardless of X, so a later-fetched object with a smaller index
+    /// overrides a pixel an earlier (larger-index) object placed.
     fn mix_sprite(&mut self, s: &SelectedSprite) {
         let base = s.x as i16 - 8;
         let xflip = s.attr.contains(Attributes::X_FLIP);
         let palette = s.attr.contains(Attributes::PALETTE_NO_0);
         let bg_prio = s.attr.contains(Attributes::PRIORITY);
+        // OAM-index priority applies only on CGB with OPRI cleared; DMG and
+        // OPRI=1 always resolve overlaps by draw (coordinate) order.
+        let index_priority = self.mode == GBMode::CGB && !self.opri;
         for i in 0..8i16 {
             let sx = base + i;
             if sx < 0 || sx >= SCREEN_W as i16 {
@@ -701,7 +760,11 @@ impl PPU {
 
             let slot = &mut self.obj_line[sx as usize];
             if slot.color != 0 {
-                continue; // An earlier sprite already owns this pixel
+                // Something already owns this pixel. Keep it unless we're in
+                // CGB OAM-priority mode and this object has a lower OAM index.
+                if !(index_priority && s.oam_index < slot.oam_index) {
+                    continue;
+                }
             }
 
             *slot = ObjPixel {
@@ -709,6 +772,7 @@ impl PPU {
                 palette,
                 bg_prio,
                 cgb_attr: s.attr.bits(),
+                oam_index: s.oam_index,
             };
         }
     }
@@ -885,7 +949,16 @@ impl Memory for PPU {
                 }
             }
             0xFF40 => self.lcdc.bits(),
-            0xFF41 => self.lcds.bits() | self.ppu_mode as u8 | 0x80,
+            0xFF41 => {
+                // During the first-line mode-0 readback window the PPU is
+                // internally in OAM scan but STAT reports mode 0.
+                let mode = if self.first_line_after_on {
+                    PPUMode::HBlank as u8
+                } else {
+                    self.ppu_mode as u8
+                };
+                self.lcds.bits() | mode | 0x80
+            }
             0xFF42 => self.scy,
             0xFF43 => self.scx,
             0xFF44 => self.ly,
@@ -974,6 +1047,14 @@ impl Memory for PPU {
                     self.reset_ly();
                     self.ppu_mode = PPUMode::OAMScan;
                     self.cycle_count = 5;
+                    // First-frame quirk: the freshly-enabled PPU scans OAM for
+                    // line 0, but STAT reports mode 0 and the mode-2 source is
+                    // suppressed until Mode 3 begins (mooneye stat_lyc_onoff).
+                    self.first_line_after_on = true;
+                    // The comparison clock restarts: re-evaluate LY(=0)=LYC now
+                    // (mooneye stat_lyc_onoff), which may raise or drop the
+                    // retained LYC_EQUALS bit and can fire a STAT interrupt.
+                    self.check_lyc();
                 }
             }
             0xFF41 => {
