@@ -23,27 +23,31 @@ pub fn run_mealybug_test(name: &str) {
     }
 }
 
-test_suite![
-    run_mealybug_test,
-    m2_win_en_toggle => ("m2_win_en_toggle"),
-    m3_bgp_change => ("m3_bgp_change"),
-    m3_bgp_change_sprites => ("m3_bgp_change_sprites"),
-    m3_obp0_change => ("m3_obp0_change"),
-    m3_scy_change => ("m3_scy_change"),
-    m3_scx_low_3_bits => ("m3_scx_low_3_bits"),
-    m3_scx_high_5_bits => ("m3_scx_high_5_bits"),
-    m3_lcdc_bg_en_change => ("m3_lcdc_bg_en_change"),
-    m3_lcdc_bg_map_change => ("m3_lcdc_bg_map_change"),
-    m3_lcdc_obj_en_change => ("m3_lcdc_obj_en_change"),
-    m3_lcdc_obj_size_change => ("m3_lcdc_obj_size_change"),
-    m3_lcdc_obj_size_change_scx => ("m3_lcdc_obj_size_change_scx"),
-    m3_lcdc_tile_sel_change => ("m3_lcdc_tile_sel_change"),
-    m3_lcdc_tile_sel_win_change => ("m3_lcdc_tile_sel_win_change"),
-    m3_lcdc_win_map_change => ("m3_lcdc_win_map_change"),
-    m3_window_timing => ("m3_window_timing"),
-    m3_window_timing_wx_0 => ("m3_window_timing_wx_0"),
-    m3_wx_4_change => ("m3_wx_4_change"),
-    m3_wx_5_change => ("m3_wx_5_change"),
-    m3_wx_6_change => ("m3_wx_6_change"),
-    m3_wx_4_change_sprites => ("m3_wx_4_change_sprites"),
-];
+mod mealybug {
+    use super::*;
+
+    test_suite![
+        run_mealybug_test,
+        m2_win_en_toggle => ("m2_win_en_toggle"),
+        m3_bgp_change => ("m3_bgp_change"),
+        m3_bgp_change_sprites => ("m3_bgp_change_sprites"),
+        m3_obp0_change => ("m3_obp0_change"),
+        m3_scy_change => ("m3_scy_change"),
+        m3_scx_low_3_bits => ("m3_scx_low_3_bits"),
+        m3_scx_high_5_bits => ("m3_scx_high_5_bits"),
+        m3_lcdc_bg_en_change => ("m3_lcdc_bg_en_change"),
+        m3_lcdc_bg_map_change => ("m3_lcdc_bg_map_change"),
+        m3_lcdc_obj_en_change => ("m3_lcdc_obj_en_change"),
+        m3_lcdc_obj_size_change => ("m3_lcdc_obj_size_change"),
+        m3_lcdc_obj_size_change_scx => ("m3_lcdc_obj_size_change_scx"),
+        m3_lcdc_tile_sel_change => ("m3_lcdc_tile_sel_change"),
+        m3_lcdc_tile_sel_win_change => ("m3_lcdc_tile_sel_win_change"),
+        m3_lcdc_win_map_change => ("m3_lcdc_win_map_change"),
+        m3_window_timing => ("m3_window_timing"),
+        m3_window_timing_wx_0 => ("m3_window_timing_wx_0"),
+        m3_wx_4_change => ("m3_wx_4_change"),
+        m3_wx_5_change => ("m3_wx_5_change"),
+        m3_wx_6_change => ("m3_wx_6_change"),
+        m3_wx_4_change_sprites => ("m3_wx_4_change_sprites"),
+    ];
+}
