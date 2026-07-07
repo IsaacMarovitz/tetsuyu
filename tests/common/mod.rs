@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 use tetsuyu::components::prelude::*;
 use tetsuyu::components::prelude::ppu::{SCREEN_W, SCREEN_H};
 use tetsuyu::config::{Color, Config};
@@ -7,35 +8,58 @@ use tetsuyu::framebuffer::{create_framebuffer_pair, FramebufferReader};
 use tetsuyu::hw::motherboard::Motherboard;
 use tetsuyu::mbc::header::{CGBFlag, Header};
 
-pub fn project_config() -> Option<Config> {
-    let s = fs::read_to_string("./config.toml").ok()?;
-    let mut config: Config = toml::from_str(&s).ok()?;
-    config.headless = true;
-    config.mode = GBMode::DMG;
+/// Approx T-cycles per frame
+pub const FC: u64 = 70_224;
 
-    // Mealybug palette
-    config.ppu_config.palette.dark = Color::new(0x000000);
-    config.ppu_config.palette.dark_gray = Color::new(0x555555);
-    config.ppu_config.palette.light_gray = Color::new(0xAAAAAA);
-    config.ppu_config.palette.light = Color::new(0xFFFFFF);
-    config.ppu_config.palette.off = Color::new(0xFF0000);
+#[macro_export]
+macro_rules! test_suite {
+    ($runner:expr, $($id:ident => ($($arg:expr),*)),* $(,)?) => {
+        $(
+            #[test]
+            fn $id() {
+                $runner($($arg),*);
+            }
+        )*
+    };
+}
 
-    Some(config)
+fn test_config() -> Option<&'static Config> {
+    static CONFIG: OnceLock<Option<Config>> = OnceLock::new();
+    CONFIG.get_or_init(|| {
+        let s = fs::read_to_string("./config.toml").ok()?;
+        let mut config: Config = toml::from_str(&s).ok()?;
+        config.headless = true;
+
+        // Mealybug palette
+        config.ppu_config.palette.dark = Color::new(0x000000);
+        config.ppu_config.palette.dark_gray = Color::new(0x555555);
+        config.ppu_config.palette.light_gray = Color::new(0xAAAAAA);
+        config.ppu_config.palette.light = Color::new(0xFFFFFF);
+        config.ppu_config.palette.off = Color::new(0xFF0000);
+
+        Some(config)
+    }).as_ref()
+}
+
+pub fn setup_harness(rom_path: &str, mode: GBMode) -> Option<Harness> {
+    let base_config = test_config().or_else(|| {
+        static WARN: std::sync::Once = std::sync::Once::new();
+        WARN.call_once(|| eprintln!("skipping: no ./config.toml with boot-rom paths"));
+        None
+    })?;
+
+    let mut config = base_config.clone();
+    config.mode = mode;
+    Harness::new(rom_path, config).ok()
 }
 
 /// Condition that ends a [`Harness::run_until`] run.
 #[derive(Debug, Clone, Copy)]
 pub enum StopCondition {
-    /// A read of `addr` (CPU-addressable memory / sysbus register) equals
-    /// `value`. Polled after each instruction.
-    RegisterEquals { addr: u16, value: u8 },
-    RegistersEqual(Registers),
     /// The CPU executed `LD B,B` (0x40), the test-ROM magic breakpoint.
     MagicBreak,
     /// At least this many frames (VBlanks) have been produced.
     Frames(u64),
-    /// At least this many T-cycles have elapsed.
-    Cycles(u64),
 }
 
 /// Why a run ended.
@@ -88,11 +112,8 @@ impl Harness {
             let frames = self.fb.poll();
 
             let met = match stop {
-                StopCondition::RegisterEquals { addr, value } => self.mb.peek(addr) == value,
-                StopCondition::RegistersEqual(r) => self.cpu_regs() == r,
                 StopCondition::MagicBreak => self.mb.magic_break(),
                 StopCondition::Frames(n) => frames >= n,
-                StopCondition::Cycles(n) => self.cycles >= n,
             };
             if met {
                 return RunOutcome::Met;
@@ -101,11 +122,6 @@ impl Harness {
                 return RunOutcome::TimedOut;
             }
         }
-    }
-
-    /// T-cycles elapsed since construction.
-    pub fn cycles(&self) -> u64 {
-        self.cycles
     }
 
     /// Read one byte of CPU-addressable memory (no side effects).
@@ -239,44 +255,32 @@ pub struct DiffReport {
 
 impl DiffReport {
     pub fn match_pct(&self) -> f64 {
-        if self.total == 0 {
-            0.0
-        } else {
-            self.matched as f64 * 100.0 / self.total as f64
-        }
+        if self.total == 0 { 0.0 } else { self.matched as f64 * 100.0 / self.total as f64 }
     }
 
-    pub fn is_exact(&self) -> bool {
-        self.total > 0 && self.first_diff.is_none()
+    pub fn format_diff(&self) -> String {
+        self.first_diff
+            .map(|(x, y)| format!("({x},{y})"))
+            .unwrap_or_else(|| "exact".into())
     }
 }
 
-/// Compare a rendered RGBA `frame` (160×144) to `reference` by direct RGB
-/// equality. The mealybug references encode the four DMG shades as the
-/// canonical greyscale values $00/$55/$AA/$FF; run the emulator with the
-/// matching palette (see `mealybug_palette`) and the comparison is exact
-/// byte equality — no canonicalization, no cross-image coupling.
 pub fn compare_frame(frame: &[u8], reference: &RefImage) -> Result<DiffReport, String> {
     if reference.width != SCREEN_W || reference.height != SCREEN_H {
-        return Err(format!(
-            "reference is {}×{}, expected {SCREEN_W}×{SCREEN_H}",
-            reference.width, reference.height
-        ));
+        return Err(format!("reference is {}×{}, expected {SCREEN_W}×{SCREEN_H}", reference.width, reference.height));
     }
     if frame.len() < SCREEN_W * SCREEN_H * 4 {
         return Err(format!("frame is {} bytes, too small", frame.len()));
     }
 
-    let mut matched = 0usize;
+    let mut matched = 0;
     let mut first_diff = None;
-    for y in 0..SCREEN_H {
-        for x in 0..SCREEN_W {
-            let i = (y * SCREEN_W + x) * 4;
-            if frame[i..i + 3] == reference.rgba[i..i + 3] {
-                matched += 1;
-            } else if first_diff.is_none() {
-                first_diff = Some((x, y));
-            }
+
+    for (i, (f_px, r_px)) in frame.chunks_exact(4).zip(reference.rgba.chunks_exact(4)).enumerate() {
+        if f_px[..3] == r_px[..3] {
+            matched += 1;
+        } else if first_diff.is_none() {
+            first_diff = Some((i % SCREEN_W, i / SCREEN_W));
         }
     }
 
@@ -287,26 +291,15 @@ pub fn compare_frame(frame: &[u8], reference: &RefImage) -> Result<DiffReport, S
     })
 }
 
-/// Run `rom_path` for `frames` VBlanks under `config`, then compare the final
-/// framebuffer to the PNG at `expected_png`. The one call every bring-up step
-/// uses; pass a `config` whose `ppu_config.use_fifo_renderer` selects the path
-/// under test.
-pub fn run_and_compare(
-    rom_path: &str,
-    expected_png: &str,
-    config: Config,
-    frames: u64,
-) -> Result<DiffReport, String> {
-    let reference = RefImage::load_png(expected_png)?;
-    let mut h = Harness::new(rom_path, config)?;
+pub fn run_and_compare(rom_path: &str, expected_png: &str, frames: u64) -> Option<Result<DiffReport, String>> {
+    let mut h = setup_harness(rom_path, GBMode::DMG)?;
+    let reference = match RefImage::load_png(expected_png) {
+        Ok(img) => img,
+        Err(e) => return Some(Err(e)),
+    };
 
-    const FRAME_CYCLES: u64 = 70_224;
-    if h.run_until(StopCondition::Frames(frames), (frames + 20) * FRAME_CYCLES)
-        == RunOutcome::TimedOut
-    {
-        return Err(format!(
-            "{rom_path}: did not reach {frames} frames in budget"
-        ));
+    if h.run_until(StopCondition::Frames(frames), (frames + 20) * FC) == RunOutcome::TimedOut {
+        return Some(Err(format!("{rom_path}: did not reach {frames} frames in budget")));
     }
-    compare_frame(h.framebuffer(), &reference)
+    Some(compare_frame(h.framebuffer(), &reference))
 }

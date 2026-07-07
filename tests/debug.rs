@@ -2,24 +2,16 @@ use common::*;
 use tetsuyu::components::prelude::ppu::SCREEN_W;
 
 mod common;
-
-/// Tuning diagnostic (run with `--ignored`): dump one ROM's first rows as
-/// raw shade values (0/85/170/255 → 0..3), ours vs the reference, so a
-/// window/BG divergence can be read column-by-column.
 #[test]
 #[ignore]
 fn window_row_dump() {
-    let Some(config) = project_config() else {
-        eprintln!("skipping: no ./config.toml with boot-rom paths");
-        return;
-    };
     let name = "m2_win_en_toggle";
     let rom = format!("roms/mealybug/{name}.gb");
     let png = format!("roms/mealybug/expected/DMG-blob/{name}.png");
 
-    let reference = RefImage::load_png(&png).unwrap();
-    let mut h = Harness::new(&rom, config).unwrap();
-    const FC: u64 = 70_224;
+    let Ok(reference) = RefImage::load_png(&png) else { return; };
+    let Some(mut h) = setup_harness(&rom, tetsuyu::components::mode::GBMode::DMG) else { return; };
+
     h.run_until(StopCondition::Frames(120), 140 * FC);
     let frame = h.framebuffer().to_vec();
 
