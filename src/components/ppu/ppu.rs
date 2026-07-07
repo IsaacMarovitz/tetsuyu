@@ -278,16 +278,16 @@ impl PPU {
         // A window trigger may clear the BG FIFO before anything shifts.
         self.check_window_trigger();
 
-        // Begin a sprite fetch if one is due (stalls the shifter until done).
-        if !self.fetcher.in_sprite_fetch() {
-            self.try_start_sprite();
-        }
-
         // One dot of the active fetcher (sprite sub-fetch has priority).
         if self.fetcher.in_sprite_fetch() {
             self.sprite_fetch_step();
         } else {
             self.bg_fetch_step();
+        }
+
+        // Begin a sprite fetch if one is due (stalls the shifter until done).
+        if !self.fetcher.in_sprite_fetch() {
+            self.try_start_sprite();
         }
 
         // Shift one pixel unless a sprite fetch is stalling us or the BG FIFO
