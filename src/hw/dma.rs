@@ -140,26 +140,53 @@ impl Dma {
         self.oam_progress += 1;
     }
 
-    /// DMG OAM-DMA bus conflict: while a transfer is actively moving bytes, a
-    /// CPU read of OAM ($FE00-$FE9F) is driven by the DMA unit instead and comes
-    /// back as $FF. This is the conflict the mooneye acceptance suite exercises:
-    /// `oam_dma_timing`/`oam_dma_start`/`oam_dma_restart` read OAM during a
-    /// transfer, and the instruction-timing tests execute from `OAM-1` so the
-    /// instruction's *operand* (at $FE00, in OAM) conflicts while its opcode
-    /// (fetched from $FDFF, in echo RAM) is read normally. Gated on
-    /// `oam_running`, so it does not assert during the 2-M-cycle setup of a
-    /// fresh DMA (OAM still accessible then).
+    /// OAM-DMA bus conflict: while a transfer is actively moving bytes a CPU
+    /// access that lands on the *same memory bus the DMA is draining* is driven
+    /// by the DMA unit instead and reads back $FF. Gated on `oam_running`, so
+    /// it never asserts during the 2-M-cycle setup of a fresh DMA (OAM/memory
+    /// still accessible then).
     ///
-    /// (Pandocs describes a broader DMG rule — during OAM DMA the CPU can reach
-    /// only HRAM — but modelling it that broadly conflicts the execute-from-echo
-    /// opcode fetch the timing tests rely on. The OAM-region conflict is what
-    /// the suite actually pins; the wider external-bus behaviour is left for a
-    /// later, finer model. CGB is unaffected: it never conflicts here.)
+    /// The two hardware generations differ in bus topology:
+    ///
+    /// - **DMG** has a single memory bus, but the acceptance suite only pins the
+    ///   OAM-region conflict ($FE00-$FE9F): `oam_dma_timing`/`_start`/`_restart`
+    ///   read OAM during a transfer, and the instruction-timing tests execute
+    ///   from `OAM-1` so the *operand* (at $FE00, in OAM) conflicts while the
+    ///   opcode (fetched from $FDFF, in echo RAM) is read normally. Modelling
+    ///   the broader "only HRAM is reachable" rule would corrupt that opcode
+    ///   fetch, so we scope the DMG conflict to OAM.
+    ///
+    /// - **CGB** splits memory across two buses: an *external* bus (cartridge
+    ///   ROM $0000-$7FFF and cartridge SRAM $A000-$BFFF) and an *internal* bus
+    ///   (WRAM $C000-$FDFF, plus OAM). A conflict occurs only when the CPU
+    ///   access targets the same bus the DMA source sits on — e.g. a DMA from
+    ///   WRAM conflicts with CPU reads of WRAM/OAM but not of ROM/SRAM, and vice
+    ///   versa. OAM itself always reads $FF during the transfer (it is being
+    ///   written), regardless of source bus.
     pub fn oam_conflict(&self, addr: u16) -> bool {
-        if self.mode != GBMode::DMG || !self.oam_running {
+        if !self.oam_running {
             return false;
         }
-        matches!(addr, 0xFE00..=0xFE9F)
+
+        // OAM is inaccessible on both models while it is being written.
+        if matches!(addr, 0xFE00..=0xFE9F) {
+            return true;
+        }
+
+        match self.mode {
+            GBMode::DMG => false,
+            _ => Self::cgb_same_bus(self.oam_src, addr),
+        }
+    }
+
+    /// True when `addr` sits on the same CGB memory bus as the DMA source. The
+    /// external bus is cartridge ROM/SRAM; the internal bus is WRAM (and OAM,
+    /// handled by the caller). Anything else (VRAM, I/O, HRAM) is on neither
+    /// shared path and never conflicts.
+    fn cgb_same_bus(src: u16, addr: u16) -> bool {
+        let external = |a: u16| matches!(a, 0x0000..=0x7FFF | 0xA000..=0xBFFF);
+        let internal = |a: u16| matches!(a, 0xC000..=0xFDFF);
+        (external(src) && external(addr)) || (internal(src) && internal(addr))
     }
 
     pub fn take_gpdma(&mut self) -> bool {
