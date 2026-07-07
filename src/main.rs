@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate num_derive;
-
 use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
 use crate::components::prelude::*;
 use crate::config::Config;
@@ -23,19 +20,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{Window, WindowId};
-
-mod components;
-mod config;
-mod context;
-mod framebuffer;
-mod harness;
-mod hw;
-mod mbc;
-mod sound;
-
-pub const CLOCK_FREQUENCY: u32 = 4_194_304;
-pub const STEP_TIME: u32 = 16;
-pub const STEP_CYCLES: u32 = (STEP_TIME as f64 / (1000_f64 / CLOCK_FREQUENCY as f64)) as u32;
+use tetsuyu::*;
 
 #[derive(Parser)]
 struct Args {
