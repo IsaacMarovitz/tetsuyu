@@ -7,12 +7,18 @@
 
 use crate::components::ppu::structs::Attributes;
 
-/// One step of the 2-dot background (or sprite) fetch cycle.
+/// One step of the background (or sprite) fetch cycle. The first four steps
+/// take 2 dots each; Push is retried every dot until the FIFO has room. This
+/// mirrors the hardware fetcher (Pandocs "FIFO Pixel Fetcher"), including the
+/// separate Sleep step — the Get-Tile-Data-High step *also* pushes a row, so a
+/// full cycle has two push opportunities and can keep the 16-deep FIFO two
+/// tiles ahead of the shifter.
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum FetchStep {
     TileId,
     TileLow,
     TileHigh,
+    Sleep,
     Push,
 }
 
@@ -43,9 +49,14 @@ pub struct ObjPixel {
     pub oam_index: u8,
 }
 
-/// A fixed-capacity (≤8) ring buffer of pixels.
+/// A fixed-capacity (≤16) ring buffer of pixels. Real hardware's background
+/// FIFO holds two tiles' worth (16 pixels), letting the fetcher assemble the
+/// tile *after* next while the current one drains — so a mid-Mode-3 write to
+/// LCDC/SCX affects a tile roughly two columns ahead of the one on screen. A
+/// shallower buffer would make those writes land a tile too early (mealybug
+/// m3_lcdc_bg_map_change / _bg_en_change).
 pub struct PixelFifo<T: Copy + Default> {
-    data: [T; 8],
+    data: [T; 16],
     head: u8,
     len: u8,
 }
@@ -53,7 +64,7 @@ pub struct PixelFifo<T: Copy + Default> {
 impl<T: Copy + Default> PixelFifo<T> {
     pub fn new() -> Self {
         Self {
-            data: [T::default(); 8],
+            data: [T::default(); 16],
             head: 0,
             len: 0,
         }
@@ -68,12 +79,20 @@ impl<T: Copy + Default> PixelFifo<T> {
         self.len == 0
     }
 
-    /// Replace the whole FIFO with the 8 pixels of a freshly-assembled tile.
-    /// Only valid when empty — the BG fetcher only pushes into an empty FIFO.
+    /// Number of pixels currently queued (0..16).
+    pub fn len(&self) -> u8 {
+        self.len
+    }
+
+    /// Append the 8 pixels of a freshly-assembled tile to the tail. The BG
+    /// fetcher only pushes when there is room for a whole tile (len ≤ 8), so
+    /// this never overflows the 16-deep buffer.
     pub fn push_row(&mut self, row: [T; 8]) {
-        self.data = row;
-        self.head = 0;
-        self.len = 8;
+        for &p in row.iter() {
+            let tail = (self.head as usize + self.len as usize) % 16;
+            self.data[tail] = p;
+            self.len += 1;
+        }
     }
 
     /// Pop one pixel from the head.
@@ -82,7 +101,7 @@ impl<T: Copy + Default> PixelFifo<T> {
             return None;
         }
         let v = self.data[self.head as usize];
-        self.head = (self.head + 1) % 8;
+        self.head = (self.head + 1) % 16;
         self.len -= 1;
         Some(v)
     }
@@ -98,6 +117,12 @@ pub struct Fetcher {
     pub fetching_window: bool,
     /// The dummy first fetch primes the pipeline and is discarded
     pub done_dummy: bool,
+    /// False until the line's first real tile has been pushed. While unset the
+    /// fetcher takes the plain High→Push path (no early High-step push, no Sleep
+    /// step) so the first tile enters the FIFO on the same dot a single-push
+    /// fetcher would — preserving the pixel phase and the 172-dot Mode-3 length.
+    /// Once set, the Get-Tile-Data-High extra push builds the two-tile lead.
+    pub primed: bool,
     // Latched bytes / attribute for the in-progress BG tile.
     pub tile_id: u8,
     pub tile_low: u8,
@@ -122,6 +147,7 @@ impl Fetcher {
             tile_x: 0,
             fetching_window: false,
             done_dummy: false,
+            primed: false,
             tile_id: 0,
             tile_low: 0,
             tile_high: 0,

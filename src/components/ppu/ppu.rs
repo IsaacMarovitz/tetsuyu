@@ -340,8 +340,15 @@ impl PPU {
         }
     }
 
-    /// One dot of the background/window fetch cycle (2 dots per step; Push is a
-    /// single dot that only succeeds into an empty FIFO).
+    /// One dot of the background/window fetch cycle. Hardware fetcher (Pandocs
+    /// "FIFO Pixel Fetcher"): five steps — Get Tile, Tile Low, Tile High, Sleep,
+    /// Push — the first four taking 2 dots each and Push retried every dot. A
+    /// row is pushed as soon as the 16-deep FIFO has room for one (≤ 8 queued),
+    /// and there are *two* push opportunities per cycle: one at the end of Tile
+    /// High and one at the Push step. Whichever fires first ends the cycle. That
+    /// extra High-step push lets the fetcher stay ~2 tiles ahead of the shifter,
+    /// so a mid-Mode-3 write to LCDC/SCX lands on a tile two columns ahead of
+    /// the one on screen (mealybug m3_lcdc_bg_map_change / _bg_en_change).
     fn bg_fetch_step(&mut self) {
         match self.fetcher.step {
             FetchStep::TileId => {
@@ -362,29 +369,57 @@ impl PPU {
                 if self.fetcher.substep == 1 {
                     self.fetcher.tile_high = self.bg_fetch_plane(1);
                     if !self.fetcher.done_dummy {
-                        // Hardware discards the line's first fetch the moment
-                        // it completes and restarts against the same column:
-                        // the 12-dot warm-up is two clean 6-dot fetches, with
-                        // no extra push dot, putting the first pixel on the
-                        // LCD at dot 92.
+                        // Hardware discards the line's first fetch the moment it
+                        // completes and restarts against the same column. The
+                        // discarded tile is never pushed.
                         self.fetcher.done_dummy = true;
                         self.fetcher.restart_bg();
                         return;
                     }
+                    if !self.fetcher.primed {
+                        // Line's first real tile: skip the early push and the
+                        // Sleep step, going straight to Push so it lands on the
+                        // same dot as before (pixel phase / Mode-3 length kept).
+                        self.fetcher.step = FetchStep::Push;
+                    } else if self.try_push_bg() {
+                        // Later tiles: the extra Get-Tile-Data-High push tops up
+                        // the 16-deep FIFO two dots early, building the two-tile
+                        // lead that lands a mid-Mode-3 LCDC/SCX write on a later
+                        // tile (mealybug m3_lcdc_bg_*_change).
+                        self.fetcher.restart_bg();
+                    } else {
+                        self.fetcher.step = FetchStep::Sleep;
+                    }
+                }
+                self.fetcher.substep ^= 1;
+            }
+            FetchStep::Sleep => {
+                if self.fetcher.substep == 1 {
                     self.fetcher.step = FetchStep::Push;
                 }
                 self.fetcher.substep ^= 1;
             }
             FetchStep::Push => {
-                if self.bg_fifo.is_empty() {
-                    let row = self.assemble_bg_row();
-                    self.bg_fifo.push_row(row);
-                    self.fetcher.tile_x = self.fetcher.tile_x.wrapping_add(1);
+                // Retried every dot until the FIFO has room for the row.
+                if self.try_push_bg() {
                     self.fetcher.restart_bg();
                 }
-                // else: FIFO still draining — idle this dot.
             }
         }
+    }
+
+    /// Push the assembled BG/window row into the FIFO if it has room for a whole
+    /// tile (≤ 8 of the 16 slots used), advancing the fetcher column. Returns
+    /// whether the push happened.
+    fn try_push_bg(&mut self) -> bool {
+        if self.bg_fifo.len() > 8 {
+            return false;
+        }
+        let row = self.assemble_bg_row();
+        self.bg_fifo.push_row(row);
+        self.fetcher.tile_x = self.fetcher.tile_x.wrapping_add(1);
+        self.fetcher.primed = true;
+        true
     }
 
     /// Fetch the tile id (and CGB attribute) for the fetcher's current column.
@@ -804,6 +839,7 @@ impl PPU {
             self.fetcher.fetching_window = true;
             self.fetcher.tile_x = 0;
             self.fetcher.done_dummy = true; // No warm-up fetch on window restart
+            self.fetcher.primed = false; // First window tile takes the phase-safe path
             self.fetcher.restart_bg();
             self.bg_fifo.clear();
 
