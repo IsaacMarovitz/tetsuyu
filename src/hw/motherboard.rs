@@ -179,12 +179,26 @@ impl Motherboard {
         self.step_oam_dma();
 
         self.cpu.setup(&mut self.pins);
+
+        // DMG OAM-DMA bus conflict on a CPU *write*: while a transfer is moving
+        // bytes the CPU cannot reach OAM, so a store to that region never lands
+        // — the location keeps whatever the DMA put there. Idle the bus for
+        // this M-cycle so no chip commits the write (the DMA's own OAM write
+        // goes through `write_oam`, not this bus phase). push_timing/rst_timing
+        // pin this: a PUSH/RST whose high-byte store aligns inside the transfer
+        // window leaves the DMA-written value in OAM.
+        let write_conflict =
+            self.pins.dir == BusDir::Write && self.dma.oam_conflict(self.pins.address);
+        if write_conflict {
+            self.pins.dir = BusDir::Idle;
+        }
+
         self.run_dots();
 
-        // DMG OAM-DMA bus conflict: while a transfer is moving bytes the CPU
-        // can reach only HRAM; every other read is driven off the DMA and
-        // returns $FF (the value the acceptance tests observe — an operand read
-        // yields $FF, and an opcode fetched from OAM reads $FF = RST $38).
+        // DMG OAM-DMA bus conflict on a CPU *read*: every non-HRAM read is
+        // driven off the DMA and returns $FF (the value the acceptance tests
+        // observe — an operand read yields $FF, and an opcode fetched from OAM
+        // reads $FF = RST $38).
         if self.pins.dir == BusDir::Read && self.dma.oam_conflict(self.pins.address) {
             self.pins.data = 0xFF;
         }
