@@ -12,9 +12,12 @@ pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
-/// DMG asserts the next visible line's mode-2 STAT condition this many
-/// dots before the line starts (late in the previous line's HBlank).
-const EARLY_MODE2_DOTS: u32 = 4;
+/// Dots before a line formally starts at which its mode-2 (OAM) STAT source
+/// is already asserted. On hardware the OAM STAT interrupt for a line is
+/// raised at the tail of the previous line's HBlank, giving a mode-2 STAT
+/// handler time to run before that line's Mode 3. This is the real hardware
+/// edge position, measured against the mealybug m3 mode-2 handlers.
+const MODE2_LOOKAHEAD: u32 = 4;
 
 pub struct PPU {
     mode: GBMode,
@@ -24,7 +27,6 @@ pub struct PPU {
     cc: ColorCorrection,
     ppu_mode: PPUMode,
     cycle_count: u32,
-    vblanked_lines: u32,
     scy: u8,
     scx: u8,
     ly: u8,
@@ -54,7 +56,19 @@ pub struct PPU {
     fetcher: Fetcher,
     shifter: Shifter,
     sprites: Vec<SelectedSprite>,
+    /// The window is currently driving the fetcher this line (set the dot the
+    /// trigger fires, cleared at Mode 3 start).
     window_active: bool,
+    /// Latched copy of `window_active` for the whole line: true once the
+    /// window activated during this line's Mode 3, so `inc_ly` can advance the
+    /// window line counter exactly when hardware does. Distinct from
+    /// `window_active`, which is cleared each new Mode 3.
+    window_line_active: bool,
+    /// The window "Y condition" (Pandocs): cleared each VBlank, and latched
+    /// true at the start of any scanline where WY == LY, staying true for the
+    /// rest of the frame. The window can only trigger while this holds — it is
+    /// sampled once per line, not compared live against LY.
+    window_y_condition: bool,
     /// DMG BGP write artifact: `old | new`, visible for exactly one dot.
     bgp_glitch: Option<u8>,
 }
@@ -69,7 +83,6 @@ impl PPU {
             cc: ColorCorrection::new(),
             ppu_mode: PPUMode::OAMScan,
             cycle_count: 0,
-            vblanked_lines: 0,
             scy: 0x00,
             scx: 0x00,
             ly: 0x00,
@@ -100,6 +113,8 @@ impl PPU {
             shifter: Shifter::new(),
             sprites: Vec::with_capacity(10),
             window_active: false,
+            window_line_active: false,
+            window_y_condition: false,
             bgp_glitch: None,
         }
     }
@@ -109,70 +124,81 @@ impl PPU {
             return;
         }
 
-        self.cycle_count += cycles;
+        for _ in 0..cycles {
+            self.dot();
+        }
+    }
+
+    /// Advance the PPU exactly one dot. `cycle_count` is the dot position
+    /// within the current line (0..456); LY is the line. Mode is derived from
+    /// the dot position rather than tracked by ad-hoc transition events, so
+    /// every mode edge — and the STAT interrupt it drives — lands on the exact
+    /// dot hardware produces it.
+    fn dot(&mut self) {
+        // Mode 3 runs its own per-dot renderer; every other mode is idle
+        // between the position-driven edges handled below.
+        if self.ppu_mode == PPUMode::Draw {
+            self.mode3_dot();
+        }
+
+        self.cycle_count += 1;
 
         match self.ppu_mode {
-            PPUMode::OAMScan => {
-                self.check_lyc();
-
-                if self.cycle_count >= 80 {
-                    self.ppu_mode = PPUMode::Draw;
-                    self.start_mode3_fifo();
-                    self.update_stat_line();
-                }
+            PPUMode::OAMScan if self.cycle_count == 80 => {
+                // 80 dots of OAM scan complete: begin Mode 3.
+                self.ppu_mode = PPUMode::Draw;
+                self.start_mode3_fifo();
+                self.update_stat_line();
             }
-            PPUMode::Draw => {
-                for _ in 0..cycles {
-                    if self.ppu_mode != PPUMode::Draw {
-                        break;
-                    }
-                    self.mode3_dot();
-                }
+            PPUMode::HBlank if self.cycle_count == 456 - MODE2_LOOKAHEAD && self.ly < 143 => {
+                // Hardware asserts the *next* line's mode-2 STAT condition a
+                // few dots before the line formally starts (the OAM STAT source
+                // is evaluated against the upcoming line at the tail of HBlank).
+                // This is a real hardware edge, not a timing fudge: the mode-2
+                // interrupt handler must be able to run before the next line's
+                // Mode 3.
+                self.assert_early_oam_stat();
             }
-            PPUMode::HBlank => {
-                // Late in HBlank the next visible line's mode-2 STAT condition
-                // asserts early; re-evaluate the line inside that window so the
-                // edge fires at the right dot.
-                if self.cycle_count >= 456 - EARLY_MODE2_DOTS && self.ly < 143 {
-                    self.update_stat_line();
-                }
+            _ => {}
+        }
 
-                if self.cycle_count >= 456 {
-                    self.cycle_count -= 456;
-                    self.inc_ly();
+        // End of a line.
+        if self.cycle_count >= 456 {
+            self.cycle_count = 0;
+            self.next_line();
+        }
+    }
 
-                    // Set the new mode before re-evaluating the STAT line so
-                    // the early-asserted mode-2 condition hands over to the
-                    // real one without a one-dot dip. A dip here fires a
-                    // second, spurious STAT interrupt at line start.
-                    if self.ly > 143 {
-                        self.ppu_mode = PPUMode::VBlank;
-                        self.interrupts |= Interrupts::V_BLANK;
-                        self.framebuffer.submit_frame();
-                    } else {
-                        self.ppu_mode = PPUMode::OAMScan;
-                    }
+    /// Advance to the next line: bump LY, pick the new mode, re-latch LYC and
+    /// the STAT line.
+    fn next_line(&mut self) {
+        self.inc_ly();
 
-                    self.check_lyc();
-                }
-            }
-            PPUMode::VBlank => {
-                if self.cycle_count >= 456 {
-                    self.cycle_count -= 456;
-                    self.vblanked_lines += 1;
+        if self.ly > 153 {
+            // Wrap back to the top of the frame.
+            self.reset_ly();
+            self.ppu_mode = PPUMode::OAMScan;
+        } else if self.ly == 144 {
+            self.ppu_mode = PPUMode::VBlank;
+            self.interrupts |= Interrupts::V_BLANK;
+            self.framebuffer.submit_frame();
+            // Y condition is cleared each VBlank (Pandocs).
+            self.window_y_condition = false;
+        } else if self.ly < 144 {
+            self.ppu_mode = PPUMode::OAMScan;
+        }
+        // 145..=153 stay in VBlank.
 
-                    if self.vblanked_lines >= 10 {
-                        self.vblanked_lines = 0;
-                        self.reset_ly();
-                        self.ppu_mode = PPUMode::OAMScan;
-                        self.update_stat_line();
-                    } else {
-                        self.inc_ly()
-                    }
+        self.check_lyc();
+    }
 
-                    self.check_lyc();
-                }
-            }
+    /// The mode-2 STAT source, asserted early (during the tail of the previous
+    /// line's HBlank) for the upcoming line. Only the mode-2 select bit can
+    /// raise the line here; the full re-evaluation happens at `next_line`.
+    fn assert_early_oam_stat(&mut self) {
+        if self.lcds.contains(LCDS::MODE_2_SELECT) && !self.stat_line {
+            self.interrupts |= Interrupts::LCD;
+            self.stat_line = true;
         }
     }
 
@@ -189,21 +215,10 @@ impl PPU {
     fn update_stat_line(&mut self) {
         // All enabled STAT sources feed one internal line; the LCD interrupt
         // fires only on its rising edge (STAT blocking).
-        //
-        // DMG quirk: the mode-2 condition for the *next* visible line asserts
-        // EARLY_MODE2_DOTS before the line starts (late in the previous line's
-        // HBlank). The mealybug m3 handlers are cycle-calibrated against this
-        // early edge; without it every mid-scanline write lands ~4 dots late.
-        let early_mode2 = self.lcds.contains(LCDS::MODE_2_SELECT)
-            && self.ppu_mode == PPUMode::HBlank
-            && self.ly < 143
-            && self.cycle_count >= 456 - EARLY_MODE2_DOTS;
-
         let line = (self.lcds.contains(LCDS::LYC_SELECT) && self.lcds.contains(LCDS::LYC_EQUALS))
             || (self.lcds.contains(LCDS::MODE_0_SELECT) && self.ppu_mode == PPUMode::HBlank)
             || (self.lcds.contains(LCDS::MODE_1_SELECT) && self.ppu_mode == PPUMode::VBlank)
-            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan)
-            || early_mode2;
+            || (self.lcds.contains(LCDS::MODE_2_SELECT) && self.ppu_mode == PPUMode::OAMScan);
 
         if line && !self.stat_line {
             self.interrupts |= Interrupts::LCD;
@@ -220,6 +235,12 @@ impl PPU {
         self.shifter = Shifter::new();
         self.shifter.discard = self.scx % 8;
         self.window_active = false;
+        self.window_line_active = false;
+        // Latch the Y condition for this scanline: once WY == LY has been seen
+        // this frame it stays set (Pandocs "Window rendering criteria").
+        if self.wy == self.ly {
+            self.window_y_condition = true;
+        }
         self.bgp_glitch = None;
         self.select_sprites();
     }
@@ -697,7 +718,7 @@ impl PPU {
             return;
         }
 
-        if !self.lcdc.contains(LCDC::WINDOW_ENABLE) || self.wy > self.ly {
+        if !self.lcdc.contains(LCDC::WINDOW_ENABLE) || !self.window_y_condition {
             return;
         }
 
@@ -715,6 +736,7 @@ impl PPU {
 
         if self.shifter.pos == self.wx {
             self.window_active = true;
+            self.window_line_active = true;
             self.fetcher.fetching_window = true;
             self.fetcher.tile_x = 0;
             self.fetcher.done_dummy = true; // No warm-up fetch on window restart
@@ -729,18 +751,18 @@ impl PPU {
         }
     }
 
-    fn window_visible(&mut self) -> bool {
-        self.wy <= self.ly && self.lcdc.contains(LCDC::WINDOW_ENABLE) && self.wx < 168
-    }
-
     fn inc_ly(&mut self) {
-        if self.ppu_mode == PPUMode::VBlank {
-            // Always INC in VBlank
-            self.wly += 1;
-        } else if self.window_visible() {
-            // Otherwise, we need to check if the window is visible on this scanline
+        // The window's internal line counter advances once per line on which
+        // the window actually activated during Mode 3 (tracked by
+        // `window_line_active`, latched when the trigger fires), never from a
+        // fresh LCDC read: a line where WIN_EN is toggled off before HBlank
+        // must not advance it even though the enable bit reads high now
+        // (m2_win_en_toggle). The latch is consumed here so VBlank lines (no
+        // Mode 3, no re-latch) never advance it.
+        if self.window_line_active {
             self.wly += 1;
         }
+        self.window_line_active = false;
 
         self.ly += 1;
     }
@@ -961,7 +983,7 @@ impl Memory for PPU {
             }
             0xFF42 => self.scy = v,
             0xFF43 => self.scx = v,
-            0xFF44 => println!("Attempted to write to LY!"),
+            0xFF44 => {} // LY is read-only; writes are ignored by hardware
             0xFF45 => {
                 self.lc = v;
                 self.check_lyc();

@@ -233,6 +233,9 @@ pub struct Cpu {
     halt_bug: bool,
     oam_glitch: bool,
     speed_switch: bool,
+    /// Set when the CPU decodes `LD B,B` (0x40), the mooneye/gameboy-doctor
+    /// "magic breakpoint" opcode used by test ROMs to signal completion.
+    magic_break: bool,
     micro: VecDeque<MicroOp>,
 }
 
@@ -251,6 +254,7 @@ impl Cpu {
             halt_bug: false,
             oam_glitch: false,
             speed_switch: false,
+            magic_break: false,
             micro,
         }
     }
@@ -690,6 +694,12 @@ impl Cpu {
 
     fn decode(&mut self) {
         let op = self.ir;
+        // `LD B,B` (0x40) is a no-op functionally but is the conventional
+        // test-ROM "magic breakpoint": record that it executed so the headless
+        // harness can detect a mooneye test signalling completion.
+        if op == 0x40 {
+            self.magic_break = true;
+        }
         if op == 0xCB {
             self.push(MicroOp::ImmZ);
             self.push(MicroOp::Exec(Effect::DecodeCb));
@@ -860,6 +870,14 @@ impl Cpu {
     }
 
     fn decode_x3(&mut self, y: u8, z: u8, p: u8, q: u8) {
+        // Illegal opcodes (0xD3/0xDB/0xDD/0xE3/0xE4/0xEB/0xEC/0xED/0xF4/0xFC/
+        // 0xFD) have no microcode; on real hardware they lock the CPU up hard.
+        // Model that as re-fetching the same opcode forever: rewind PC by one
+        // so the terminal Fetch `decode` appends re-reads this byte, an
+        // infinite 1-M-cycle loop. This keeps a stray garbage fetch — e.g. an
+        // opcode pulled off the OAM-DMA conflict bus — from crashing the
+        // emulator, matching how such a program hangs on hardware.
+        let illegal = |cpu: &mut Cpu| cpu.reg.pc = cpu.reg.pc.wrapping_sub(1);
         match z {
             0 => match y {
                 0..=3 => {
@@ -957,7 +975,7 @@ impl Cpu {
                 }
                 6 => self.push(MicroOp::Exec(Effect::Di)),
                 7 => self.push(MicroOp::Exec(Effect::Ei)),
-                _ => panic!("hw::Cpu: illegal opcode {:#04x}", self.ir),
+                _ => illegal(self),
             },
             4 => match y {
                 0..=3 => {
@@ -965,7 +983,7 @@ impl Cpu {
                     self.push(MicroOp::ImmW);
                     self.push(MicroOp::Exec(Effect::CallCc(cc_of(y))));
                 }
-                _ => panic!("hw::Cpu: illegal opcode {:#04x}", self.ir),
+                _ => illegal(self),
             },
             5 => {
                 if q == 0 {
@@ -986,7 +1004,7 @@ impl Cpu {
                     self.push(MicroOp::Store(Addr::Sp, Byte::PcLow));
                     self.push(MicroOp::Exec(Effect::SetPcWz));
                 } else {
-                    panic!("hw::Cpu: illegal opcode {:#04x}", self.ir);
+                    illegal(self);
                 }
             }
             6 => {
@@ -1091,6 +1109,21 @@ impl Cpu {
 
     pub fn ime(&self) -> bool {
         self.ime
+    }
+
+    /// Snapshot of registers.
+    pub fn regs(&self) -> Registers {
+        self.reg.clone()
+    }
+
+    /// True once the CPU has decoded `LD B,B` (0x40), the test-ROM magic
+    /// breakpoint. Latching; stays set until cleared with `take_magic_break`.
+    pub fn magic_break(&self) -> bool {
+        self.magic_break
+    }
+
+    pub fn take_magic_break(&mut self) -> bool {
+        std::mem::take(&mut self.magic_break)
     }
 
     /// Fetch-time interrupt servicing. The decap'd decode ROM shows the ISR

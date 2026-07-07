@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use std::fmt;
 use std::fmt::Formatter;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq)]
 pub struct Registers {
     pub a: u8,
     pub f: u8,
@@ -15,6 +15,17 @@ pub struct Registers {
     pub l: u8,
     pub pc: u16,
     pub sp: u16,
+}
+
+impl PartialEq for Registers {
+    fn eq(&self, other: &Registers) -> bool {
+        self.b == other.b
+            && self.c == other.c
+            && self.d == other.d
+            && self.e == other.e
+            && self.h == other.h
+            && self.l == other.l
+    }
 }
 
 bitflags! {

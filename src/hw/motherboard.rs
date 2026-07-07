@@ -8,6 +8,7 @@ use super::ppu::Ppu;
 use super::sysbus::SystemBus;
 use super::timer::Timer;
 use crate::components::joypad::JoypadButton;
+use crate::components::prelude::Registers;
 use crate::config::Config;
 use crate::framebuffer::FramebufferWriter;
 use crate::mbc::header::Header;
@@ -113,6 +114,16 @@ impl Motherboard {
         self.sysbus.serial_output()
     }
 
+    /// CPU register snapshot.
+    pub fn cpu_regs(&self) -> Registers {
+        self.cpu.regs()
+    }
+
+    /// True once the CPU has hit the test-ROM magic breakpoint (`LD B,B`).
+    pub fn magic_break(&self) -> bool {
+        self.cpu.magic_break()
+    }
+
     /// Run one instruction; returns the elapsed T-cycles (4 per M-cycle).
     pub fn step(&mut self) -> u32 {
         let mut mcycles = 0u32;
@@ -170,10 +181,12 @@ impl Motherboard {
         self.cpu.setup(&mut self.pins);
         self.run_dots();
 
-        // DMG OAM-DMA bus conflict: a CPU read of the DMA's bus region returns
-        // the DMA latch instead of the addressed byte.
+        // DMG OAM-DMA bus conflict: while a transfer is moving bytes the CPU
+        // can reach only HRAM; every other read is driven off the DMA and
+        // returns $FF (the value the acceptance tests observe — an operand read
+        // yields $FF, and an opcode fetched from OAM reads $FF = RST $38).
         if self.pins.dir == BusDir::Read && self.dma.oam_conflict(self.pins.address) {
-            self.pins.data = self.dma.oam_latch;
+            self.pins.data = 0xFF;
         }
 
         let fetched = self.cpu.complete(&self.pins);

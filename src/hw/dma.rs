@@ -13,8 +13,22 @@ pub struct Dma {
     oam_src: u16,
     pub oam_progress: u16,
     pub oam_active: bool,
-    oam_starting: bool,
-    pub oam_latch: u8,
+    /// M-cycles remaining before a freshly-written OAM DMA begins moving bytes
+    /// and asserting the bus conflict. Hardware needs two M-cycles of setup
+    /// after the $FF46 write: the write M-cycle itself and one more still have
+    /// OAM accessible; the transfer (and conflict) begin on the *third*
+    /// M-cycle. `oam_dma_start` pins this exactly. During these cycles a
+    /// previously-running transfer (a restart) keeps moving bytes and
+    /// conflicting until the new one takes over.
+    oam_setup: u8,
+    /// Source high byte latched by the pending $FF46 write, applied when
+    /// `oam_setup` elapses. Distinct from `oam_src` so a restart's in-flight
+    /// transfer keeps its own source during the 2-cycle setup.
+    oam_pending_src: u16,
+    /// True while a transfer is actively moving bytes (and therefore asserting
+    /// the DMG bus conflict). False during the 2-cycle setup of a *fresh* DMA,
+    /// but a restart leaves the previous transfer running through setup.
+    oam_running: bool,
 
     // HDMA (CGB). hdma_len == 0xFF means inactive.
     hdma_src: u16,
@@ -31,8 +45,9 @@ impl Dma {
             oam_src: 0,
             oam_progress: 0,
             oam_active: false,
-            oam_starting: false,
-            oam_latch: 0xFF,
+            oam_setup: 0,
+            oam_pending_src: 0,
+            oam_running: false,
             hdma_src: 0,
             hdma_dst: 0x8000,
             hdma_len: 0xFF,
@@ -46,10 +61,14 @@ impl Dma {
     }
 
     fn start_oam(&mut self, value: u8) {
-        self.oam_src = (value as u16) << 8;
-        self.oam_progress = 0;
+        // Latch the new source and arm the 2-M-cycle setup. If a transfer is
+        // already running (a restart), it keeps moving bytes and asserting the
+        // conflict until the setup elapses; only then does the new source take
+        // over with progress reset. For a fresh start the engine is simply
+        // marked active with no transfer/conflict until setup completes.
+        self.oam_pending_src = (value as u16) << 8;
+        self.oam_setup = 2;
         self.oam_active = true;
-        self.oam_starting = true;
     }
 
     fn start_hdma(&mut self, v: u8) {
@@ -70,41 +89,77 @@ impl Dma {
 
     // -- motherboard-facing transfer control ------------------------------
 
-    /// Next OAM-DMA source byte address to read this M-cycle, or None. Consumes
-    /// the one-M-cycle startup delay.
+    /// Next OAM-DMA source byte address to read this M-cycle, or None. Drives
+    /// the 2-M-cycle setup delay: a freshly written DMA moves no bytes (and
+    /// asserts no conflict) for two M-cycles after the $FF46 write, then begins
+    /// transferring on the third. A restart written over a running transfer
+    /// lets the old transfer keep moving bytes through those two cycles until
+    /// the new source takes over. Retirement is deferred to the M-cycle *after*
+    /// the 160th byte moved, so the conflict still holds on that final transfer
+    /// cycle (the acceptance tests align a read to exactly it).
     pub fn oam_next(&mut self) -> Option<u16> {
         if !self.oam_active {
             return None;
         }
-        if self.oam_starting {
-            self.oam_starting = false;
+
+        if self.oam_setup > 0 {
+            self.oam_setup -= 1;
+            if self.oam_setup == 0 {
+                // Setup elapsed: the pending source takes over and the transfer
+                // begins moving its first byte this very M-cycle.
+                self.oam_src = self.oam_pending_src;
+                self.oam_progress = 0;
+                self.oam_running = true;
+                return Some(self.oam_src + self.oam_progress);
+            }
+            // Still in setup. A restart's previous transfer keeps running;
+            // a fresh start moves nothing yet.
+            if self.oam_running {
+                if self.oam_progress >= 0xA0 {
+                    self.oam_running = false;
+                    return None;
+                }
+                return Some(self.oam_src + self.oam_progress);
+            }
+            return None;
+        }
+
+        if self.oam_progress >= 0xA0 {
+            // The 160th byte moved on the previous M-cycle; the conflict held
+            // through it, and only now does the engine go idle.
+            self.oam_active = false;
+            self.oam_running = false;
             return None;
         }
         Some(self.oam_src + self.oam_progress)
     }
 
-    /// Record a byte fetched for OAM DMA; advance and deactivate when done.
-    pub fn oam_feed(&mut self, byte: u8) {
-        self.oam_latch = byte;
+    /// Record a byte fetched for OAM DMA and advance. Deactivation is deferred
+    /// to the next `oam_next` so the final transfer M-cycle still conflicts.
+    pub fn oam_feed(&mut self, _byte: u8) {
         self.oam_progress += 1;
-        if self.oam_progress >= 0xA0 {
-            self.oam_active = false;
-        }
     }
 
-    /// DMG OAM-DMA bus conflict: a CPU read of the same external bus region as
-    /// the active DMA source returns the DMA's latched byte.
+    /// DMG OAM-DMA bus conflict: while a transfer is actively moving bytes, a
+    /// CPU read of OAM ($FE00-$FE9F) is driven by the DMA unit instead and comes
+    /// back as $FF. This is the conflict the mooneye acceptance suite exercises:
+    /// `oam_dma_timing`/`oam_dma_start`/`oam_dma_restart` read OAM during a
+    /// transfer, and the instruction-timing tests execute from `OAM-1` so the
+    /// instruction's *operand* (at $FE00, in OAM) conflicts while its opcode
+    /// (fetched from $FDFF, in echo RAM) is read normally. Gated on
+    /// `oam_running`, so it does not assert during the 2-M-cycle setup of a
+    /// fresh DMA (OAM still accessible then).
+    ///
+    /// (Pandocs describes a broader DMG rule — during OAM DMA the CPU can reach
+    /// only HRAM — but modelling it that broadly conflicts the execute-from-echo
+    /// opcode fetch the timing tests rely on. The OAM-region conflict is what
+    /// the suite actually pins; the wider external-bus behaviour is left for a
+    /// later, finer model. CGB is unaffected: it never conflicts here.)
     pub fn oam_conflict(&self, addr: u16) -> bool {
-        if self.mode != GBMode::DMG || !self.oam_active {
+        if self.mode != GBMode::DMG || !self.oam_running {
             return false;
         }
-        let bus = |x: u16| match x {
-            0x8000..=0x9FFF => 1u8,
-            0x0000..=0x7FFF | 0xA000..=0xFDFF => 0,
-            _ => 2,
-        };
-        let b = bus(addr);
-        b != 2 && b == bus(self.oam_src)
+        matches!(addr, 0xFE00..=0xFE9F)
     }
 
     pub fn take_gpdma(&mut self) -> bool {

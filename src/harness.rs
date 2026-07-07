@@ -6,6 +6,7 @@
 //! validation. Construction returns a `Result` instead of exiting the process,
 //! so a failed load fails one test rather than the whole runner.
 
+use std::cmp::PartialEq;
 use crate::components::mode::GBMode;
 use crate::components::ppu::ppu::{SCREEN_H, SCREEN_W};
 use crate::config::Config;
@@ -14,6 +15,7 @@ use crate::hw::motherboard::Motherboard;
 use crate::mbc::header::{CGBFlag, Header};
 use std::fs;
 use std::path::Path;
+use crate::components::prelude::Registers;
 
 /// Condition that ends a [`Harness::run_until`] run.
 #[derive(Debug, Clone, Copy)]
@@ -21,6 +23,9 @@ pub enum StopCondition {
     /// A read of `addr` (CPU-addressable memory / sysbus register) equals
     /// `value`. Polled after each instruction.
     RegisterEquals { addr: u16, value: u8 },
+    RegistersEqual(Registers),
+    /// The CPU executed `LD B,B` (0x40), the test-ROM magic breakpoint.
+    MagicBreak,
     /// At least this many frames (VBlanks) have been produced.
     Frames(u64),
     /// At least this many T-cycles have elapsed.
@@ -78,6 +83,8 @@ impl Harness {
 
             let met = match stop {
                 StopCondition::RegisterEquals { addr, value } => self.mb.peek(addr) == value,
+                StopCondition::RegistersEqual(r) => self.cpu_regs() == r,
+                StopCondition::MagicBreak => self.mb.magic_break(),
                 StopCondition::Frames(n) => frames >= n,
                 StopCondition::Cycles(n) => self.cycles >= n,
             };
@@ -110,6 +117,16 @@ impl Harness {
     /// Bytes transmitted over the serial port so far.
     pub fn serial(&self) -> &[u8] {
         self.mb.serial_output()
+    }
+
+    /// CPU registers.
+    pub fn cpu_regs(&self) -> Registers {
+        self.mb.cpu_regs()
+    }
+
+    /// True once the CPU has hit the `LD B,B` magic breakpoint.
+    pub fn magic_break(&self) -> bool {
+        self.mb.magic_break()
     }
 
     /// The most recent complete frame as RGBA (`4 * 160 * 144` bytes).
@@ -298,6 +315,7 @@ mod tests {
         let s = fs::read_to_string("./config.toml").ok()?;
         let mut config: Config = toml::from_str(&s).ok()?;
         config.headless = true;
+        config.mode = GBMode::DMG;
 
         // Mealybug palette
         config.ppu_config.palette.dark = Color::new(0x000000);
@@ -313,6 +331,7 @@ mod tests {
     /// files are absent is skipped, so this list can name more than the working
     /// tree carries.
     const MEALYBUG_DMG_BLOB: &[&str] = &[
+        "m2_win_en_toggle",
         "m3_bgp_change",
         "m3_bgp_change_sprites",
         "m3_obp0_change",
@@ -394,6 +413,171 @@ mod tests {
                 "== {rom}\n{}",
                 String::from_utf8_lossy(h.serial()).trim_end()
             );
+        }
+    }
+
+    /// Mooneye acceptance ROMs, grouped. A test passes when it leaves the
+    /// Fibonacci signature (B,C,D,E,H,L = 3,5,8,13,21,34) in the registers
+    /// after signalling completion with its `ld b,b` magic breakpoint. Paths
+    /// are relative to `roms/moonsuite/`; missing files are skipped.
+    const MOONEYE_ACCEPTANCE: &[&str] = &[
+        // PPU / STAT timing — the group most relevant to the window and
+        // mode-2 STAT work.
+        "ppu/intr_2_0_timing",
+        "ppu/intr_2_mode0_timing",
+        "ppu/intr_2_mode3_timing",
+        "ppu/intr_2_oam_ok_timing",
+        "ppu/intr_1_2_timing-GS",
+        "ppu/stat_lyc_onoff",
+        "ppu/stat_irq_blocking",
+        "ppu/vblank_stat_intr-GS",
+        "ppu/hblank_ly_scx_timing-GS",
+        "ppu/lcdon_timing-GS",
+        "ppu/lcdon_write_timing-GS",
+        // Interrupt dispatch / timing.
+        "intr_timing",
+        "ei_timing",
+        "ei_sequence",
+        "di_timing-GS",
+        "rapid_di_ei",
+        "reti_intr_timing",
+        "reti_timing",
+        "halt_ime0_ei",
+        "halt_ime1_timing",
+        "if_ie_registers",
+        // Instruction / memory timing.
+        "add_sp_e_timing",
+        "call_timing",
+        "call_cc_timing",
+        "jp_timing",
+        "jp_cc_timing",
+        "ret_timing",
+        "ret_cc_timing",
+        "push_timing",
+        "pop_timing",
+        "ld_hl_sp_e_timing",
+        "div_timing",
+        "rst_timing",
+        // OAM DMA.
+        "oam_dma_timing",
+        "oam_dma_start",
+        "oam_dma_restart",
+        "oam_dma/basic",
+        "oam_dma/reg_read",
+    ];
+
+    /// Focused single-ROM diagnostic: run one mooneye ROM to its magic
+    /// breakpoint and print the register signature and PC. Edit `ROM` to
+    /// target a specific failing test. Ignored by default.
+    #[test]
+    #[ignore]
+    fn mooneye_probe_one() {
+        let Some(config) = project_config() else {
+            eprintln!("skipping: no ./config.toml with boot-rom paths");
+            return;
+        };
+        const FC: u64 = 70_224;
+        const ROM: &str = "roms/moonsuite/acceptance/add_sp_e_timing.gb";
+        if !Path::new(ROM).exists() {
+            eprintln!("missing {ROM}");
+            return;
+        }
+        let mut h = Harness::new(ROM, config).unwrap();
+        let outcome = h.run_until(StopCondition::MagicBreak, 240 * FC);
+        println!("outcome={outcome:?} regs={}", h.cpu_regs());
+    }
+
+    /// Reporting dashboard: run each mooneye acceptance ROM until it executes
+    /// its `LD B,B` magic breakpoint, then read the register signature. PASS
+    /// iff B,C,D,E,H,L = 3,5,8,13,21,34 (Fibonacci). If the breakpoint is
+    /// never reached inside the budget the row is marked TIMEOUT. Run with
+    /// `cargo test mooneye_acceptance_report -- --nocapture`.
+    #[test]
+    fn mooneye_acceptance_report() {
+        let Some(config) = project_config() else {
+            eprintln!("skipping: no ./config.toml with boot-rom paths");
+            return;
+        };
+
+        const FC: u64 = 70_224;
+
+        let mut passed = 0usize;
+        let mut ran = 0usize;
+        println!("\n{:<40}  {}", "mooneye acceptance", "result");
+        for name in MOONEYE_ACCEPTANCE {
+            let rom = format!("roms/moonsuite/acceptance/{name}.gb");
+            if !Path::new(&rom).exists() {
+                println!("Failed to find ROM {rom}");
+                continue;
+            }
+            ran += 1;
+            let mut h = match Harness::new(&rom, config.clone()) {
+                Ok(h) => h,
+                Err(e) => {
+                    println!("{name:<40}  err: {e}");
+                    continue;
+                }
+            };
+
+            // Run until the ROM signals completion with `LD B,B`. Mooneye
+            // tests finish within a few frames; 240 frames is a generous cap.
+            let outcome = h.run_until(StopCondition::MagicBreak, 240 * FC);
+            if outcome == RunOutcome::TimedOut {
+                println!("{name:<40}  TIMEOUT (no ld b,b)");
+                continue;
+            }
+
+            let regs = h.cpu_regs();
+            if regs.b == 3
+                && regs.c == 5
+                && regs.d == 8
+                && regs.e == 13
+                && regs.h == 21
+                && regs.l == 34
+            {
+                passed += 1;
+                println!("{name:<40}  PASS");
+            } else {
+                println!("{name:<40}  FAIL {}", regs);
+            }
+        }
+        println!("\nmooneye acceptance: {passed}/{ran} passed");
+    }
+
+    /// Tuning diagnostic (run with `--ignored`): dump one ROM's first rows as
+    /// raw shade values (0/85/170/255 → 0..3), ours vs the reference, so a
+    /// window/BG divergence can be read column-by-column.
+    #[test]
+    #[ignore]
+    fn window_row_dump() {
+        let Some(config) = dmg_blob_config() else {
+            eprintln!("skipping: no ./config.toml with boot-rom paths");
+            return;
+        };
+        let name = "m2_win_en_toggle";
+        let rom = format!("roms/mealybug/{name}.gb");
+        let png = format!("roms/mealybug/expected/DMG-blob/{name}.png");
+
+        let reference = RefImage::load_png(&png).unwrap();
+        let mut h = Harness::new(&rom, config).unwrap();
+        const FC: u64 = 70_224;
+        h.run_until(StopCondition::Frames(120), 140 * FC);
+        let frame = h.framebuffer().to_vec();
+
+        let shade = |v: u8| (v as u16 * 3 / 255) as u8;
+        let render = |buf: &[u8], row: usize| -> String {
+            (0..40)
+                .map(|x| {
+                    let i = (row * SCREEN_W + x) * 4;
+                    std::char::from_digit(shade(buf[i]) as u32, 10).unwrap()
+                })
+                .collect()
+        };
+
+        println!("\n{name} rows 0..6, cols 0..40 (shade 0..3):");
+        for row in 0..6 {
+            println!("  row {row} ref : {}", render(&reference.rgba, row));
+            println!("  row {row} fifo: {}", render(&frame, row));
         }
     }
 }

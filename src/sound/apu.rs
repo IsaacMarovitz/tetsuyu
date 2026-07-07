@@ -162,6 +162,15 @@ impl APU {
     }
 
     fn update_channel_1(&self, synth: &Synth) {
+        // Hardware: a DAC-enabled but never-triggered channel holds its digital
+        // output at the maximum level (15), not 0. For the pulse channels that
+        // hold is a pure DC offset, and the synth's output DC-blocker removes
+        // any steady DC — so its audible contribution is zero regardless.
+        // Routing vol=1.0 through the duty `pulse()` would instead synthesise a
+        // spurious *tone*, so the correct audio output for the inactive case is
+        // silence. (The digital-15 hold would only matter for reproducing the
+        // click on a DAC/enable transition, which needs the band-limited step
+        // path CH3 uses, not this frequency+duty pulse path.)
         let vol = if self.is_ch_1_active && self.ch1.dac_enabled && self.config.ch1_enabled {
             self.ch1.volume_envelope.volume / 15.0
         } else {
@@ -212,14 +221,23 @@ impl APU {
     fn update_channel_3(&self, synth: &Synth) {
         // Channel 3 is fed as cycle-accurate DAC amplitude events (see
         // `sound::ch3_blip`) rather than a frequency + wavetable snapshot, so
-        // PCM-style wave RAM content is reproduced without aliasing. Report
-        // 0 while inactive so the on/off transition itself is captured as a
-        // proper band-limited step.
-        let active = self.is_ch_3_active && self.ch3.dac_enabled && self.config.ch3_enabled;
-        let amplitude = if active {
-            self.ch3.current_amplitude()
-        } else {
+        // PCM-style wave RAM content is reproduced without aliasing, and the
+        // band-limited step path makes level *transitions* audible even though
+        // the output DC-blocker removes any steady offset.
+        //
+        // Hardware: a channel whose DAC is enabled but which was never
+        // triggered does not output digital 0 — its output holds constant at
+        // the current wave-RAM sample (the value last latched into the sample
+        // buffer, selected by the parity of the wave index). Feeding that held
+        // value rather than 0 makes the step when the DAC toggles reproduce the
+        // correct click; only a disabled DAC feeds true 0.
+        let amplitude = if !self.ch3.dac_enabled || !self.config.ch3_enabled {
             0
+        } else {
+            // Active or merely DAC-on-but-untriggered: the DAC converts the
+            // current sample buffer either way. `current_amplitude` reads the
+            // held buffer value by the current wave-index parity.
+            self.ch3.current_amplitude()
         };
 
         synth.ch3.feed(
