@@ -1,13 +1,15 @@
+use common::*;
 use std::path::Path;
 use tetsuyu::components::mode::GBMode;
-use common::*;
 
 #[macro_use]
 mod common;
 
 pub fn run_mooneye_test(sub_path: &str, mode: GBMode) {
     let rom = format!("roms/moonsuite/acceptance/{sub_path}.gb");
-    if !Path::new(&rom).exists() { return; }
+    if !Path::new(&rom).exists() {
+        return;
+    }
 
     let mut h = setup_harness(&rom, mode).expect("Harness initialization failed");
     assert_ne!(

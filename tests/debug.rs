@@ -9,8 +9,12 @@ fn window_row_dump() {
     let rom = format!("roms/mealybug/{name}.gb");
     let png = format!("roms/mealybug/expected/DMG-blob/{name}.png");
 
-    let Ok(reference) = RefImage::load_png(&png) else { return; };
-    let Some(mut h) = setup_harness(&rom, tetsuyu::components::mode::GBMode::DMG) else { return; };
+    let Ok(reference) = RefImage::load_png(&png) else {
+        return;
+    };
+    let Some(mut h) = setup_harness(&rom, tetsuyu::components::mode::GBMode::DMG) else {
+        return;
+    };
 
     h.run_until(StopCondition::Frames(120), 140 * FC);
     let frame = h.framebuffer().to_vec();

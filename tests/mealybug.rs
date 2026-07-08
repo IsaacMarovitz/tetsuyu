@@ -1,5 +1,5 @@
-use std::path::Path;
 use common::*;
+use std::path::Path;
 
 #[macro_use]
 mod common;
@@ -7,7 +7,9 @@ mod common;
 pub fn run_mealybug_test(name: &str) {
     let rom = format!("roms/mealybug/{name}.gb");
     let png = format!("roms/mealybug/expected/DMG-blob/{name}.png");
-    if !Path::new(&rom).exists() || !Path::new(&png).exists() { return; }
+    if !Path::new(&rom).exists() || !Path::new(&png).exists() {
+        return;
+    }
 
     match run_and_compare(&rom, &png, 120) {
         Some(Ok(report)) => {

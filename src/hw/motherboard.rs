@@ -141,36 +141,28 @@ impl Motherboard {
                 break;
             }
         }
-        // A general-purpose HDMA requested this instruction copies at once,
-        // halting the CPU; run it now.
+
         if self.dma.take_gpdma() {
             self.run_gpdma();
         }
-        // STOP requests a speed switch if KEY1 is armed.
+
         if self.cpu.take_speed_switch() {
             self.sysbus.try_speed_switch();
         }
+
         mcycles * 4
     }
-
-    // -- one M-cycle -------------------------------------------------------
 
     fn m_cycle(&mut self) -> bool {
         let was_halted = self.cpu.is_halted();
         self.cpu.run_free_acts();
 
-        // A 16-bit inc/dec through the OAM region this M-cycle glitches OAM on
-        // the DMG when the PPU is scanning it; the PPU gates on mode itself.
         if self.cpu.take_oam_glitch() {
             self.ppu.corrupt_oam_inc();
         }
 
         if self.cpu.is_halted() {
             if self.ic.pending() != Interrupts::empty() {
-                // Executing HALT with an interrupt already pending but IME
-                // clear does not halt; it arms the HALT bug so the next fetch
-                // reads the following byte twice. A wake from an earlier HALT
-                // (was_halted) is the ordinary resume path.
                 if !was_halted && !self.cpu.ime() {
                     self.cpu.trigger_halt_bug();
                 }
@@ -182,12 +174,6 @@ impl Motherboard {
             }
         }
 
-        // ISR vector latch: at the start of the low-byte push M-cycle (armed as
-        // a free act just drained by run_free_acts), decide the interrupt vector
-        // from live IE & IF — after the high PC byte was pushed on the previous
-        // cycle (an IE write there has already landed) and before the low byte
-        // is pushed. Acknowledge the serviced bit; if the push cleared every
-        // enabled bit the dispatch is cancelled (vector $0000, IF kept).
         if self.cpu.take_isr_latch() {
             let pending = self.ic.pending();
             if let Some(bit) = self.cpu.latch_isr_vector(pending) {
@@ -200,13 +186,6 @@ impl Motherboard {
 
         self.cpu.setup(&mut self.pins);
 
-        // DMG OAM-DMA bus conflict on a CPU *write*: while a transfer is moving
-        // bytes the CPU cannot reach OAM, so a store to that region never lands
-        // — the location keeps whatever the DMA put there. Idle the bus for
-        // this M-cycle so no chip commits the write (the DMA's own OAM write
-        // goes through `write_oam`, not this bus phase). push_timing/rst_timing
-        // pin this: a PUSH/RST whose high-byte store aligns inside the transfer
-        // window leaves the DMA-written value in OAM.
         let write_conflict =
             self.pins.dir == BusDir::Write && self.dma.oam_conflict(self.pins.address);
         if write_conflict {
@@ -215,10 +194,6 @@ impl Motherboard {
 
         self.run_dots();
 
-        // DMG OAM-DMA bus conflict on a CPU *read*: every non-HRAM read is
-        // driven off the DMA and returns $FF (the value the acceptance tests
-        // observe — an operand read yields $FF, and an opcode fetched from OAM
-        // reads $FF = RST $38).
         if self.pins.dir == BusDir::Read && self.dma.oam_conflict(self.pins.address) {
             self.pins.data = 0xFF;
         }
@@ -226,14 +201,6 @@ impl Motherboard {
         let fetched = self.cpu.complete(&self.pins);
         self.pins.transfer = false;
 
-        // Interrupt servicing is decided at fetch time: a request that rose at
-        // any dot of this fetch M-cycle (the PPU/timer requests merged during
-        // run_dots above) converts the just-fetched opcode into the ISR's
-        // first internal cycle. The IF acknowledge and vector selection are
-        // deferred to the mid-dispatch IsrLatch cycle (handled above), so an IE
-        // write during the PC push can still cancel or redirect the dispatch.
-        // Sub-M-cycle sampling within the fetch is not modelled; mooneye's intr
-        // tests would pin that edge.
         if fetched {
             let pending = self.ic.pending();
             self.cpu.offer_interrupt(pending);
@@ -241,13 +208,6 @@ impl Motherboard {
         fetched
     }
 
-    /// Advance the four T-cycles of an M-cycle. Chips advance their internal
-    /// clock every dot (base-domain gated by the divider). The bus transfer
-    /// resolves on the last dot *before* the chips advance through it: the bus
-    /// settles during the M-cycle's final T-cycle, so the PPU pixel clocked on
-    /// that dot (and the timer/APU state stepped on it) already observes the
-    /// written value. This is what makes a mid-Mode-3 palette write's
-    /// transitional value land on the hardware-correct pixel.
     fn run_dots(&mut self) {
         for dot in 0..4u8 {
             self.pins.transfer = dot == 3;
@@ -292,10 +252,6 @@ impl Motherboard {
         self.pins.transfer = false;
     }
 
-    // -- DMA driving -------------------------------------------------------
-
-    /// Read an address as a non-CPU bus master, without advancing any chip's
-    /// internal clock. Used by the DMA engine for its source fetches.
     fn bus_read(&mut self, addr: u16, master: BusMaster) -> u8 {
         self.pins.address = addr;
         self.pins.dir = BusDir::Read;

@@ -13,6 +13,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 use std::{process, thread};
+use tetsuyu::*;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -20,7 +21,6 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::Key;
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{Window, WindowId};
-use tetsuyu::*;
 
 #[derive(Parser)]
 struct Args {
@@ -253,7 +253,11 @@ fn main() {
             // those tick at twice the base rate, so two of them equal one unit
             // of real-time budget. Without this the limiter throttles double
             // speed to the base cycle throughput and the user sees half speed.
-            step_cycles += if mb.double_speed() { cycles / 2 } else { cycles };
+            step_cycles += if mb.double_speed() {
+                cycles / 2
+            } else {
+                cycles
+            };
         }
     });
 

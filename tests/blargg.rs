@@ -1,5 +1,5 @@
-use std::path::Path;
 use common::*;
+use std::path::Path;
 use tetsuyu::components::mode::GBMode;
 
 #[macro_use]
@@ -7,7 +7,9 @@ mod common;
 
 fn run_blargg_test(sub_path: &str, mode: GBMode) {
     let rom = format!("roms/blargg/{sub_path}.gb");
-    if !Path::new(&rom).exists() { return; }
+    if !Path::new(&rom).exists() {
+        return;
+    }
 
     let mut h = setup_harness(&rom, mode).expect("Harness initialization failed");
     h.run_until_unbounded(StopCondition::BlarggStatus);
@@ -46,7 +48,9 @@ fn run_blargg_test(sub_path: &str, mode: GBMode) {
 
 fn run_serial_blargg_test(sub_path: &str, mode: GBMode) {
     let rom = format!("roms/blargg/{sub_path}.gb");
-    if !Path::new(&rom).exists() { return; }
+    if !Path::new(&rom).exists() {
+        return;
+    }
 
     let mut h = setup_harness(&rom, mode).expect("Harness initialization failed");
     h.run_until_unbounded(StopCondition::SerialEndsWithAny(&["Passed", "Failed"]));

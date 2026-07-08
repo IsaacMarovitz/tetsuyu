@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
 use std::sync::OnceLock;
+use tetsuyu::components::prelude::ppu::{SCREEN_H, SCREEN_W};
 use tetsuyu::components::prelude::*;
-use tetsuyu::components::prelude::ppu::{SCREEN_W, SCREEN_H};
 use tetsuyu::config::{Color, Config};
-use tetsuyu::framebuffer::{create_framebuffer_pair, FramebufferReader};
+use tetsuyu::framebuffer::{FramebufferReader, create_framebuffer_pair};
 use tetsuyu::hw::motherboard::Motherboard;
 use tetsuyu::mbc::header::{CGBFlag, Header};
 
@@ -25,21 +25,23 @@ macro_rules! test_suite {
 
 fn test_config() -> Option<&'static Config> {
     static CONFIG: OnceLock<Option<Config>> = OnceLock::new();
-    CONFIG.get_or_init(|| {
-        let s = fs::read_to_string("./config.toml").ok()?;
-        let mut config: Config = toml::from_str(&s).ok()?;
-        config.headless = true;
-        config.print_serial = false;
+    CONFIG
+        .get_or_init(|| {
+            let s = fs::read_to_string("./config.toml").ok()?;
+            let mut config: Config = toml::from_str(&s).ok()?;
+            config.headless = true;
+            config.print_serial = false;
 
-        // Mealybug palette
-        config.ppu_config.palette.dark = Color::new(0x000000);
-        config.ppu_config.palette.dark_gray = Color::new(0x555555);
-        config.ppu_config.palette.light_gray = Color::new(0xAAAAAA);
-        config.ppu_config.palette.light = Color::new(0xFFFFFF);
-        config.ppu_config.palette.off = Color::new(0xFF0000);
+            // Mealybug palette
+            config.ppu_config.palette.dark = Color::new(0x000000);
+            config.ppu_config.palette.dark_gray = Color::new(0x555555);
+            config.ppu_config.palette.light_gray = Color::new(0xAAAAAA);
+            config.ppu_config.palette.light = Color::new(0xFFFFFF);
+            config.ppu_config.palette.off = Color::new(0xFF0000);
 
-        Some(config)
-    }).as_ref()
+            Some(config)
+        })
+        .as_ref()
 }
 
 pub fn setup_harness(rom_path: &str, mode: GBMode) -> Option<Harness> {
@@ -110,7 +112,12 @@ impl Harness {
         let (writer, fb) = create_framebuffer_pair();
         let mb = Motherboard::new(rom, header, config, boot_rom, writer, rom_is_cgb);
 
-        Ok(Self { mb, fb, cycles: 0, blargg_started: false })
+        Ok(Self {
+            mb,
+            fb,
+            cycles: 0,
+            blargg_started: false,
+        })
     }
 
     /// Step one instruction at a time until `stop` is met or `max_cycles`
@@ -161,19 +168,26 @@ impl Harness {
 
                 // Only exit when it has safely initialized and status changes away from 0x80
                 has_sig && self.blargg_started && status != 0x80
-            },
+            }
             StopCondition::SerialEndsWithAny(substrings) => {
                 let out = self.serial();
 
                 // Trim trailing whitespaces, carriage returns, and newlines from the end edge
                 let mut len = out.len();
-                while len > 0 && (out[len - 1] == b'\n' || out[len - 1] == b'\r' || out[len - 1] == b' ' || out[len - 1] == b'\t') {
+                while len > 0
+                    && (out[len - 1] == b'\n'
+                        || out[len - 1] == b'\r'
+                        || out[len - 1] == b' '
+                        || out[len - 1] == b'\t')
+                {
                     len -= 1;
                 }
                 let trimmed = &out[..len];
 
                 // Verify if the strict end of the current buffer matches our termination goals
-                substrings.iter().any(|&sub| trimmed.ends_with(sub.as_bytes()))
+                substrings
+                    .iter()
+                    .any(|&sub| trimmed.ends_with(sub.as_bytes()))
             }
         }
     }
@@ -302,7 +316,11 @@ pub struct DiffReport {
 
 impl DiffReport {
     pub fn match_pct(&self) -> f64 {
-        if self.total == 0 { 0.0 } else { self.matched as f64 * 100.0 / self.total as f64 }
+        if self.total == 0 {
+            0.0
+        } else {
+            self.matched as f64 * 100.0 / self.total as f64
+        }
     }
 
     pub fn format_diff(&self) -> String {
@@ -314,7 +332,10 @@ impl DiffReport {
 
 pub fn compare_frame(frame: &[u8], reference: &RefImage) -> Result<DiffReport, String> {
     if reference.width != SCREEN_W || reference.height != SCREEN_H {
-        return Err(format!("reference is {}×{}, expected {SCREEN_W}×{SCREEN_H}", reference.width, reference.height));
+        return Err(format!(
+            "reference is {}×{}, expected {SCREEN_W}×{SCREEN_H}",
+            reference.width, reference.height
+        ));
     }
     if frame.len() < SCREEN_W * SCREEN_H * 4 {
         return Err(format!("frame is {} bytes, too small", frame.len()));
@@ -323,7 +344,11 @@ pub fn compare_frame(frame: &[u8], reference: &RefImage) -> Result<DiffReport, S
     let mut matched = 0;
     let mut first_diff = None;
 
-    for (i, (f_px, r_px)) in frame.chunks_exact(4).zip(reference.rgba.chunks_exact(4)).enumerate() {
+    for (i, (f_px, r_px)) in frame
+        .chunks_exact(4)
+        .zip(reference.rgba.chunks_exact(4))
+        .enumerate()
+    {
         if f_px[..3] == r_px[..3] {
             matched += 1;
         } else if first_diff.is_none() {
@@ -338,7 +363,11 @@ pub fn compare_frame(frame: &[u8], reference: &RefImage) -> Result<DiffReport, S
     })
 }
 
-pub fn run_and_compare(rom_path: &str, expected_png: &str, frames: u64) -> Option<Result<DiffReport, String>> {
+pub fn run_and_compare(
+    rom_path: &str,
+    expected_png: &str,
+    frames: u64,
+) -> Option<Result<DiffReport, String>> {
     let mut h = setup_harness(rom_path, GBMode::DMG)?;
     let reference = match RefImage::load_png(expected_png) {
         Ok(img) => img,
@@ -346,7 +375,9 @@ pub fn run_and_compare(rom_path: &str, expected_png: &str, frames: u64) -> Optio
     };
 
     if h.run_until(StopCondition::Frames(frames), (frames + 20) * FC) == RunOutcome::TimedOut {
-        return Some(Err(format!("{rom_path}: did not reach {frames} frames in budget")));
+        return Some(Err(format!(
+            "{rom_path}: did not reach {frames} frames in budget"
+        )));
     }
     Some(compare_frame(h.framebuffer(), &reference))
 }
