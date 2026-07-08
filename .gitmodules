@@ -4,3 +4,6 @@
 [submodule "sst"]
 	path = sst
 	url = https://github.com/SingleStepTests/sm83
+[submodule "blargg"]
+	path = blargg
+	url = https://github.com/L-P/blargg-test-roms

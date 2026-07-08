@@ -13,8 +13,9 @@ pub const FC: u64 = 70_224;
 
 #[macro_export]
 macro_rules! test_suite {
-    ($runner:expr, $($id:ident => ($($arg:expr),*)),* $(,)?) => {
+    ($runner:expr, $($(#[ $attr:meta ])* $id:ident => ($($arg:expr),*)),* $(,)?) => {
         $(
+            $(#[$attr])*
             #[test]
             fn $id() {
                 $runner($($arg),*);
