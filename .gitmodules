@@ -1,3 +1,6 @@
 [submodule "slang-shaders"]
 	path = slang-shaders
 	url = https://github.com/libretro/slang-shaders
+[submodule "sst"]
+	path = sst
+	url = https://github.com/SingleStepTests/sm83

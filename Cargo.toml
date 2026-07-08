@@ -19,3 +19,6 @@ librashader = { version = "0.12", default-features = false, features = ["runtime
 png = "0.18"
 blip_buf = "0.1.6"
 rtrb = "0.3.4"
+
+[dev-dependencies]
+serde_json = "1.0"

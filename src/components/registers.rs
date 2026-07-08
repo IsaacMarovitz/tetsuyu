@@ -19,12 +19,16 @@ pub struct Registers {
 
 impl PartialEq for Registers {
     fn eq(&self, other: &Registers) -> bool {
-        self.b == other.b
+        self.a == other.a
+            && self.f == other.f
+            && self.b == other.b
             && self.c == other.c
             && self.d == other.d
             && self.e == other.e
             && self.h == other.h
             && self.l == other.l
+            && self.pc == other.pc
+            && self.sp == other.sp
     }
 }
 
