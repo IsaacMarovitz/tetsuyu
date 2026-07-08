@@ -8,6 +8,8 @@ pub struct CH4 {
     lfsr_width: bool,
     divisor_code: u8,
     pub final_volume: f32,
+    lfsr: u16,
+    lfsr_counter: u32,
     pub length_counter: LengthCounter,
     pub volume_envelope: VolumeEnvelope,
 }
@@ -20,6 +22,8 @@ impl CH4 {
             lfsr_width: false,
             divisor_code: 0,
             final_volume: 0.0,
+            lfsr: 0x7FFF,
+            lfsr_counter: 0,
             length_counter: LengthCounter::new(),
             volume_envelope: VolumeEnvelope::new(),
         }
@@ -31,6 +35,8 @@ impl CH4 {
         self.lfsr_width = false;
         self.divisor_code = 0;
         self.final_volume = 0.0;
+        self.lfsr = 0x7FFF;
+        self.lfsr_counter = 0;
         self.length_counter.clear();
         self.volume_envelope.clear();
     }
@@ -44,30 +50,40 @@ impl CH4 {
 
     pub fn tick_lfsr(&mut self) {
         self.final_volume = self.volume_envelope.volume;
+
+        if self.lfsr_counter > 0 {
+            self.lfsr_counter -= 1;
+        }
+        if self.lfsr_counter == 0 {
+            self.lfsr_counter = self.noise_period();
+            self.step_lfsr();
+        }
+    }
+    
+    fn noise_period(&self) -> u32 {
+        8 * self.get_divisor() * (1u32 << self.clock_shift)
+    }
+
+    fn step_lfsr(&mut self) {
+        let xor = (self.lfsr & 1) ^ ((self.lfsr >> 1) & 1);
+        self.lfsr >>= 1;
+        if xor != 0 {
+            self.lfsr |= 0x4000;
+        }
+        if self.lfsr_width && xor != 0 {
+            self.lfsr |= 0x40;
+        }
+    }
+
+    pub fn amplitude_bit(&self) -> bool {
+        self.lfsr & 1 == 0
     }
 
     pub fn trigger(&mut self) {
         self.volume_envelope.reload();
         self.final_volume = self.volume_envelope.volume;
-    }
-
-    pub fn get_frequency(&self) -> f32 {
-        let divisor = self.get_divisor() as f32;
-
-        // Game Boy noise frequency formula:
-        // Base clock is 524288 Hz (4.194304 MHz / 8)
-        // Frequency = 524288 / divisor / 2^shift
-        let base_clock = 524288.0;
-        let shift_divisor = (1 << self.clock_shift) as f32;
-
-        let frequency = base_clock / divisor / shift_divisor;
-
-        // Clamp to prevent aliasing and ensure audible range
-        frequency.max(50.0).min(22000.0)
-    }
-
-    pub fn is_width_7bit(&self) -> bool {
-        self.lfsr_width
+        self.lfsr = 0x7FFF;
+        self.lfsr_counter = self.noise_period();
     }
 }
 

@@ -24,7 +24,7 @@ pub struct Apu {
     ch2: CH2,
     ch3: CH3,
     ch4: CH4,
-    synth: Option<Synth>,
+    mixer: Option<Mixer>,
 }
 
 bitflags! {
@@ -53,8 +53,8 @@ bitflags! {
 
 impl Apu {
     pub fn new(config: Config) -> Self {
-        let synth = if config.apu_config.master_enabled && !config.headless {
-            Some(Synth::new())
+        let mixer = if config.apu_config.master_enabled && !config.headless {
+            Some(Mixer::new())
         } else {
             None
         };
@@ -78,7 +78,7 @@ impl Apu {
             ch2: CH2::new(),
             ch3: CH3::new(),
             ch4: CH4::new(),
-            synth,
+            mixer,
         }
     }
 
@@ -163,131 +163,112 @@ impl Apu {
             self.ch4.tick_lfsr();
         }
 
-        if let Some(synth) = &self.synth {
-            self.update_channel_1(synth);
-            self.update_channel_2(synth);
-            self.update_channel_3(synth);
-            self.update_channel_4(synth);
-            self.update_global_mix(synth);
+        if self.mixer.is_some() {
+            let (left, right) = self.mix();
+            if let Some(mixer) = &mut self.mixer {
+                mixer.feed(left, right);
+            }
         }
     }
 
-    fn update_channel_1(&self, synth: &Synth) {
-        // Hardware: a DAC-enabled but never-triggered channel holds its digital
-        // output at the maximum level (15), not 0. For the pulse channels that
-        // hold is a pure DC offset, and the synth's output DC-blocker removes
-        // any steady DC — so its audible contribution is zero regardless.
-        // Routing vol=1.0 through the duty `pulse()` would instead synthesise a
-        // spurious *tone*, so the correct audio output for the inactive case is
-        // silence. (The digital-15 hold would only matter for reproducing the
-        // click on a DAC/enable transition, which needs the band-limited step
-        // path CH3 uses, not this frequency+duty pulse path.)
-        let vol = if self.is_ch_1_active && self.ch1.dac_enabled && self.config.ch1_enabled {
-            self.ch1.volume_envelope.volume / 15.0
-        } else {
-            0.0
-        };
+    const DUTY_TABLE: [[u8; 8]; 4] = [
+        [0, 0, 0, 0, 0, 0, 0, 1], // 12.5%
+        [1, 0, 0, 0, 0, 0, 0, 1], // 25%
+        [1, 0, 0, 0, 0, 1, 1, 1], // 50%
+        [0, 1, 1, 1, 1, 1, 1, 0], // 75%
+    ];
+    
+    fn mix(&self) -> (i32, i32) {
+        if !self.audio_enabled {
+            return (0, 0);
+        }
 
-        let duty = match self.ch1.duty_cycle {
-            DutyCycle::EIGHTH => 0.125,
-            DutyCycle::QUARTER => 0.25,
-            DutyCycle::HALF => 0.5,
-            DutyCycle::THREE_QUARTERS => 0.75,
-            _ => 0.0,
-        };
+        let mut left = 0i32;
+        let mut right = 0i32;
+        for (digital, pan_l, pan_r) in [
+            (self.ch1_digital(), Panning::CH1_LEFT, Panning::CH1_RIGHT),
+            (self.ch2_digital(), Panning::CH2_LEFT, Panning::CH2_RIGHT),
+            (self.ch3_digital(), Panning::CH3_LEFT, Panning::CH3_RIGHT),
+            (self.ch4_digital(), Panning::CH4_LEFT, Panning::CH4_RIGHT),
+        ] {
+            if let Some(d) = digital {
+                let analog = d * 2 - 15;
+                if self.panning.contains(pan_l) {
+                    left += analog;
+                }
+                if self.panning.contains(pan_r) {
+                    right += analog;
+                }
+            }
+        }
 
-        synth.ch1.update(
-            131072.0 / (2048.0 - self.ch1.period as f32),
-            vol,
-            duty,
-            self.panning.contains(Panning::CH1_LEFT),
-            self.panning.contains(Panning::CH1_RIGHT),
-        );
+        left *= self.left_volume as i32 + 1;
+        right *= self.right_volume as i32 + 1;
+        (left, right)
     }
-
-    fn update_channel_2(&self, synth: &Synth) {
-        let vol = if self.is_ch_2_active && self.ch2.dac_enabled && self.config.ch2_enabled {
-            self.ch2.volume_envelope.volume / 15.0
+    
+    fn ch1_digital(&self) -> Option<i32> {
+        if !(self.ch1.dac_enabled && self.config.ch1_enabled) {
+            return None;
+        }
+        
+        if !self.is_ch_1_active {
+            return Some(15);
+        }
+        
+        let bit = Self::DUTY_TABLE[self.ch1.duty_cycle.bits() as usize]
+            [self.ch1.sample_index as usize];
+        
+        Some(if bit != 0 {
+            self.ch1.volume_envelope.volume as i32
         } else {
-            0.0
-        };
-
-        let duty = match self.ch2.duty_cycle {
-            DutyCycle::EIGHTH => 0.125,
-            DutyCycle::QUARTER => 0.25,
-            DutyCycle::HALF => 0.5,
-            DutyCycle::THREE_QUARTERS => 0.75,
-            _ => 0.0,
-        };
-
-        synth.ch2.update(
-            131072.0 / (2048.0 - self.ch2.period as f32),
-            vol,
-            duty,
-            self.panning.contains(Panning::CH2_LEFT),
-            self.panning.contains(Panning::CH2_RIGHT),
-        );
-    }
-
-    fn update_channel_3(&self, synth: &Synth) {
-        // Channel 3 is fed as cycle-accurate DAC amplitude events (see
-        // `apu::ch3_blip`) rather than a frequency + wavetable snapshot, so
-        // PCM-style wave RAM content is reproduced without aliasing, and the
-        // band-limited step path makes level *transitions* audible even though
-        // the output DC-blocker removes any steady offset.
-        //
-        // Hardware: a channel whose DAC is enabled but which was never
-        // triggered does not output digital 0 — its output holds constant at
-        // the current wave-RAM sample (the value last latched into the sample
-        // buffer, selected by the parity of the wave index). Feeding that held
-        // value rather than 0 makes the step when the DAC toggles reproduce the
-        // correct click; only a disabled DAC feeds true 0.
-        let amplitude = if !self.ch3.dac_enabled || !self.config.ch3_enabled {
             0
-        } else {
-            // Active or merely DAC-on-but-untriggered: the DAC converts the
-            // current sample buffer either way. `current_amplitude` reads the
-            // held buffer value by the current wave-index parity.
-            self.ch3.current_amplitude()
-        };
-
-        synth.ch3.feed(
-            amplitude,
-            self.panning.contains(Panning::CH3_LEFT),
-            self.panning.contains(Panning::CH3_RIGHT),
-        );
+        })
     }
 
-    fn update_channel_4(&self, synth: &Synth) {
-        let vol = if self.is_ch_4_active && self.ch4.dac_enabled && self.config.ch4_enabled {
-            self.ch4.final_volume / 15.0
+    fn ch2_digital(&self) -> Option<i32> {
+        if !(self.ch2.dac_enabled && self.config.ch2_enabled) {
+            return None;
+        }
+        
+        if !self.is_ch_2_active {
+            return Some(15);
+        }
+        
+        let bit = Self::DUTY_TABLE[self.ch2.duty_cycle.bits() as usize]
+            [self.ch2.sample_index as usize];
+        
+        Some(if bit != 0 {
+            self.ch2.volume_envelope.volume as i32
         } else {
-            0.0
-        };
-
-        synth.ch4.update(
-            self.ch4.get_frequency(),
-            vol,
-            self.ch4.is_width_7bit(),
-            self.panning.contains(Panning::CH4_LEFT),
-            self.panning.contains(Panning::CH4_RIGHT),
-        );
+            0
+        })
     }
 
-    fn update_global_mix(&self, synth: &Synth) {
-        let global_l = if self.audio_enabled {
-            (self.left_volume + 1) as f32 / 8.0
-        } else {
-            0.0
-        };
+    fn ch3_digital(&self) -> Option<i32> {
+        if !(self.ch3.dac_enabled && self.config.ch3_enabled) {
+            return None;
+        }
+        
+        // Active or DAC-on-but-untriggered: the DAC converts the current wave
+        // sample either way (held constant when untriggered).
+        Some(self.ch3.wave_digital() as i32)
+    }
 
-        let global_r = if self.audio_enabled {
-            (self.right_volume + 1) as f32 / 8.0
+    fn ch4_digital(&self) -> Option<i32> {
+        if !(self.ch4.dac_enabled && self.config.ch4_enabled) {
+            return None;
+        }
+        
+        if !self.is_ch_4_active {
+            return Some(15);
+        }
+        
+        Some(if self.ch4.amplitude_bit() {
+            self.ch4.final_volume as i32
         } else {
-            0.0
-        };
-
-        synth.global.update(global_l, global_r);
+            0
+        })
     }
 }
 

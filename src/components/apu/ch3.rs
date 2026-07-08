@@ -127,19 +127,14 @@ impl CH3 {
         }
     }
 
-    pub const AMPLITUDE_SCALE: i32 = 30_000;
-
-    pub fn current_amplitude(&self) -> i32 {
+    pub fn wave_digital(&self) -> u8 {
         let byte = self.wave_ram[(self.sample_index >> 1) as usize];
         let nibble = if self.sample_index & 1 == 0 {
             (byte & 0b1111_0000) >> 4
         } else {
             byte & 0b0000_1111
         };
-        let shift = self.get_volume_shift();
-        let shifted = (nibble >> shift) as i32;
-
-        (shifted * 2 - 15) * Self::AMPLITUDE_SCALE / 15
+        nibble >> self.get_volume_shift()
     }
 }
 
