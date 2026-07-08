@@ -31,9 +31,6 @@ impl Interrupts {
     }
 }
 
-/// The interrupt controller. Owns IF ($FF0F) and IE ($FFFF) and decodes them
-/// itself. Other chips report IRQs via their `Ticked`; the motherboard funnels
-/// those into `request`. The CPU asks `pending` and calls `acknowledge`.
 pub struct InterruptController {
     iflag: Interrupts,
     ienable: Interrupts,

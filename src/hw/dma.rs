@@ -1,11 +1,6 @@
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use crate::components::mode::GBMode;
 
-/// The DMA engine: OAM DMA (0xFF46) and CGB HDMA/GPDMA (0xFF51-0xFF55). It owns
-/// the registers and the transfer state, but the byte movement itself is driven
-/// by the motherboard, since reading the source is a bus-master operation and
-/// writing OAM/VRAM uses the PPU's direct DMA ports. The engine only decides
-/// *what* to move and *when*.
 pub struct Dma {
     mode: GBMode,
 
@@ -13,21 +8,8 @@ pub struct Dma {
     oam_src: u16,
     pub oam_progress: u16,
     pub oam_active: bool,
-    /// M-cycles remaining before a freshly-written OAM DMA begins moving bytes
-    /// and asserting the bus conflict. Hardware needs two M-cycles of setup
-    /// after the $FF46 write: the write M-cycle itself and one more still have
-    /// OAM accessible; the transfer (and conflict) begin on the *third*
-    /// M-cycle. `oam_dma_start` pins this exactly. During these cycles a
-    /// previously-running transfer (a restart) keeps moving bytes and
-    /// conflicting until the new one takes over.
     oam_setup: u8,
-    /// Source high byte latched by the pending $FF46 write, applied when
-    /// `oam_setup` elapses. Distinct from `oam_src` so a restart's in-flight
-    /// transfer keeps its own source during the 2-cycle setup.
     oam_pending_src: u16,
-    /// True while a transfer is actively moving bytes (and therefore asserting
-    /// the DMG bus conflict). False during the 2-cycle setup of a *fresh* DMA,
-    /// but a restart leaves the previous transfer running through setup.
     oam_running: bool,
 
     // HDMA (CGB). hdma_len == 0xFF means inactive.
@@ -61,11 +43,6 @@ impl Dma {
     }
 
     fn start_oam(&mut self, value: u8) {
-        // Latch the new source and arm the 2-M-cycle setup. If a transfer is
-        // already running (a restart), it keeps moving bytes and asserting the
-        // conflict until the setup elapses; only then does the new source take
-        // over with progress reset. For a fresh start the engine is simply
-        // marked active with no transfer/conflict until setup completes.
         self.oam_pending_src = (value as u16) << 8;
         self.oam_setup = 2;
         self.oam_active = true;
@@ -87,16 +64,6 @@ impl Dma {
         }
     }
 
-    // -- motherboard-facing transfer control ------------------------------
-
-    /// Next OAM-DMA source byte address to read this M-cycle, or None. Drives
-    /// the 2-M-cycle setup delay: a freshly written DMA moves no bytes (and
-    /// asserts no conflict) for two M-cycles after the $FF46 write, then begins
-    /// transferring on the third. A restart written over a running transfer
-    /// lets the old transfer keep moving bytes through those two cycles until
-    /// the new source takes over. Retirement is deferred to the M-cycle *after*
-    /// the 160th byte moved, so the conflict still holds on that final transfer
-    /// cycle (the acceptance tests align a read to exactly it).
     pub fn oam_next(&mut self) -> Option<u16> {
         if !self.oam_active {
             return None;
@@ -140,29 +107,6 @@ impl Dma {
         self.oam_progress += 1;
     }
 
-    /// OAM-DMA bus conflict: while a transfer is actively moving bytes a CPU
-    /// access that lands on the *same memory bus the DMA is draining* is driven
-    /// by the DMA unit instead and reads back $FF. Gated on `oam_running`, so
-    /// it never asserts during the 2-M-cycle setup of a fresh DMA (OAM/memory
-    /// still accessible then).
-    ///
-    /// The two hardware generations differ in bus topology:
-    ///
-    /// - **DMG** has a single memory bus, but the acceptance suite only pins the
-    ///   OAM-region conflict ($FE00-$FE9F): `oam_dma_timing`/`_start`/`_restart`
-    ///   read OAM during a transfer, and the instruction-timing tests execute
-    ///   from `OAM-1` so the *operand* (at $FE00, in OAM) conflicts while the
-    ///   opcode (fetched from $FDFF, in echo RAM) is read normally. Modelling
-    ///   the broader "only HRAM is reachable" rule would corrupt that opcode
-    ///   fetch, so we scope the DMG conflict to OAM.
-    ///
-    /// - **CGB** splits memory across two buses: an *external* bus (cartridge
-    ///   ROM $0000-$7FFF and cartridge SRAM $A000-$BFFF) and an *internal* bus
-    ///   (WRAM $C000-$FDFF, plus OAM). A conflict occurs only when the CPU
-    ///   access targets the same bus the DMA source sits on — e.g. a DMA from
-    ///   WRAM conflicts with CPU reads of WRAM/OAM but not of ROM/SRAM, and vice
-    ///   versa. OAM itself always reads $FF during the transfer (it is being
-    ///   written), regardless of source bus.
     pub fn oam_conflict(&self, addr: u16) -> bool {
         if !self.oam_running {
             return false;
@@ -179,10 +123,6 @@ impl Dma {
         }
     }
 
-    /// True when `addr` sits on the same CGB memory bus as the DMA source. The
-    /// external bus is cartridge ROM/SRAM; the internal bus is WRAM (and OAM,
-    /// handled by the caller). Anything else (VRAM, I/O, HRAM) is on neither
-    /// shared path and never conflicts.
     fn cgb_same_bus(src: u16, addr: u16) -> bool {
         let external = |a: u16| matches!(a, 0x0000..=0x7FFF | 0xA000..=0xBFFF);
         let internal = |a: u16| matches!(a, 0xC000..=0xFDFF);
@@ -197,9 +137,6 @@ impl Dma {
         self.hdma_len != 0xFF && self.hdma_hblank
     }
 
-    /// Advance one 0x10-byte HDMA block: returns the (src, dst) pairs to copy,
-    /// then updates the running length. The motherboard performs the reads and
-    /// VRAM writes.
     pub fn hdma_block(&mut self) -> [(u16, u16); 0x10] {
         let mut pairs = [(0u16, 0u16); 0x10];
         for i in 0..0x10u16 {

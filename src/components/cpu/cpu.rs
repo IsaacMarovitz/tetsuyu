@@ -1,231 +1,9 @@
-use super::bus::{BusDir, BusMaster, Pins};
-use super::interrupt::Interrupts;
+use crate::components::cpu::types::*;
 use crate::components::mode::GBMode;
-use crate::components::registers::{Flags, Registers};
+use crate::components::prelude::{Flags, Registers};
+use crate::hw::bus::{BusDir, BusMaster, Pins};
+use crate::hw::interrupt::Interrupts;
 use std::collections::VecDeque;
-
-// --------------------------------------------------------------------------
-// Operand selectors
-// --------------------------------------------------------------------------
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum R8 {
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    A,
-}
-
-#[derive(Clone, Copy)]
-pub enum R16 {
-    Bc,
-    De,
-    Hl,
-    Sp,
-}
-
-#[derive(Clone, Copy)]
-pub enum R16Stk {
-    Bc,
-    De,
-    Hl,
-    Af,
-}
-
-#[derive(Clone, Copy)]
-pub enum Cond {
-    Nz,
-    Z,
-    Nc,
-    C,
-}
-
-#[derive(Clone, Copy)]
-pub enum AluOp {
-    Add,
-    Adc,
-    Sub,
-    Sbc,
-    And,
-    Xor,
-    Or,
-    Cp,
-}
-
-#[derive(Clone, Copy)]
-pub enum RotOp {
-    Rlc,
-    Rrc,
-    Rl,
-    Rr,
-    Sla,
-    Sra,
-    Swap,
-    Srl,
-}
-
-#[derive(Clone, Copy)]
-pub enum Addr {
-    Bc,
-    De,
-    Hl,
-    HighZ,
-    HighC,
-    Wz,
-    Sp,
-}
-
-#[derive(Clone, Copy)]
-pub enum Byte {
-    Reg(R8),
-    Z,
-    PcHigh,
-    PcLow,
-    SpHigh,
-    SpLow,
-    StkHigh(R16Stk),
-    StkLow(R16Stk),
-}
-
-// r-table: index 6 is (HL); handled specially by callers.
-fn r8_of(idx: u8) -> R8 {
-    match idx {
-        0 => R8::B,
-        1 => R8::C,
-        2 => R8::D,
-        3 => R8::E,
-        4 => R8::H,
-        5 => R8::L,
-        7 => R8::A,
-        _ => unreachable!("index 6 is (HL), not a register"),
-    }
-}
-
-fn rp_of(p: u8) -> R16 {
-    match p {
-        0 => R16::Bc,
-        1 => R16::De,
-        2 => R16::Hl,
-        _ => R16::Sp,
-    }
-}
-
-fn rp2_of(p: u8) -> R16Stk {
-    match p {
-        0 => R16Stk::Bc,
-        1 => R16Stk::De,
-        2 => R16Stk::Hl,
-        _ => R16Stk::Af,
-    }
-}
-
-fn cc_of(y: u8) -> Cond {
-    match y {
-        0 => Cond::Nz,
-        1 => Cond::Z,
-        2 => Cond::Nc,
-        _ => Cond::C,
-    }
-}
-
-fn alu_of(y: u8) -> AluOp {
-    match y {
-        0 => AluOp::Add,
-        1 => AluOp::Adc,
-        2 => AluOp::Sub,
-        3 => AluOp::Sbc,
-        4 => AluOp::And,
-        5 => AluOp::Xor,
-        6 => AluOp::Or,
-        _ => AluOp::Cp,
-    }
-}
-
-fn rot_of(y: u8) -> RotOp {
-    match y {
-        0 => RotOp::Rlc,
-        1 => RotOp::Rrc,
-        2 => RotOp::Rl,
-        3 => RotOp::Rr,
-        4 => RotOp::Sla,
-        5 => RotOp::Sra,
-        6 => RotOp::Swap,
-        _ => RotOp::Srl,
-    }
-}
-
-// --------------------------------------------------------------------------
-// Micro-ops and free effects
-// --------------------------------------------------------------------------
-
-pub enum MicroOp {
-    Fetch,
-    ImmZ,
-    ImmW,
-    LoadZ(Addr),
-    LoadW(Addr),
-    Store(Addr, Byte),
-    Internal,
-    Exec(Effect),
-}
-
-#[derive(Clone, Copy)]
-pub enum Effect {
-    LdR(R8, R8),
-    LdRZ(R8),
-    Alu(AluOp, R8),
-    AluZ(AluOp),
-    IncR(R8),
-    DecR(R8),
-    IncZ,
-    DecZ,
-    Inc16(R16),
-    Dec16(R16),
-    AddHl(R16),
-    AccRot(RotOp),
-    Rot(RotOp, R8),
-    RotZ(RotOp),
-    Bit(u8, R8),
-    BitZ(u8),
-    Res(u8, R8),
-    ResZ(u8),
-    Set(u8, R8),
-    SetZ(u8),
-    Daa,
-    Cpl,
-    Scf,
-    Ccf,
-    LdRpWz(R16),
-    SetStkWz(R16Stk),
-    SetPcWz,
-    SetPcHl,
-    SetPc(u16),
-    /// Set PC to the vector latched at the start of the low-byte push cycle.
-    SetPcIsr,
-    /// Arm the ISR vector latch: run as a free act at the start of the low-byte
-    /// push M-cycle, it flags the motherboard to sample live `IE & IF` now.
-    IsrArmLatch,
-    JrZ,
-    SpDec,
-    SpInc,
-    WzInc,
-    LdSpHl,
-    AddSpE,
-    LdHlSpE,
-    Ei,
-    Di,
-    Reti,
-    Halt,
-    Stop,
-    DecodeCb,
-    BranchRel(Cond),
-    JpCc(Cond),
-    CallCc(Cond),
-    RetCc(Cond),
-}
 
 pub struct Cpu {
     pub reg: Registers,
@@ -273,8 +51,6 @@ impl Cpu {
             micro,
         }
     }
-
-    // -- register / operand access ----------------------------------------
 
     fn wz(&self) -> u16 {
         ((self.w as u16) << 8) | self.z as u16
@@ -368,8 +144,6 @@ impl Cpu {
             Cond::C => self.flag(Flags::C),
         }
     }
-
-    // -- ALU ---------------------------------------------------------------
 
     fn alu(&mut self, op: AluOp, v: u8) {
         let a = self.reg.a;
@@ -515,8 +289,6 @@ impl Cpu {
         self.reg.set_flag(Flags::C, carry);
         self.reg.a = a;
     }
-
-    // -- effect execution --------------------------------------------------
 
     fn exec(&mut self, e: Effect) {
         match e {
@@ -677,8 +449,6 @@ impl Cpu {
         }
     }
 
-    // -- queue helpers -----------------------------------------------------
-
     fn push(&mut self, op: MicroOp) {
         self.micro.push_back(op);
     }
@@ -706,8 +476,6 @@ impl Cpu {
         self.push_front(MicroOp::Exec(Effect::SpInc));
         self.push_front(MicroOp::LoadZ(Addr::Sp));
     }
-
-    // -- decode ------------------------------------------------------------
 
     fn decode(&mut self) {
         let op = self.ir;
@@ -887,13 +655,6 @@ impl Cpu {
     }
 
     fn decode_x3(&mut self, y: u8, z: u8, p: u8, q: u8) {
-        // Illegal opcodes (0xD3/0xDB/0xDD/0xE3/0xE4/0xEB/0xEC/0xED/0xF4/0xFC/
-        // 0xFD) have no microcode; on real hardware they lock the CPU up hard.
-        // Model that as re-fetching the same opcode forever: rewind PC by one
-        // so the terminal Fetch `decode` appends re-reads this byte, an
-        // infinite 1-M-cycle loop. This keeps a stray garbage fetch — e.g. an
-        // opcode pulled off the OAM-DMA conflict bus — from crashing the
-        // emulator, matching how such a program hangs on hardware.
         let illegal = |cpu: &mut Cpu| cpu.reg.pc = cpu.reg.pc.wrapping_sub(1);
         match z {
             0 => match y {
@@ -1091,8 +852,6 @@ impl Cpu {
         self.push(MicroOp::Fetch);
     }
 
-    // -- boundary / interrupt ---------------------------------------------
-
     pub fn is_halted(&self) -> bool {
         self.halted
     }
@@ -1128,13 +887,12 @@ impl Cpu {
         self.ime
     }
 
-    /// Snapshot of registers.
+    /// Snapshot of registers
     pub fn regs(&self) -> Registers {
         self.reg.clone()
     }
 
-    /// True once the CPU has decoded `LD B,B` (0x40), the test-ROM magic
-    /// breakpoint. Latching; stays set until cleared with `take_magic_break`.
+    /// True once the CPU has decoded `LD B,B` (0x40)
     pub fn magic_break(&self) -> bool {
         self.magic_break
     }
@@ -1143,58 +901,29 @@ impl Cpu {
         std::mem::take(&mut self.magic_break)
     }
 
-    /// Fetch-time interrupt servicing. The decap'd decode ROM shows the ISR
-    /// has no standalone check point — "ISR servicing is done at fetch-time":
-    /// the decision is made during a generic fetch, and on accept the fetched
-    /// opcode is discarded and the 5 M-cycle ISR follows (M0 internal with the
-    /// PC re-adjusted past the discarded fetch, M1 internal, M2/M3 push PC,
-    /// M4 vector fetch). Called by the motherboard immediately after every
-    /// completed generic fetch.
-    ///
-    /// The decision uses IME as it was *before* this fetch: `ei` latches one
-    /// M-cycle late, so its own trailing fetch must not observe it. The
-    /// pending `ei` promotion therefore happens here, after the decision.
-    ///
-    /// The *vector* is not chosen here. Hardware re-reads `IE & IF` mid-dispatch
-    /// (after the high PC byte is pushed), so an IE write landing on that push
-    /// can still cancel or redirect the dispatch. That decision — and the IF
-    /// acknowledge — is deferred to [`MicroOp::IsrLatch`], resolved by the
-    /// motherboard against the live interrupt controller. This returns `true`
-    /// when a dispatch was started so the caller knows an ISR is in flight;
-    /// IF is *not* acknowledged here.
-    ///
-    /// Both halves are pinned by hardware tests: blargg interrupt_time
-    /// measures the taken-interrupt cost (fetch shared with the untaken path
-    /// + 5 ISR cycles), the mealybug m3 suite pins that a request rising
-    /// *during* a fetch M-cycle is serviced by that very fetch, and mooneye
-    /// `ie_push` pins the mid-dispatch IE re-read.
     pub fn offer_interrupt(&mut self, pending: Interrupts) -> bool {
         let ime_at_fetch = self.ime;
+
         if self.ime_pending {
             self.ime_pending = false;
             self.ime = true;
         }
+
         if !ime_at_fetch {
             return false;
         }
+
         if pending.highest().is_none() {
             return false;
         }
+
         self.ime = false;
         self.ime_pending = false;
-        // Hardware M0: IDU PC- — undo the discarded opcode's PC increment so
-        // the pushed return address re-executes it after reti.
         self.reg.pc = self.reg.pc.wrapping_sub(1);
         self.isr_vector = 0;
         self.isr_latch_armed = false;
         self.micro.clear();
-        // The canonical 5 M-cycles: two internal, push PC high, push PC low,
-        // set PC = vector (then the vector-fetch shares the terminal Fetch).
-        // The vector is *not* chosen up front. `IsrArmLatch` runs as a free act
-        // at the very start of the low-byte push cycle, flagging the motherboard
-        // to sample live `IE & IF` then — after the high-byte push landed and
-        // before the low-byte push write — so an IE write on the high push can
-        // still cancel or redirect the dispatch without adding a cycle.
+
         self.push(MicroOp::Internal);
         self.push(MicroOp::Internal);
         self.push(MicroOp::Exec(Effect::SpDec));
@@ -1204,21 +933,14 @@ impl Cpu {
         self.push(MicroOp::Store(Addr::Sp, Byte::PcLow));
         self.push(MicroOp::Exec(Effect::SetPcIsr));
         self.push(MicroOp::Fetch);
+
         true
     }
 
-    /// True when the ISR vector latch is armed (the high-byte push completed and
-    /// the low-byte push M-cycle is starting). The motherboard samples live
-    /// `IE & IF` and calls [`Self::latch_isr_vector`] when this holds. Consumes
-    /// the arm flag.
     pub fn take_isr_latch(&mut self) -> bool {
         std::mem::take(&mut self.isr_latch_armed)
     }
 
-    /// Resolve the ISR vector mid-dispatch. `pending` is the live `IE & IF` at
-    /// this cycle. Returns the bit to acknowledge in IF, or `None` when every
-    /// enabled bit was cleared (a write to IE on the high-byte push cancelled
-    /// the dispatch): the vector stays `$0000` and IF is left untouched.
     pub fn latch_isr_vector(&mut self, pending: Interrupts) -> Option<Interrupts> {
         match pending.highest() {
             Some((vector, bit)) => {
@@ -1231,8 +953,6 @@ impl Cpu {
             }
         }
     }
-
-    // -- M-cycle interface -------------------------------------------------
 
     pub fn run_free_acts(&mut self) {
         while matches!(self.micro.front(), Some(MicroOp::Exec(_))) {
@@ -1267,14 +987,13 @@ impl Cpu {
         match self.micro.pop_front().expect("micro-op queue underflow") {
             MicroOp::Fetch => {
                 self.ir = pins.data;
+
                 if self.halt_bug {
                     self.halt_bug = false;
                 } else {
                     self.reg.pc = self.reg.pc.wrapping_add(1);
                 }
-                // A pending `ei` is promoted in `offer_interrupt`, which the
-                // motherboard calls after every completed fetch, so the ISR
-                // decision at this fetch still sees the pre-`ei` IME.
+
                 self.decode();
                 true
             }

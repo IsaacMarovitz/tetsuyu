@@ -63,16 +63,6 @@ impl Ticked {
     }
 }
 
-/// A peer chip on the bus, with its two hardware-distinct interfaces separated:
-///
-/// - `advance` steps the chip's internal clock by one dot. `base_dot` gates
-///   base-domain chips (PPU, APU); CPU-domain chips (timer) advance every call.
-/// - `bus` is the address/data interface: the chip responds if selected. It is
-///   driven on the CPU's transfer dot, and also by the DMA engine when it seizes
-///   the bus as master — so a bus access never depends on the internal clock.
-///
-/// Splitting them lets the DMA read any address without advancing anyone, and
-/// mirrors real silicon where a chip's dot clock and its bus port are separate.
 pub trait Chip {
     fn advance(&mut self, _base_dot: bool) -> Ticked {
         Ticked::default()

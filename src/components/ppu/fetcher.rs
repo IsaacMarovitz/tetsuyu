@@ -1,18 +1,5 @@
-//! This module holds the *data* for the sub-dot-accurate renderer — the two
-//! pixel FIFOs, the background/window/sprite fetcher, and the LCD shifter. The
-//! per-dot logic that drives them lives on `PPU` (in `ppu.rs`), so it can reach
-//! the VRAM/OAM/register state and reuse the existing tile-address and colour
-//! maths. Keeping the state here and the behaviour there avoids a
-//! self-referential borrow of `PPU`.
-
 use crate::components::ppu::structs::Attributes;
 
-/// One step of the background (or sprite) fetch cycle. The first four steps
-/// take 2 dots each; Push is retried every dot until the FIFO has room. This
-/// mirrors the hardware fetcher (Pandocs "FIFO Pixel Fetcher"), including the
-/// separate Sleep step — the Get-Tile-Data-High step *also* pushes a row, so a
-/// full cycle has two push opportunities and can keep the 16-deep FIFO two
-/// tiles ahead of the shifter.
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum FetchStep {
     TileId,

@@ -7,7 +7,6 @@ pub mod context;
 pub mod framebuffer;
 pub mod hw;
 pub mod mbc;
-pub mod sound;
 
 pub const CLOCK_FREQUENCY: u32 = 4_194_304;
 pub const STEP_TIME: u32 = 16;

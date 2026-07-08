@@ -1,10 +1,11 @@
+use crate::components::apu::prelude::*;
 use crate::components::memory::Memory;
 use crate::components::mode::GBMode;
 use crate::config::{APUConfig, Config};
-use crate::sound::prelude::*;
+use crate::hw::bus::{BusDir, Pins};
 use bitflags::bitflags;
 
-pub struct APU {
+pub struct Apu {
     config: APUConfig,
     mode: GBMode,
     audio_enabled: bool,
@@ -50,7 +51,7 @@ bitflags! {
     }
 }
 
-impl APU {
+impl Apu {
     pub fn new(config: Config) -> Self {
         let synth = if config.apu_config.master_enabled && !config.headless {
             Some(Synth::new())
@@ -78,6 +79,16 @@ impl APU {
             ch3: CH3::new(),
             ch4: CH4::new(),
             synth,
+        }
+    }
+
+    pub fn bus(&mut self, pins: &mut Pins) {
+        if pins.transfer && matches!(pins.address, 0xFF10..=0xFF3F) {
+            match pins.dir {
+                BusDir::Read => pins.data = self.read(pins.address),
+                BusDir::Write => self.write(pins.address, pins.data),
+                BusDir::Idle => {}
+            }
         }
     }
 
@@ -127,7 +138,7 @@ impl APU {
         self.frame_sequencer & 1 == 0
     }
 
-    pub fn cycle(&mut self, div: u8, double_speed: bool) {
+    pub fn advance(&mut self, div: u8, double_speed: bool) {
         let bit = 4 + double_speed as u8;
         let div_bit = (div >> bit) & 1;
         let old_div_bit = (self.div_apu >> bit) & 1;
@@ -220,7 +231,7 @@ impl APU {
 
     fn update_channel_3(&self, synth: &Synth) {
         // Channel 3 is fed as cycle-accurate DAC amplitude events (see
-        // `sound::ch3_blip`) rather than a frequency + wavetable snapshot, so
+        // `apu::ch3_blip`) rather than a frequency + wavetable snapshot, so
         // PCM-style wave RAM content is reproduced without aliasing, and the
         // band-limited step path makes level *transitions* audible even though
         // the output DC-blocker removes any steady offset.
@@ -280,7 +291,7 @@ impl APU {
     }
 }
 
-impl Memory for APU {
+impl Memory for Apu {
     fn read(&self, a: u16) -> u8 {
         match a {
             0xFF10..=0xFF14 => self.ch1.read(a),

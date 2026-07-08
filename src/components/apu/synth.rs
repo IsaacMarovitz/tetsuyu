@@ -1,5 +1,5 @@
-use crate::sound::ch3_blip::{Ch3BlipNode, Ch3BlipProducer, ch3_blip_pair};
-use crate::sound::lfsr_noise::lfsr_noise_controlled;
+use crate::components::apu::ch3_blip::{Ch3BlipNode, Ch3BlipProducer, ch3_blip_pair};
+use crate::components::apu::lfsr_noise::lfsr_noise_controlled;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, SizedSample, StreamConfig};
 use fundsp::prelude::*;

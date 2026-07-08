@@ -1,6 +1,6 @@
+use crate::components::apu::length_counter::LengthCounter;
+use crate::components::apu::volume_envelope::VolumeEnvelope;
 use crate::components::memory::Memory;
-use crate::sound::length_counter::LengthCounter;
-use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH4 {
     pub dac_enabled: bool,

@@ -1,7 +1,7 @@
+use crate::components::apu::length_counter::LengthCounter;
+use crate::components::apu::period_timer::PeriodTimer;
 use crate::components::memory::Memory;
 use crate::components::mode::GBMode;
-use crate::sound::length_counter::LengthCounter;
-use crate::sound::period_timer::PeriodTimer;
 use bitflags::bitflags;
 
 pub struct CH3 {

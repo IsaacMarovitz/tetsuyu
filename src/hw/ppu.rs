@@ -5,11 +5,6 @@ use crate::components::ppu::ppu::PPU as CorePpu;
 use crate::config::Config;
 use crate::framebuffer::FramebufferWriter;
 
-/// The PPU as a peer chip. It owns the existing dot-accurate line renderer and
-/// adapts it to the bus. The renderer is boxed: it embeds ~384 KB of color
-/// lookup tables, and keeping it on the heap stops that from being copied
-/// through every stack frame during construction (which overflows the thread
-/// stack in debug builds, where there is no return-value optimization).
 pub struct Ppu {
     core: Box<CorePpu>,
 }
@@ -21,9 +16,6 @@ impl Ppu {
         }
     }
 
-    /// Addresses the PPU is authoritative for. Deliberately excludes 0xFF46
-    /// (OAM DMA) and 0xFF4C/0xFF4D so the DMA and speed-switch owners can claim
-    /// them without a bus conflict.
     fn owns(addr: u16) -> bool {
         matches!(addr,
             0x8000..=0x9FFF

@@ -1,21 +1,18 @@
-use super::apu::Apu;
 use super::bus::{BusDir, BusMaster, Chip, Pins, Ticked};
 use super::clock::Clock;
-use super::cpu::Cpu;
 use super::dma::Dma;
 use super::interrupt::{InterruptController, Interrupts};
 use super::ppu::Ppu;
 use super::sysbus::SystemBus;
 use super::timer::Timer;
+use crate::components::apu::apu::Apu;
+use crate::components::cpu::cpu::Cpu;
 use crate::components::joypad::JoypadButton;
 use crate::components::prelude::Registers;
 use crate::config::Config;
 use crate::framebuffer::FramebufferWriter;
 use crate::mbc::header::Header;
 
-/// The mainboard: owns the chips, the clock, and the traces. Its logic is
-/// arbitration, routing, and driving the DMA — it holds no peripheral internals
-/// and no address decode (each chip decodes itself).
 pub struct Motherboard {
     cpu: Cpu,
     clock: Clock,
@@ -51,8 +48,6 @@ impl Motherboard {
         }
     }
 
-    /// Convenience constructor matching the legacy `CPU::new`: loads the boot
-    /// ROM from the config paths and derives the CGB flag from the header.
     pub fn from_config(
         rom: Vec<u8>,
         header: Header,

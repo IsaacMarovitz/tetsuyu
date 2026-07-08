@@ -12,5 +12,5 @@ mod volume_envelope;
 
 #[allow(unused_imports)]
 mod prelude {
-    pub use crate::sound::{apu::*, ch1::*, ch2::*, ch3::*, ch4::*, synth::*};
+    pub use crate::components::apu::{apu::*, ch1::*, ch2::*, ch3::*, ch4::*, synth::*};
 }

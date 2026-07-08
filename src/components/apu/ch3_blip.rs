@@ -8,7 +8,7 @@
 //! content is a static, low-frequency periodic waveform.
 
 use crate::CLOCK_FREQUENCY;
-use crate::sound::ch3::CH3;
+use crate::components::apu::ch3::CH3;
 use blip_buf::BlipBuf;
 use fundsp::prelude::*;
 use rtrb::{Consumer, Producer, RingBuffer};

@@ -9,10 +9,6 @@ use crate::mbc::header::Header;
 use crate::mbc::mode::{MBC, MBCMode};
 use crate::mbc::prelude::*;
 
-/// Everything on the bus that is passive memory or an untimed port: the
-/// cartridge (MBC) with the boot-rom overlay, work RAM, high RAM, the serial
-/// and joypad ports, and the speed/bank/RP control registers. The timed
-/// hardware (PPU, timer, interrupt controller, DMA, APU) are separate peers.
 pub struct SystemBus {
     mbc: Box<dyn MBC + 'static>,
     serial: Serial,

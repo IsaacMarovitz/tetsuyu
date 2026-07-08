@@ -1,8 +1,8 @@
+use crate::components::apu::apu::DutyCycle;
+use crate::components::apu::length_counter::LengthCounter;
+use crate::components::apu::period_timer::PeriodTimer;
+use crate::components::apu::volume_envelope::VolumeEnvelope;
 use crate::components::memory::Memory;
-use crate::sound::apu::DutyCycle;
-use crate::sound::length_counter::LengthCounter;
-use crate::sound::period_timer::PeriodTimer;
-use crate::sound::volume_envelope::VolumeEnvelope;
 
 pub struct CH2 {
     pub dac_enabled: bool,

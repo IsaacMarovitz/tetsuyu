@@ -1,3 +1,5 @@
+pub mod apu;
+pub mod cpu;
 pub mod joypad;
 pub mod memory;
 pub mod mode;
