@@ -12,6 +12,8 @@ pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
+const LY_153_ROLLOVER: u32 = 4;
+
 /// Dots before a line formally starts at which its mode-2 (OAM) STAT source
 /// is already asserted. On hardware the OAM STAT interrupt for a line is
 /// raised at the tail of the previous line's HBlank, giving a mode-2 STAT
@@ -997,7 +999,9 @@ impl Memory for PPU {
             }
             0xFF42 => self.scy,
             0xFF43 => self.scx,
-            0xFF44 => self.ly,
+            0xFF44 => {
+                if self.ly == 153 && self.cycle_count >= LY_153_ROLLOVER { 0 } else { self.ly }
+            }
             0xFF45 => self.lc,
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
