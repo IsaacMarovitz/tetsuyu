@@ -178,11 +178,3 @@ mod cgb {
         timer_tma_write_reloading => ("timer/tma_write_reloading", GBMode::CGB),
     ];
 }
-
-/// Focused single-ROM diagnostic probe helper (Ignored by cargo test run unless specified)
-#[test]
-#[ignore]
-fn mooneye_probe_one() {
-    // Uses the generic runner infrastructure function targeting a specific test path manually
-    run_mooneye_test("add_sp_e_timing", GBMode::DMG);
-}
