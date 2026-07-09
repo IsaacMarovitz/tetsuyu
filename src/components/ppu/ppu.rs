@@ -12,6 +12,23 @@ pub const FRAMEBUFFER_SIZE: usize = 4 * SCREEN_W * SCREEN_H;
 pub const SCREEN_W: usize = 160;
 pub const SCREEN_H: usize = 144;
 
+/// Which flavour of the DMG OAM corruption a CPU M-cycle triggers. The row the
+/// PPU is scanning is decided by the PPU; this only says *how* it corrupts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum OamGlitch {
+    /// 16-bit inc/dec (INC/DEC rp, PUSH's dec sp, ...) — a write corruption
+    /// applied at the row asserted by the IDU at the M-cycle start (pre-dots).
+    Increase,
+    /// An actual OAM store during mode 2 (e.g. PUSH's push of a byte) — a write
+    /// corruption applied at the row reached by the store transfer (post-dots).
+    Write,
+    /// A plain read of OAM during mode 2 (e.g. a stack-pop's high-byte read).
+    Read,
+    /// A read that shares its M-cycle with the IDU increment (a stack-pop's
+    /// low-byte read) — the three-row "read + write" pattern.
+    ReadIncrease,
+}
+
 const LY_153_ROLLOVER: u32 = 4;
 
 /// Dots before a line formally starts at which its mode-2 (OAM) STAT source
@@ -937,34 +954,84 @@ impl PPU {
         self.write_vram(a, v, bank);
     }
 
-    pub fn oam_corrupt_inc(&mut self) {
-        // DMG/SGB OAM corruption: an address in FE00-FEFF held by a 16-bit
-        // inc/dec during mode 2 glitches the row the PPU is scanning. The
-        // corruption sources from the previous row, so only row 0 is immune.
-        // OAM is a 16-bit-word bus; corruption acts on words.
+    /// Word accessor on the raw OAM byte array (little-endian, 16-bit bus).
+    fn oam_w(&self, r: usize, w: usize) -> u16 {
+        let i = r * 8 + w * 2;
+        (self.oam[i] as u16) | ((self.oam[i + 1] as u16) << 8)
+    }
+
+    fn oam_set_w(&mut self, r: usize, w: usize, v: u16) {
+        let i = r * 8 + w * 2;
+        self.oam[i] = v as u8;
+        self.oam[i + 1] = (v >> 8) as u8;
+    }
+
+    fn oam_copy_row(&mut self, from: usize, to: usize) {
+        let mut buf = [0u8; 8];
+        buf.copy_from_slice(&self.oam[from * 8..from * 8 + 8]);
+        self.oam[to * 8..to * 8 + 8].copy_from_slice(&buf);
+    }
+
+    /// The OAM row the PPU is currently scanning, if a DMG mode-2 corruption
+    /// can happen at all. One row is scanned per M-cycle.
+    fn oam_scan_row(&self) -> Option<usize> {
         if self.mode != GBMode::DMG || self.ppu_mode != PPUMode::OAMScan {
-            return;
+            return None;
         }
-        let row = (self.cycle_count / 4) as usize; // One row scanned per M-cycle
-        if row < 1 || row >= 20 {
-            return;
-        }
+        Some((self.cycle_count / 4) as usize)
+    }
 
-        let word = |o: &[u8; 0xA0], r: usize, w: usize| -> u16 {
-            let i = r * 8 + w * 2;
-            (o[i] as u16) | ((o[i + 1] as u16) << 8)
-        };
-        let a = word(&self.oam, row, 0);
-        let b = word(&self.oam, row - 1, 0);
-        let c = word(&self.oam, row - 1, 2);
-        let new0 = ((a ^ c) & (b ^ c)) ^ c;
-
-        let base = row * 8;
-        self.oam[base] = new0 as u8;
-        self.oam[base + 1] = (new0 >> 8) as u8;
+    /// Common tail of read/write corruption: the last three words of `row` are
+    /// copied from the preceding row; only the first-word formula differs.
+    fn oam_glitch_row(&mut self, row: usize, new_w0: u16) {
+        self.oam_set_w(row, 0, new_w0);
         for w in 1..4 {
-            self.oam[base + w * 2] = self.oam[(row - 1) * 8 + w * 2];
-            self.oam[base + w * 2 + 1] = self.oam[(row - 1) * 8 + w * 2 + 1];
+            let v = self.oam_w(row - 1, w);
+            self.oam_set_w(row, w, v);
+        }
+    }
+
+    fn oam_write_corrupt(&mut self, row: usize) {
+        if !(1..20).contains(&row) {
+            return;
+        }
+        let a = self.oam_w(row, 0);
+        let b = self.oam_w(row - 1, 0);
+        let c = self.oam_w(row - 1, 2);
+        self.oam_glitch_row(row, ((a ^ c) & (b ^ c)) ^ c);
+    }
+
+    fn oam_read_corrupt(&mut self, row: usize) {
+        if !(1..20).contains(&row) {
+            return;
+        }
+        let a = self.oam_w(row, 0);
+        let b = self.oam_w(row - 1, 0);
+        let c = self.oam_w(row - 1, 2);
+        self.oam_glitch_row(row, b | (a & c));
+    }
+
+    fn oam_read_increase_corrupt(&mut self, row: usize) {
+        if (4..=18).contains(&row) {
+            let a = self.oam_w(row - 2, 0);
+            let b = self.oam_w(row - 1, 0);
+            let c = self.oam_w(row, 0);
+            let d = self.oam_w(row - 1, 2);
+            self.oam_set_w(row - 1, 0, (b & (a | c | d)) | (a & c & d));
+            self.oam_copy_row(row - 1, row);
+            self.oam_copy_row(row - 1, row - 2);
+        }
+        self.oam_read_corrupt(row);
+    }
+
+    pub fn oam_corrupt(&mut self, kind: OamGlitch) {
+        let Some(row) = self.oam_scan_row() else {
+            return;
+        };
+        match kind {
+            OamGlitch::Increase | OamGlitch::Write => self.oam_write_corrupt(row),
+            OamGlitch::Read => self.oam_read_corrupt(row),
+            OamGlitch::ReadIncrease => self.oam_read_increase_corrupt(row),
         }
     }
 }

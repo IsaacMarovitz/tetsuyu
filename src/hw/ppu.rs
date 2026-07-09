@@ -1,7 +1,7 @@
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use super::interrupt::Interrupts;
 use crate::components::memory::Memory;
-use crate::components::ppu::ppu::PPU as CorePpu;
+use crate::components::ppu::ppu::{OamGlitch, PPU as CorePpu};
 use crate::config::Config;
 use crate::framebuffer::FramebufferWriter;
 
@@ -37,10 +37,11 @@ impl Ppu {
         self.core.write_vram_direct(addr, value);
     }
 
-    /// DMG OAM corruption: a 16-bit inc/dec through the OAM region during
-    /// mode 2 glitches the row being scanned. No-op outside that window.
-    pub fn corrupt_oam_inc(&mut self) {
-        self.core.oam_corrupt_inc();
+    /// DMG OAM corruption: a CPU access through the OAM region during mode 2
+    /// glitches the row being scanned. The kind (write/read/read-increase) is
+    /// decided by the CPU M-cycle. No-op outside that window.
+    pub fn corrupt_oam(&mut self, kind: OamGlitch) {
+        self.core.oam_corrupt(kind);
     }
 
     /// Forwarded from a write to 0xFF50: drops the PPU's boot-rom palette

@@ -195,7 +195,21 @@ pub enum Effect {
     IsrArmLatch,
     JrZ,
     SpDec,
+    /// SP decrement that does *not* raise an OAM glitch. Used for a push's
+    /// second `dec sp`, whose glitched write collapses into the store sharing
+    /// its M-cycle ("push triggers 4 times but behaves like 3 writes").
+    SpDecNoGlitch,
     SpInc,
+    /// Free act raising the DMG "read-during-increase" OAM glitch for the given
+    /// address (the low-byte read of a stack pop, which shares its M-cycle with
+    /// the first SP increment). Does not modify any register.
+    OamReadInc(Addr),
+    /// Free act raising a plain OAM "read" glitch for the given address (the
+    /// high-byte read of a stack pop). Does not modify any register.
+    OamRead(Addr),
+    /// Free act raising an OAM "write" glitch for the given address (an actual
+    /// store into OAM, e.g. a push). Does not modify any register.
+    OamWrite(Addr),
     WzInc,
     LdSpHl,
     AddSpE,

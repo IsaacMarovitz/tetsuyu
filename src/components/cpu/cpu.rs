@@ -1,5 +1,6 @@
 use crate::components::cpu::types::*;
 use crate::components::mode::GBMode;
+use crate::components::ppu::ppu::OamGlitch;
 use crate::components::prelude::{Flags, Registers};
 use crate::hw::bus::{BusDir, BusMaster, Pins};
 use crate::hw::interrupt::Interrupts;
@@ -14,7 +15,8 @@ pub struct Cpu {
     ime_pending: bool,
     halted: bool,
     halt_bug: bool,
-    oam_glitch: bool,
+    oam_glitch_pre: Option<OamGlitch>,
+    oam_glitch_post: Option<OamGlitch>,
     speed_switch: bool,
     /// Set when the CPU decodes `LD B,B` (0x40), the mooneye/gameboy-doctor
     /// "magic breakpoint" opcode used by test ROMs to signal completion.
@@ -43,7 +45,8 @@ impl Cpu {
             ime_pending: false,
             halted: false,
             halt_bug: false,
-            oam_glitch: false,
+            oam_glitch_pre: None,
+            oam_glitch_post: None,
             speed_switch: false,
             magic_break: false,
             isr_vector: 0,
@@ -320,12 +323,12 @@ impl Cpu {
             Effect::DecZ => self.z = self.dec8(self.z),
             Effect::Inc16(r) => {
                 let v = self.r16(r);
-                self.note_oam_glitch(v);
+                self.note_oam_glitch(v, OamGlitch::Increase);
                 self.set_r16(r, v.wrapping_add(1));
             }
             Effect::Dec16(r) => {
                 let v = self.r16(r);
-                self.note_oam_glitch(v);
+                self.note_oam_glitch(v, OamGlitch::Increase);
                 self.set_r16(r, v.wrapping_sub(1));
             }
             Effect::AddHl(r) => {
@@ -391,12 +394,26 @@ impl Cpu {
                 self.reg.pc = (self.reg.pc as i16).wrapping_add(e) as u16;
             }
             Effect::SpDec => {
-                self.note_oam_glitch(self.reg.sp);
+                self.note_oam_glitch(self.reg.sp, OamGlitch::Increase);
+                self.reg.sp = self.reg.sp.wrapping_sub(1);
+            }
+            Effect::SpDecNoGlitch => {
                 self.reg.sp = self.reg.sp.wrapping_sub(1);
             }
             Effect::SpInc => {
-                self.note_oam_glitch(self.reg.sp);
                 self.reg.sp = self.reg.sp.wrapping_add(1);
+            }
+            Effect::OamReadInc(a) => {
+                let addr = self.addr(a);
+                self.note_oam_glitch(addr, OamGlitch::ReadIncrease);
+            }
+            Effect::OamRead(a) => {
+                let addr = self.addr(a);
+                self.note_oam_glitch(addr, OamGlitch::Read);
+            }
+            Effect::OamWrite(a) => {
+                let addr = self.addr(a);
+                self.note_oam_glitch(addr, OamGlitch::Write);
             }
             Effect::WzInc => {
                 let v = self.wz().wrapping_add(1);
@@ -453,8 +470,27 @@ impl Cpu {
         self.micro.push_back(op);
     }
 
+    fn push_stack_push_word(&mut self, high: Byte, low: Byte) {
+        self.push(MicroOp::Internal);
+        self.push(MicroOp::Exec(Effect::SpDec));
+        self.push(MicroOp::Exec(Effect::OamWrite(Addr::Sp)));
+        self.push(MicroOp::Store(Addr::Sp, high));
+        self.push(MicroOp::Exec(Effect::SpDecNoGlitch));
+        self.push(MicroOp::Exec(Effect::OamWrite(Addr::Sp)));
+        self.push(MicroOp::Store(Addr::Sp, low));
+    }
+
     fn push_front(&mut self, op: MicroOp) {
         self.micro.push_front(op);
+    }
+
+    fn push_stack_pop_word(&mut self) {
+        self.push(MicroOp::Exec(Effect::OamReadInc(Addr::Sp)));
+        self.push(MicroOp::LoadZ(Addr::Sp));
+        self.push(MicroOp::Exec(Effect::SpInc));
+        self.push(MicroOp::Exec(Effect::OamRead(Addr::Sp)));
+        self.push(MicroOp::LoadW(Addr::Sp));
+        self.push(MicroOp::Exec(Effect::SpInc));
     }
 
     // Front of queue currently holds only the terminal Fetch. Insert the
@@ -473,8 +509,10 @@ impl Cpu {
         self.push_front(MicroOp::Internal);
         self.push_front(MicroOp::Exec(Effect::SpInc));
         self.push_front(MicroOp::LoadW(Addr::Sp));
+        self.push_front(MicroOp::Exec(Effect::OamRead(Addr::Sp)));
         self.push_front(MicroOp::Exec(Effect::SpInc));
         self.push_front(MicroOp::LoadZ(Addr::Sp));
+        self.push_front(MicroOp::Exec(Effect::OamReadInc(Addr::Sp)));
     }
 
     fn decode(&mut self) {
@@ -686,28 +724,19 @@ impl Cpu {
             1 => {
                 if q == 0 {
                     // POP rp2
-                    self.push(MicroOp::LoadZ(Addr::Sp));
-                    self.push(MicroOp::Exec(Effect::SpInc));
-                    self.push(MicroOp::LoadW(Addr::Sp));
-                    self.push(MicroOp::Exec(Effect::SpInc));
+                    self.push_stack_pop_word();
                     self.push(MicroOp::Exec(Effect::SetStkWz(rp2_of(p))));
                 } else {
                     match p {
                         0 => {
                             // RET
-                            self.push(MicroOp::LoadZ(Addr::Sp));
-                            self.push(MicroOp::Exec(Effect::SpInc));
-                            self.push(MicroOp::LoadW(Addr::Sp));
-                            self.push(MicroOp::Exec(Effect::SpInc));
+                            self.push_stack_pop_word();
                             self.push(MicroOp::Internal);
                             self.push(MicroOp::Exec(Effect::SetPcWz));
                         }
                         1 => {
                             // RETI
-                            self.push(MicroOp::LoadZ(Addr::Sp));
-                            self.push(MicroOp::Exec(Effect::SpInc));
-                            self.push(MicroOp::LoadW(Addr::Sp));
-                            self.push(MicroOp::Exec(Effect::SpInc));
+                            self.push_stack_pop_word();
                             self.push(MicroOp::Internal);
                             self.push(MicroOp::Exec(Effect::Reti));
                         }
@@ -766,11 +795,10 @@ impl Cpu {
             5 => {
                 if q == 0 {
                     // PUSH rp2
-                    self.push(MicroOp::Internal);
-                    self.push(MicroOp::Exec(Effect::SpDec));
-                    self.push(MicroOp::Store(Addr::Sp, Byte::StkHigh(rp2_of(p))));
-                    self.push(MicroOp::Exec(Effect::SpDec));
-                    self.push(MicroOp::Store(Addr::Sp, Byte::StkLow(rp2_of(p))));
+                    self.push_stack_push_word(
+                        Byte::StkHigh(rp2_of(p)),
+                        Byte::StkLow(rp2_of(p)),
+                    );
                 } else if p == 0 {
                     // CALL nn
                     self.push(MicroOp::ImmZ);
@@ -866,17 +894,24 @@ impl Cpu {
         self.halt_bug = true;
     }
 
-    /// Record that a 16-bit inc/dec acted on an address in the OAM region.
-    /// The DMG glitches OAM when this happens during mode 2; the motherboard
-    /// forwards the event and the PPU decides whether it corrupts.
-    fn note_oam_glitch(&mut self, addr: u16) {
-        if (0xFE00..=0xFEFF).contains(&addr) {
-            self.oam_glitch = true;
+    fn note_oam_glitch(&mut self, addr: u16, kind: OamGlitch) {
+        if !(0xFE00..=0xFEFF).contains(&addr) {
+            return;
+        }
+        match kind {
+            OamGlitch::Increase => self.oam_glitch_pre = Some(kind),
+            OamGlitch::Read | OamGlitch::ReadIncrease | OamGlitch::Write => {
+                self.oam_glitch_post = Some(kind)
+            }
         }
     }
 
-    pub fn take_oam_glitch(&mut self) -> bool {
-        std::mem::take(&mut self.oam_glitch)
+    pub fn take_oam_glitch_pre(&mut self) -> Option<OamGlitch> {
+        self.oam_glitch_pre.take()
+    }
+
+    pub fn take_oam_glitch_post(&mut self) -> Option<OamGlitch> {
+        self.oam_glitch_post.take()
     }
 
     pub fn take_speed_switch(&mut self) -> bool {

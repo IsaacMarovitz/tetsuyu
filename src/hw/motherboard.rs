@@ -152,8 +152,8 @@ impl Motherboard {
         let was_halted = self.cpu.is_halted();
         self.cpu.run_free_acts();
 
-        if self.cpu.take_oam_glitch() {
-            self.ppu.corrupt_oam_inc();
+        if let Some(kind) = self.cpu.take_oam_glitch_pre() {
+            self.ppu.corrupt_oam(kind);
         }
 
         if self.cpu.is_halted() {
@@ -188,6 +188,10 @@ impl Motherboard {
         }
 
         self.run_dots();
+
+        if let Some(kind) = self.cpu.take_oam_glitch_post() {
+            self.ppu.corrupt_oam(kind);
+        }
 
         if self.pins.dir == BusDir::Read && self.dma.oam_conflict(self.pins.address) {
             self.pins.data = 0xFF;
