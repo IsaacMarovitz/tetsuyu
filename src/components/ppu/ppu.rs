@@ -70,14 +70,7 @@ pub struct PPU {
     framebuffer: FramebufferWriter,
     pub entered_hblank: bool,
     stat_line: bool,
-    bg_fifo: PixelFifo<BgPixel>,
-    obj_line: [ObjPixel; SCREEN_W],
-    fetcher: Fetcher,
-    shifter: Shifter,
-    sprites: Vec<SelectedSprite>,
-    /// The window is currently driving the fetcher this line (set the dot the
-    /// trigger fires, cleared at Mode 3 start).
-    window_active: bool,
+    pipeline: Pipeline,
     /// Latched copy of `window_active` for the whole line: true once the
     /// window activated during this line's Mode 3, so `inc_ly` can advance the
     /// window line counter exactly when hardware does. Distinct from
@@ -95,12 +88,6 @@ pub struct PPU {
     /// but STAT still reports mode 0 (and the mode-2 STAT source does not fire):
     /// the "mode-0 readback" first-frame quirk pinned by mooneye stat_lyc_onoff.
     first_line_after_on: bool,
-    /// BG/window tile columns (keyed by `(px + scx) >> 3`) already charged the
-    /// once-per-tile OBJ alignment penalty this Mode 3. The Pandocs OBJ penalty
-    /// algorithm charges the alignment wait only for the first object whose
-    /// leftmost pixel lands in a given tile; later objects in the same tile pay
-    /// only the flat 6-dot fetch. Reset at each Mode 3 start.
-    obj_penalty_tiles: Vec<i16>,
 }
 
 impl PPU {
@@ -137,17 +124,11 @@ impl PPU {
             framebuffer,
             entered_hblank: false,
             stat_line: false,
-            bg_fifo: PixelFifo::new(),
-            obj_line: [ObjPixel::default(); SCREEN_W],
-            fetcher: Fetcher::new(),
-            shifter: Shifter::new(),
-            sprites: Vec::with_capacity(10),
-            window_active: false,
+            pipeline: Pipeline::new(),
             window_line_active: false,
             window_y_condition: false,
             bgp_glitch: None,
             first_line_after_on: false,
-            obj_penalty_tiles: Vec::with_capacity(21),
         }
     }
 
@@ -271,288 +252,59 @@ impl PPU {
         self.stat_line = line;
     }
 
-    /// Set up the FIFO renderer for one Mode 3 (called at the OAMScan→Draw
-    /// edge). Selects this line's sprites and resets the fetcher/shifter/FIFO.
+    /// Set up the pixel pipeline for one Mode 3 (called at the OAMScan→Draw
+    /// edge): latches the window Y condition and hands the pipeline this line's
+    /// register snapshot + OAM so it can select sprites and reset itself.
     fn start_mode3_fifo(&mut self) {
-        self.bg_fifo.clear();
-        self.obj_line = [ObjPixel::default(); SCREEN_W];
-        self.fetcher = Fetcher::new();
-        self.shifter = Shifter::new();
-        self.shifter.discard = self.scx % 8;
-        self.window_active = false;
         self.window_line_active = false;
         // Latch the Y condition for this scanline: once WY == LY has been seen
         // this frame it stays set (Pandocs "Window rendering criteria").
         if self.wy == self.ly {
             self.window_y_condition = true;
         }
+        
         self.bgp_glitch = None;
-        self.obj_penalty_tiles.clear();
-        self.select_sprites();
+        let r = self.regs();
+        self.pipeline.start_line(&self.oam, r);
     }
 
-    /// Mode 2 result: up to 10 sprites overlapping this line, in OAM order.
-    fn select_sprites(&mut self) {
-        self.sprites.clear();
-        let size = if self.lcdc.contains(LCDC::OBJ_SIZE) {
-            16
-        } else {
-            8
-        };
-        let line = self.ly as i32 + 16;
-        for i in 0..40u8 {
-            let o = i as usize * 4;
-            let y = self.oam[o] as i32;
-            if line >= y && line < y + size {
-                self.sprites.push(SelectedSprite {
-                    oam_index: i * 4,
-                    x: self.oam[o + 1],
-                    y: self.oam[o],
-                    tile: self.oam[o + 2],
-                    attr: Attributes::from_bits_retain(self.oam[o + 3]),
-                    fetched: false,
-                });
-                if self.sprites.len() == 10 {
-                    break;
-                }
-            }
+    /// Register snapshot handed to the pixel pipeline for a dot / line start.
+    fn regs(&self) -> Regs {
+        Regs {
+            mode: self.mode,
+            lcdc: self.lcdc,
+            scx: self.scx,
+            scy: self.scy,
+            ly: self.ly,
+            wx: self.wx,
+            wly: self.wly,
+            window_y: self.window_y_condition,
+            opri: self.opri,
         }
     }
 
-    /// Advance the renderer by one dot
+    /// Advance the renderer one dot: drive the pixel pipeline and paint any
+    /// pixel it emits. All fetch/FIFO/sprite state lives in the pipeline now.
     fn mode3_dot(&mut self) {
-        // A window trigger may clear the BG FIFO before anything shifts.
-        self.check_window_trigger();
-
-        // One dot of the active fetcher (sprite sub-fetch has priority).
-        if self.fetcher.in_sprite_fetch() {
-            self.sprite_fetch_step();
-        } else {
-            self.bg_fetch_step();
+        let r = self.regs();
+        if let Some(e) = self.pipeline.tick(&self.vram, r) {
+            self.emit_pixel(e.x, e.bg, e.obj);
         }
 
-        // Begin a sprite fetch if one is due (stalls the shifter until done).
-        if !self.fetcher.in_sprite_fetch() {
-            self.try_start_sprite();
-        }
-
-        // Shift one pixel unless a sprite fetch is stalling us or the BG FIFO
-        // has nothing ready yet.
-        if !self.fetcher.in_sprite_fetch() && !self.bg_fifo.is_empty() {
-            self.shift_pixel();
-        }
-
-        // The window comparator position ticks on every Mode 3 dot the
-        // shifter isn't stalled by a sprite fetch.
-        if !self.fetcher.in_sprite_fetch() {
-            self.shifter.pos = self.shifter.pos.wrapping_add(1);
+        // The window's WLY counter advances on any line the window activated.
+        if self.pipeline.window_triggered() {
+            self.window_line_active = true;
         }
 
         // The BGP write artifact lives for exactly the one dot after the write
         // resolves; whether or not a pixel was emitted on it, it's gone now.
         self.bgp_glitch = None;
 
-        if self.shifter.emitted >= SCREEN_W as u8 {
+        if self.pipeline.finished() {
             self.ppu_mode = PPUMode::HBlank;
             self.entered_hblank = true;
             self.update_stat_line();
         }
-    }
-
-    /// One dot of the background/window fetch cycle. Hardware fetcher (Pandocs
-    /// "FIFO Pixel Fetcher"): five steps — Get Tile, Tile Low, Tile High, Sleep,
-    /// Push — the first four taking 2 dots each and Push retried every dot. A
-    /// row is pushed as soon as the 16-deep FIFO has room for one (≤ 8 queued),
-    /// and there are *two* push opportunities per cycle: one at the end of Tile
-    /// High and one at the Push step. Whichever fires first ends the cycle. That
-    /// extra High-step push lets the fetcher stay ~2 tiles ahead of the shifter,
-    /// so a mid-Mode-3 write to LCDC/SCX lands on a tile two columns ahead of
-    /// the one on screen (mealybug m3_lcdc_bg_map_change / _bg_en_change).
-    fn bg_fetch_step(&mut self) {
-        match self.fetcher.step {
-            FetchStep::TileId => {
-                if self.fetcher.substep == 1 {
-                    self.bg_fetch_tile_id();
-                    self.fetcher.step = FetchStep::TileLow;
-                }
-                self.fetcher.substep ^= 1;
-            }
-            FetchStep::TileLow => {
-                if self.fetcher.substep == 1 {
-                    self.fetcher.tile_low = self.bg_fetch_plane(0);
-                    self.fetcher.step = FetchStep::TileHigh;
-                }
-                self.fetcher.substep ^= 1;
-            }
-            FetchStep::TileHigh => {
-                if self.fetcher.substep == 1 {
-                    self.fetcher.tile_high = self.bg_fetch_plane(1);
-                    if !self.fetcher.done_dummy {
-                        // Hardware discards the line's first fetch the moment it
-                        // completes and restarts against the same column. The
-                        // discarded tile is never pushed.
-                        self.fetcher.done_dummy = true;
-                        self.fetcher.restart_bg();
-                        return;
-                    }
-                    if !self.fetcher.primed {
-                        // Line's first real tile: skip the early push and the
-                        // Sleep step, going straight to Push so it lands on the
-                        // same dot as before (pixel phase / Mode-3 length kept).
-                        self.fetcher.step = FetchStep::Push;
-                    } else if self.try_push_bg() {
-                        // Later tiles: the extra Get-Tile-Data-High push tops up
-                        // the 16-deep FIFO two dots early, building the two-tile
-                        // lead that lands a mid-Mode-3 LCDC/SCX write on a later
-                        // tile (mealybug m3_lcdc_bg_*_change).
-                        self.fetcher.restart_bg();
-                    } else {
-                        self.fetcher.step = FetchStep::Sleep;
-                    }
-                }
-                self.fetcher.substep ^= 1;
-            }
-            FetchStep::Sleep => {
-                if self.fetcher.substep == 1 {
-                    self.fetcher.step = FetchStep::Push;
-                }
-                self.fetcher.substep ^= 1;
-            }
-            FetchStep::Push => {
-                // Retried every dot until the FIFO has room for the row.
-                if self.try_push_bg() {
-                    self.fetcher.restart_bg();
-                }
-            }
-        }
-    }
-
-    /// Push the assembled BG/window row into the FIFO if it has room for a whole
-    /// tile (≤ 8 of the 16 slots used), advancing the fetcher column. Returns
-    /// whether the push happened.
-    fn try_push_bg(&mut self) -> bool {
-        if self.bg_fifo.len() > 8 {
-            return false;
-        }
-        let row = self.assemble_bg_row();
-        self.bg_fifo.push_row(row);
-        self.fetcher.tile_x = self.fetcher.tile_x.wrapping_add(1);
-        self.fetcher.primed = true;
-        true
-    }
-
-    /// Fetch the tile id (and CGB attribute) for the fetcher's current column.
-    fn bg_fetch_tile_id(&mut self) {
-        let (base, tx, ty) = if self.fetcher.fetching_window {
-            let base = if self.lcdc.contains(LCDC::WINDOW_AREA) {
-                0x9C00
-            } else {
-                0x9800
-            };
-            (
-                base,
-                self.fetcher.tile_x as u16 & 31,
-                (self.wly as u16 >> 3) & 31,
-            )
-        } else {
-            let base = if self.lcdc.contains(LCDC::BG_TILE_MAP_AREA) {
-                0x9C00
-            } else {
-                0x9800
-            };
-            let tx = ((self.scx as u16 / 8) + self.fetcher.tile_x as u16) & 31;
-            let ty = ((self.scy.wrapping_add(self.ly) as u16) >> 3) & 31;
-            (base, tx, ty)
-        };
-        let addr = base + ty * 32 + tx;
-        self.fetcher.tile_id = self.read_vram(addr, 0);
-        self.fetcher.tile_attr = if self.mode == GBMode::CGB {
-            self.read_vram(addr, 1)
-        } else {
-            0
-        };
-    }
-
-    /// Row within the current BG/window tile (0..7), honouring CGB Y-flip.
-    fn bg_row_in_tile(&self) -> u16 {
-        let py = if self.fetcher.fetching_window {
-            self.wly
-        } else {
-            self.scy.wrapping_add(self.ly)
-        };
-        let row = (py % 8) as u16;
-        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
-        if self.mode == GBMode::CGB && attr.contains(Attributes::Y_FLIP) {
-            7 - row
-        } else {
-            row
-        }
-    }
-
-    /// Address + bank of the current BG/window tile's data row.
-    fn bg_tile_data_addr(&self) -> (u16, usize) {
-        let base = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-            0x8000
-        } else {
-            0x8800
-        };
-        let offset = if self.lcdc.contains(LCDC::TILE_DATA_AREA) {
-            self.fetcher.tile_id as i16
-        } else {
-            (self.fetcher.tile_id as i8) as i16 + 128
-        } as u16
-            * 16;
-        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
-        let bank = if self.mode == GBMode::CGB && attr.contains(Attributes::BANK) {
-            1
-        } else {
-            0
-        };
-        (base + offset + self.bg_row_in_tile() * 2, bank)
-    }
-
-    fn bg_fetch_plane(&self, plane: u16) -> u8 {
-        let (addr, bank) = self.bg_tile_data_addr();
-        self.read_vram(addr + plane, bank)
-    }
-
-    /// Turn the two latched bit-planes into 8 BG pixels, index 0 = leftmost.
-    fn assemble_bg_row(&self) -> [BgPixel; 8] {
-        let attr = Attributes::from_bits_retain(self.fetcher.tile_attr);
-        let xflip = self.mode == GBMode::CGB && attr.contains(Attributes::X_FLIP);
-        let mut row = [BgPixel::default(); 8];
-        for (i, cell) in row.iter_mut().enumerate() {
-            let bit = if xflip { i as u8 } else { 7 - i as u8 };
-            let lo = (self.fetcher.tile_low >> bit) & 1;
-            let hi = (self.fetcher.tile_high >> bit) & 1;
-            *cell = BgPixel {
-                color: (hi << 1) | lo,
-                cgb_attr: self.fetcher.tile_attr,
-            };
-        }
-        row
-    }
-
-    /// Emit (or discard) one pixel from the head of the BG FIFO.
-    fn shift_pixel(&mut self) {
-        let bg = match self.bg_fifo.pop() {
-            Some(p) => p,
-            None => return,
-        };
-
-        // Discard pending pixels: SCX%8 fine scroll at line start, or the
-        // left-edge clip of a WX<7 window. (A mid-line window trigger requires
-        // the fine-scroll discard to have finished, so the two uses of this
-        // counter can never overlap.)
-        if self.shifter.discard > 0 {
-            self.shifter.discard -= 1;
-            return;
-        }
-
-        let x = self.shifter.emitted as usize;
-        let obj = self.obj_line[x];
-        self.emit_pixel(x, bg, obj);
-        self.shifter.emitted += 1;
     }
 
     /// Resolve BG-vs-OBJ priority for one pixel and write it.
@@ -652,221 +404,6 @@ impl PPU {
             };
             self.framebuffer
                 .set_pixel(c.r(), c.g(), c.b(), x, self.ly as usize);
-        }
-    }
-
-    /// Begin a sprite fetch if a selected sprite is due at the current position
-    /// and the BG FIFO has produced a tile to align against.
-    fn try_start_sprite(&mut self) {
-        // DMG suppresses OBJ fetches entirely when objects are disabled;
-        // CGB still fetches (only mixing checks LCDC), so this shortens Mode 3
-        // on DMG only.
-        if self.mode == GBMode::DMG && !self.lcdc.contains(LCDC::OBJ_ENABLE) {
-            return;
-        }
-        if self.bg_fifo.is_empty() {
-            return;
-        }
-
-        let target = self.shifter.emitted as i16;
-        let mut chosen: Option<usize> = None;
-        for (i, s) in self.sprites.iter().enumerate() {
-            if s.fetched {
-                continue;
-            }
-
-            // A sprite is due once the pixel about to be emitted has reached
-            // its screen X (x-8); left-clipped sprites (x<8) fire at x=0.
-            if (s.x as i16 - 8) <= target {
-                match chosen {
-                    None => chosen = Some(i),
-                    Some(j) => {
-                        let o = &self.sprites[j];
-                        if s.x < o.x || (s.x == o.x && s.oam_index < o.oam_index) {
-                            chosen = Some(i);
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(i) = chosen {
-            self.sprites[i].fetched = true;
-            let s = self.sprites[i];
-            self.fetcher.sprite = Some(s);
-            self.fetcher.sprite_stall = self.obj_penalty(&s);
-        }
-    }
-
-    /// The Mode-3 penalty (in dots) an object incurs, per the Pandocs "OBJ
-    /// penalty algorithm". "The Pixel" is the object's leftmost pixel at screen
-    /// X `x - 8`. A flat 6 dots for the tile fetch, plus — only for the first
-    /// object whose Pixel lands in a given BG/window tile — an alignment wait
-    /// equal to `(pixels strictly right of The Pixel in its tile) - 2`, floored
-    /// at 0. An OAM X of 0 is a fixed 11-dot penalty regardless of SCX.
-    fn obj_penalty(&mut self, s: &SelectedSprite) -> u8 {
-        if s.x == 0 {
-            return 11;
-        }
-
-        // Screen X of The Pixel, and which BG/window tile column it sits in.
-        // Horizontal scroll (outside the window) shifts the tile grid by
-        // SCX % 8; the window's grid is aligned to the screen.
-        let px = s.x as i16 - 8;
-        let scroll = if self.fetcher.fetching_window {
-            0
-        } else {
-            (self.scx % 8) as i16
-        };
-        let tile_key = (px + scroll).div_euclid(8);
-
-        let mut penalty = 6u8;
-        if !self.obj_penalty_tiles.contains(&tile_key) {
-            self.obj_penalty_tiles.push(tile_key);
-            // Offset of The Pixel within its tile (0 = leftmost). Pixels
-            // strictly to its right = 7 - offset; minus 2, floored at 0.
-            let offset = (px + scroll).rem_euclid(8);
-            let align = (7 - offset - 2).max(0) as u8;
-            penalty += align;
-        }
-        penalty
-    }
-
-    /// One dot of an in-progress OBJ penalty stall. The shifter is frozen for
-    /// `sprite_stall` dots (see `obj_penalty`); on the last dot the object's
-    /// tile planes are read and mixed into the OBJ overlay, then the fetcher is
-    /// released so the shifter resumes next dot.
-    fn sprite_fetch_step(&mut self) {
-        let s = match self.fetcher.sprite {
-            Some(s) => s,
-            None => return,
-        };
-
-        if self.fetcher.sprite_stall > 1 {
-            self.fetcher.sprite_stall -= 1;
-            return;
-        }
-
-        // Final penalty dot: fetch the planes and mix.
-        self.fetcher.sprite_low = self.sprite_plane(&s, 0);
-        self.fetcher.sprite_high = self.sprite_plane(&s, 1);
-        self.mix_sprite(&s);
-        self.fetcher.sprite_stall = 0;
-        self.fetcher.sprite = None; // Resume shifting next dot
-    }
-
-    fn oam_top(s: &SelectedSprite) -> u8 {
-        s.y.wrapping_sub(16)
-    }
-
-    fn sprite_plane(&self, s: &SelectedSprite, plane: u16) -> u8 {
-        let size: u8 = if self.lcdc.contains(LCDC::OBJ_SIZE) {
-            16
-        } else {
-            8
-        };
-        let mut row = self.ly.wrapping_sub(Self::oam_top(s)) & (size - 1);
-
-        if s.attr.contains(Attributes::Y_FLIP) {
-            row = size - 1 - row;
-        }
-
-        let tile = if size == 16 { s.tile & 0xFE } else { s.tile };
-        let addr = 0x8000u16 + tile as u16 * 16 + row as u16 * 2;
-        let bank = if self.mode == GBMode::CGB && s.attr.contains(Attributes::BANK) {
-            1
-        } else {
-            0
-        };
-
-        self.read_vram(addr + plane, bank)
-    }
-
-    /// Mix a freshly-fetched sprite into the per-line OBJ overlay.
-    ///
-    /// Objects are fetched in X order (ties by OAM index), so under coordinate
-    /// priority — DMG, and CGB with OPRI=1 ($FF6C bit 0 set) — the first object
-    /// to cover a pixel is the highest-priority one and keeps it. Under CGB
-    /// OAM priority (OPRI=0) the winner is instead the lowest OAM index
-    /// regardless of X, so a later-fetched object with a smaller index
-    /// overrides a pixel an earlier (larger-index) object placed.
-    fn mix_sprite(&mut self, s: &SelectedSprite) {
-        let base = s.x as i16 - 8;
-        let xflip = s.attr.contains(Attributes::X_FLIP);
-        let palette = s.attr.contains(Attributes::PALETTE_NO_0);
-        let bg_prio = s.attr.contains(Attributes::PRIORITY);
-        // OAM-index priority applies only on CGB with OPRI cleared; DMG and
-        // OPRI=1 always resolve overlaps by draw (coordinate) order.
-        let index_priority = self.mode == GBMode::CGB && !self.opri;
-        for i in 0..8i16 {
-            let sx = base + i;
-            if sx < 0 || sx >= SCREEN_W as i16 {
-                continue;
-            }
-
-            let bit = if xflip { i as u8 } else { 7 - i as u8 };
-            let lo = (self.fetcher.sprite_low >> bit) & 1;
-            let hi = (self.fetcher.sprite_high >> bit) & 1;
-            let color = (hi << 1) | lo;
-            if color == 0 {
-                continue;
-            }
-
-            let slot = &mut self.obj_line[sx as usize];
-            if slot.color != 0 {
-                // Something already owns this pixel. Keep it unless we're in
-                // CGB OAM-priority mode and this object has a lower OAM index.
-                if !(index_priority && s.oam_index < slot.oam_index) {
-                    continue;
-                }
-            }
-
-            *slot = ObjPixel {
-                color,
-                palette,
-                bg_prio,
-                cgb_attr: s.attr.bits(),
-                oam_index: s.oam_index,
-            };
-        }
-    }
-
-    fn check_window_trigger(&mut self) {
-        if self.window_active || self.fetcher.in_sprite_fetch() {
-            return;
-        }
-
-        if !self.lcdc.contains(LCDC::WINDOW_ENABLE) || !self.window_y_condition {
-            return;
-        }
-
-        // The WX<7 + fine-scroll (SCX%8 != 0) glitch and the WX=166 quirk
-        // are not yet modelled.
-        if self.shifter.discard != 0 {
-            return;
-        }
-
-        // WX >= 167 never starts a window (documented); the guard is needed
-        // explicitly because the position counter wraps up from its -1 start.
-        if self.wx >= 167 {
-            return;
-        }
-
-        if self.shifter.pos == self.wx {
-            self.window_active = true;
-            self.window_line_active = true;
-            self.fetcher.fetching_window = true;
-            self.fetcher.tile_x = 0;
-            self.fetcher.done_dummy = true; // No warm-up fetch on window restart
-            self.fetcher.primed = false; // First window tile takes the phase-safe path
-            self.fetcher.restart_bg();
-            self.bg_fifo.clear();
-
-            // WX 0..6: the window still starts at the screen's left edge, but
-            // its first 7-WX pixels fall off the left side and are clipped.
-            if self.wx < 7 {
-                self.shifter.discard = 7 - self.wx;
-            }
         }
     }
 
