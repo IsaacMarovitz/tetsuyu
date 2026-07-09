@@ -74,7 +74,6 @@ mod blargg {
         run_blargg_test,
         // DMG Only
         dmg_sound => ("dmg_sound/dmg_sound", GBMode::DMG),
-        #[ignore = "Known failure"]
         oam_bug => ("oam_bug/oam_bug", GBMode::DMG),
         // CGB Only
         cgb_sound => ("cgb_sound/cgb_sound", GBMode::CGB),

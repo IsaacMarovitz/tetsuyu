@@ -24,9 +24,6 @@ tetsuyu contains harnessess for running blargg, mealybug, and mooneye test suite
 Most known failures are precise PPU timing issues that won't affect most ROMs. 
 Current known failures:
 
-### Blargg
-- `oam_bug`
-
 ### Mealybug
 - `m2_win_en_toggle`
 - `m3_lcdc_bg_en_change`

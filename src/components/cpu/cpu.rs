@@ -331,6 +331,14 @@ impl Cpu {
                 self.note_oam_glitch(v, OamGlitch::Increase);
                 self.set_r16(r, v.wrapping_sub(1));
             }
+            Effect::Inc16NoGlitch(r) => {
+                let v = self.r16(r);
+                self.set_r16(r, v.wrapping_add(1));
+            }
+            Effect::Dec16NoGlitch(r) => {
+                let v = self.r16(r);
+                self.set_r16(r, v.wrapping_sub(1));
+            }
             Effect::AddHl(r) => {
                 let v = self.r16(r);
                 self.add_hl(v);
@@ -629,14 +637,16 @@ impl Cpu {
                             self.push(MicroOp::Exec(Effect::LdRZ(R8::A)));
                         }
                         2 => {
+                            self.push(MicroOp::Exec(Effect::OamReadInc(Addr::Hl)));
                             self.push(MicroOp::LoadZ(Addr::Hl));
                             self.push(MicroOp::Exec(Effect::LdRZ(R8::A)));
-                            self.push(MicroOp::Exec(Effect::Inc16(R16::Hl)));
+                            self.push(MicroOp::Exec(Effect::Inc16NoGlitch(R16::Hl)));
                         }
                         _ => {
+                            self.push(MicroOp::Exec(Effect::OamReadInc(Addr::Hl)));
                             self.push(MicroOp::LoadZ(Addr::Hl));
                             self.push(MicroOp::Exec(Effect::LdRZ(R8::A)));
-                            self.push(MicroOp::Exec(Effect::Dec16(R16::Hl)));
+                            self.push(MicroOp::Exec(Effect::Dec16NoGlitch(R16::Hl)));
                         }
                     }
                 }

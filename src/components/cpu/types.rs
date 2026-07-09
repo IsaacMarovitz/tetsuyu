@@ -169,6 +169,11 @@ pub enum Effect {
     DecZ,
     Inc16(R16),
     Dec16(R16),
+    /// 16-bit increment/decrement that raises no OAM glitch of its own. Used by
+    /// `LD A,(HL+/-)`, where the inc/dec shares its M-cycle with the memory read
+    /// and is absorbed into a single read-during-increase corruption.
+    Inc16NoGlitch(R16),
+    Dec16NoGlitch(R16),
     AddHl(R16),
     AccRot(RotOp),
     Rot(RotOp, R8),
