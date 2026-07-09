@@ -4,6 +4,7 @@ use crate::components::mode::GBMode;
 use crate::config::{APUConfig, Config};
 use crate::hw::bus::{BusDir, Pins};
 use bitflags::bitflags;
+use crate::components::prelude::io;
 
 pub struct Apu {
     config: APUConfig,
@@ -177,7 +178,7 @@ impl Apu {
         [1, 0, 0, 0, 0, 1, 1, 1], // 50%
         [0, 1, 1, 1, 1, 1, 1, 0], // 75%
     ];
-    
+
     fn mix(&self) -> (i32, i32) {
         if !self.audio_enabled {
             return (0, 0);
@@ -206,19 +207,19 @@ impl Apu {
         right *= self.right_volume as i32 + 1;
         (left, right)
     }
-    
+
     fn ch1_digital(&self) -> Option<i32> {
         if !(self.ch1.dac_enabled && self.config.ch1_enabled) {
             return None;
         }
-        
+
         if !self.is_ch_1_active {
             return Some(15);
         }
-        
+
         let bit = Self::DUTY_TABLE[self.ch1.duty_cycle.bits() as usize]
             [self.ch1.sample_index as usize];
-        
+
         Some(if bit != 0 {
             self.ch1.volume_envelope.volume as i32
         } else {
@@ -230,14 +231,14 @@ impl Apu {
         if !(self.ch2.dac_enabled && self.config.ch2_enabled) {
             return None;
         }
-        
+
         if !self.is_ch_2_active {
             return Some(15);
         }
-        
+
         let bit = Self::DUTY_TABLE[self.ch2.duty_cycle.bits() as usize]
             [self.ch2.sample_index as usize];
-        
+
         Some(if bit != 0 {
             self.ch2.volume_envelope.volume as i32
         } else {
@@ -249,7 +250,7 @@ impl Apu {
         if !(self.ch3.dac_enabled && self.config.ch3_enabled) {
             return None;
         }
-        
+
         // Active or DAC-on-but-untriggered: the DAC converts the current wave
         // sample either way (held constant when untriggered).
         Some(self.ch3.wave_digital() as i32)
@@ -259,11 +260,11 @@ impl Apu {
         if !(self.ch4.dac_enabled && self.config.ch4_enabled) {
             return None;
         }
-        
+
         if !self.is_ch_4_active {
             return Some(15);
         }
-        
+
         Some(if self.ch4.amplitude_bit() {
             self.ch4.final_volume as i32
         } else {
@@ -275,21 +276,18 @@ impl Apu {
 impl Memory for Apu {
     fn read(&self, a: u16) -> u8 {
         match a {
-            0xFF10..=0xFF14 => self.ch1.read(a),
-            0xFF15..=0xFF19 => self.ch2.read(a),
-            0xFF1A..=0xFF1E => self.ch3.read(a),
-            0xFF1F..=0xFF23 => self.ch4.read(a),
-            // NR50: Master Volume & VIN
-            0xFF24 => {
+            io::NR10..=io::NR14 => self.ch1.read(a),
+            io::NR21..=io::NR24 => self.ch2.read(a),
+            io::NR30..=io::NR34 => self.ch3.read(a),
+            io::NR41..=io::NR44 => self.ch4.read(a),
+            io::NR50 => {
                 (self.vin_left as u8) << 7
                     | (self.left_volume & 0b0000_0111) << 4
                     | (self.vin_right as u8) << 3
                     | (self.right_volume & 0b0000_0111)
             }
-            // NR51: Sound Panning
-            0xFF25 => self.panning.bits(),
-            // NR52: Audio Master Control
-            0xFF26 => {
+            io::NR51 => self.panning.bits(),
+            io::NR52 => {
                 ((self.audio_enabled as u8) << 7)
                     | ((self.is_ch_4_active as u8) << 3)
                     | ((self.is_ch_3_active as u8) << 2)
@@ -297,7 +295,7 @@ impl Memory for Apu {
                     | ((self.is_ch_1_active as u8) << 0)
                     | 0x70
             }
-            0xFF30..=0xFF3F => self.ch3.read_wave(a, self.is_ch_3_active, self.mode),
+            io::WAV_START..=io::WAV_END => self.ch3.read_wave(a, self.is_ch_3_active, self.mode),
             _ => 0xFF,
         }
     }
@@ -309,13 +307,13 @@ impl Memory for Apu {
         // length load (low bits of NRx1) is the one exception: it still takes
         // effect, but nothing else in the register does — so load only the
         // length and return, leaving duty and the trigger/enable logic alone.
-        if a >= 0xFF10 && a <= 0xFF25 && !self.audio_enabled {
+        if a >= io::NR10 && a <= io::NR51 && !self.audio_enabled {
             if self.mode == GBMode::DMG {
                 match a {
-                    0xFF11 => self.ch1.length_counter.load((v & 0x3F) as u16, 64),
-                    0xFF16 => self.ch2.length_counter.load((v & 0x3F) as u16, 64),
-                    0xFF1B => self.ch3.length_counter.load(v as u16, 256),
-                    0xFF20 => self.ch4.length_counter.load((v & 0x3F) as u16, 64),
+                    io::NR11 => self.ch1.length_counter.load((v & 0x3F) as u16, 64),
+                    io::NR21 => self.ch2.length_counter.load((v & 0x3F) as u16, 64),
+                    io::NR31 => self.ch3.length_counter.load(v as u16, 256),
+                    io::NR41 => self.ch4.length_counter.load((v & 0x3F) as u16, 64),
                     _ => {}
                 }
             }
@@ -323,12 +321,12 @@ impl Memory for Apu {
         }
 
         match a {
-            0xFF10..=0xFF14 => {
+            io::NR10..=io::NR14 => {
                 let was_enabled = self.ch1.length_counter.enabled;
                 let extra = self.length_extra_clock();
                 self.ch1.write(a, v);
 
-                if a == 0xFF14 {
+                if a == io::NR14 {
                     let trigger = (v & 0x80) != 0;
                     let hit_zero = self.ch1.length_counter.enable_clock(was_enabled, extra);
                     if hit_zero && !trigger {
@@ -343,7 +341,7 @@ impl Memory for Apu {
                 }
 
                 // Handle DAC disable
-                if a == 0xFF12 && (v & 0xF8) == 0 {
+                if a == io::NR12 && (v & 0xF8) == 0 {
                     self.is_ch_1_active = false;
                 }
 
@@ -353,12 +351,12 @@ impl Memory for Apu {
                     self.ch1.sweep_overflow = false;
                 }
             }
-            0xFF15..=0xFF19 => {
+            io::NR21..=io::NR24 => {
                 let was_enabled = self.ch2.length_counter.enabled;
                 let extra = self.length_extra_clock();
                 self.ch2.write(a, v);
 
-                if a == 0xFF19 {
+                if a == io::NR24 {
                     let trigger = (v & 0x80) != 0;
                     let hit_zero = self.ch2.length_counter.enable_clock(was_enabled, extra);
                     if hit_zero && !trigger {
@@ -373,14 +371,14 @@ impl Memory for Apu {
                 }
 
                 // Handle DAC disable
-                if a == 0xFF17 && (v & 0xF8) == 0 {
+                if a == io::NR22 && (v & 0xF8) == 0 {
                     self.is_ch_2_active = false;
                 }
             }
-            0xFF1A..=0xFF1E => {
+            io::NR30..=io::NR34 => {
                 // DMG: retriggering CH3 while active corrupts wave RAM. Must run
                 // before the trigger resets the sample index.
-                if a == 0xFF1E
+                if a == io::NR34
                     && (v & 0x80) != 0
                     && self.mode == GBMode::DMG
                     && self.is_ch_3_active
@@ -393,7 +391,7 @@ impl Memory for Apu {
                 let extra = self.length_extra_clock();
                 self.ch3.write(a, v);
 
-                if a == 0xFF1E {
+                if a == io::NR34 {
                     let trigger = (v & 0x80) != 0;
                     let hit_zero = self.ch3.length_counter.enable_clock(was_enabled, extra);
                     if hit_zero && !trigger {
@@ -408,11 +406,11 @@ impl Memory for Apu {
                 }
 
                 // Handle DAC disable
-                if a == 0xFF1A && (v & 0x80) == 0 {
+                if a == io::NR30 && (v & 0x80) == 0 {
                     self.is_ch_3_active = false;
                 }
             }
-            0xFF1F..=0xFF23 => {
+            io::NR41..=io::NR44 => {
                 let was_enabled = self.ch4.length_counter.enabled;
                 let extra = self.length_extra_clock();
                 self.ch4.write(a, v);
@@ -432,12 +430,11 @@ impl Memory for Apu {
                 }
 
                 // Handle DAC disable
-                if a == 0xFF21 && (v & 0xF8) == 0 {
+                if a == io::NR42 && (v & 0xF8) == 0 {
                     self.is_ch_4_active = false;
                 }
             }
-            // NR50: Master Volume & VIN
-            0xFF24 => {
+            io::NR50 => {
                 if self.audio_enabled {
                     self.vin_left = (v & 0x80) != 0;
                     self.left_volume = (v >> 4) & 0b0000_0111;
@@ -445,14 +442,12 @@ impl Memory for Apu {
                     self.right_volume = v & 0b0000_0111;
                 }
             }
-            // NR51: Sound Panning
-            0xFF25 => {
+            io::NR51 => {
                 if self.audio_enabled {
                     self.panning = Panning::from_bits_truncate(v)
                 }
             }
-            // NR52: Audio Master Control
-            0xFF26 => {
+            io::NR52 => {
                 let was_enabled = self.audio_enabled;
                 set_apu_control = true;
                 self.audio_enabled = (v >> 7) == 0x01;

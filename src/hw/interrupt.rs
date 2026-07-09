@@ -1,5 +1,6 @@
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use bitflags::bitflags;
+use crate::components::prelude::io;
 
 bitflags! {
     #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -62,7 +63,7 @@ impl Chip for InterruptController {
     fn bus(&mut self, pins: &mut Pins) -> Ticked {
         // IF/IE are pure registers; nothing free-running to advance.
         match pins.address {
-            0xFF0F if pins.selected(true) => match pins.dir {
+            io::IF if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = self.iflag.bits() | 0xE0,
                 BusDir::Write => self.iflag = Interrupts::from_bits_truncate(pins.data),
                 BusDir::Idle => {}

@@ -1,3 +1,4 @@
+use crate::components::prelude::io;
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use super::interrupt::Interrupts;
 
@@ -99,7 +100,7 @@ impl Chip for Timer {
 
     fn bus(&mut self, pins: &mut Pins) -> Ticked {
         match pins.address {
-            0xFF04 if pins.selected(true) => match pins.dir {
+            io::DIV if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = (self.counter >> 8) as u8,
                 // Writing DIV clears the whole counter; the drop can clock TIMA.
                 BusDir::Write => {
@@ -109,7 +110,7 @@ impl Chip for Timer {
                 }
                 BusDir::Idle => {}
             },
-            0xFF05 if pins.selected(true) => match pins.dir {
+            io::TIMA if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = self.tima,
                 BusDir::Write => match self.reload {
                     // Cycle A: Write cancels the overflow entirely
@@ -123,7 +124,7 @@ impl Chip for Timer {
                 },
                 BusDir::Idle => {}
             },
-            0xFF06 if pins.selected(true) => match pins.dir {
+            io::TMA if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = self.tma,
                 BusDir::Write => {
                     self.tma = pins.data;
@@ -135,7 +136,7 @@ impl Chip for Timer {
                 }
                 BusDir::Idle => {}
             },
-            0xFF07 if pins.selected(true) => match pins.dir {
+            io::TAC if pins.selected(true) => match pins.dir {
                 BusDir::Read => pins.data = 0xF8 | self.tac,
                 BusDir::Write => {
                     let before = self.mux();

@@ -1,5 +1,6 @@
 use super::bus::{BusDir, Chip, Pins, Ticked};
 use crate::components::mode::GBMode;
+use crate::components::prelude::io;
 
 pub struct Dma {
     mode: GBMode,
@@ -39,7 +40,7 @@ impl Dma {
     }
 
     fn owns(addr: u16) -> bool {
-        matches!(addr, 0xFF46 | 0xFF51..=0xFF55)
+        matches!(addr, io::DMA | io::HDMA1..=io::HDMA5)
     }
 
     fn start_oam(&mut self, value: u8) {
@@ -162,24 +163,24 @@ impl Chip for Dma {
         if pins.selected(Self::owns(pins.address)) {
             let cgb = self.mode != GBMode::DMG;
             match (pins.address, pins.dir) {
-                (0xFF46, BusDir::Read) => pins.data = (self.oam_src >> 8) as u8,
-                (0xFF46, BusDir::Write) => self.start_oam(pins.data),
-                (0xFF51, BusDir::Write) if cgb => {
+                (io::DMA, BusDir::Read) => pins.data = (self.oam_src >> 8) as u8,
+                (io::DMA, BusDir::Write) => self.start_oam(pins.data),
+                (io::HDMA1, BusDir::Write) if cgb => {
                     self.hdma_src = (self.hdma_src & 0x00FF) | ((pins.data as u16) << 8)
                 }
-                (0xFF52, BusDir::Write) if cgb => {
+                (io::HDMA2, BusDir::Write) if cgb => {
                     self.hdma_src = (self.hdma_src & 0xFF00) | (pins.data as u16 & 0xF0)
                 }
-                (0xFF53, BusDir::Write) if cgb => {
+                (io::HDMA3, BusDir::Write) if cgb => {
                     self.hdma_dst =
                         0x8000 | (self.hdma_dst & 0x00FF) | ((pins.data as u16 & 0x1F) << 8)
                 }
-                (0xFF54, BusDir::Write) if cgb => {
+                (io::HDMA4, BusDir::Write) if cgb => {
                     self.hdma_dst = (self.hdma_dst & 0xFF00) | (pins.data as u16 & 0xF0)
                 }
-                (0xFF55, BusDir::Read) if cgb => pins.data = self.hdma_len,
-                (0xFF55, BusDir::Write) if cgb => self.start_hdma(pins.data),
-                (0xFF51..=0xFF55, BusDir::Read) => pins.data = 0xFF, // DMG: inert
+                (io::HDMA5, BusDir::Read) if cgb => pins.data = self.hdma_len,
+                (io::HDMA5, BusDir::Write) if cgb => self.start_hdma(pins.data),
+                (io::HDMA1..=io::HDMA5, BusDir::Read) => pins.data = 0xFF, // DMG: inert
                 _ => {}
             }
         }

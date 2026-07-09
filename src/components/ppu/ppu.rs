@@ -1053,8 +1053,8 @@ impl Memory for PPU {
                     0xFF
                 }
             }
-            0xFF40 => self.lcdc.bits(),
-            0xFF41 => {
+            io::LCDC => self.lcdc.bits(),
+            io::STAT => {
                 // During the first-line mode-0 readback window the PPU is
                 // internally in OAM scan but STAT reports mode 0.
                 let mode = if self.first_line_after_on {
@@ -1064,53 +1064,53 @@ impl Memory for PPU {
                 };
                 self.lcds.bits() | mode | 0x80
             }
-            0xFF42 => self.scy,
-            0xFF43 => self.scx,
-            0xFF44 => {
+            io::SCY => self.scy,
+            io::SCX => self.scx,
+            io::LY => {
                 if self.ly == 153 && self.cycle_count >= LY_153_ROLLOVER { 0 } else { self.ly }
             }
-            0xFF45 => self.lc,
-            0xFF47 => self.bgp,
-            0xFF48 => self.obp0,
-            0xFF49 => self.obp1,
-            0xFF4A => self.wy,
-            0xFF4B => self.wx,
-            0xFF4F => {
+            io::LYC => self.lc,
+            io::BGP => self.bgp,
+            io::OBP0 => self.obp0,
+            io::OBP1 => self.obp1,
+            io::WY => self.wy,
+            io::WX => self.wx,
+            io::VBK => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
                     0xFE | self.vram_bank as u8
                 }
             }
-            0xFF68 => {
+            io::BGPI => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
                     self.bcps.read() | 0x40
                 }
             }
-            0xFF69 => {
+            io::BGPD => {
                 if self.mode == GBMode::DMG || self.ppu_mode == PPUMode::Draw {
                     0xFF
                 } else {
                     self.bcpd[self.bcps.address as usize]
                 }
             }
-            0xFF6A => {
+            io::OBPI => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
                     self.ocps.read() | 0x40
                 }
             }
-            0xFF6B => {
+            io::OBPD => {
                 if self.mode == GBMode::DMG || self.ppu_mode == PPUMode::Draw {
                     0xFF
                 } else {
                     self.ocpd[self.ocps.address as usize]
                 }
             }
-            0xFF6C => 0xFE | self.opri as u8,
+            io::OPRI => 0xFE | self.opri as u8,
             _ => 0xFF,
         }
     }
@@ -1127,7 +1127,7 @@ impl Memory for PPU {
                     self.oam[a as usize - 0xFE00] = v
                 }
             }
-            0xFF40 => {
+            io::LCDC => {
                 let was_on = self.lcdc.contains(LCDC::LCD_ENABLE);
                 self.lcdc = LCDC::from_bits(v).unwrap();
                 if !self.lcdc.contains(LCDC::LCD_ENABLE) {
@@ -1164,19 +1164,19 @@ impl Memory for PPU {
                     self.check_lyc();
                 }
             }
-            0xFF41 => {
+            io::STAT => {
                 let sanitised = v & 0b1111_1000 | (self.lcds.bits() & 0b0000_0100);
                 self.lcds = LCDS::from_bits_truncate(sanitised);
                 self.check_lyc();
             }
-            0xFF42 => self.scy = v,
-            0xFF43 => self.scx = v,
-            0xFF44 => {} // LY is read-only; writes are ignored by hardware
-            0xFF45 => {
+            io::SCY => self.scy = v,
+            io::SCX => self.scx = v,
+            io::LY => {} // LY is read-only; writes are ignored by hardware
+            io::LYC => {
                 self.lc = v;
                 self.check_lyc();
             }
-            0xFF47 => {
+            io::BGP => {
                 // DMG: a BGP write landing during Mode 3 leaves `old | new`
                 // visible for the single dot the write occupies before the new
                 // value takes over — the 1-px slivers the mealybug
@@ -1186,14 +1186,14 @@ impl Memory for PPU {
                 }
                 self.bgp = v;
             }
-            0xFF48 => self.obp0 = v,
-            0xFF49 => self.obp1 = v,
-            0xFF4A => self.wy = v,
-            0xFF4B => self.wx = v,
-            0xFF4C => {}
-            0xFF4F => self.vram_bank = (v & 0x01) as usize,
-            0xFF68 => self.bcps.write(v),
-            0xFF69 => {
+            io::OBP0 => self.obp0 = v,
+            io::OBP1 => self.obp1 = v,
+            io::WY => self.wy = v,
+            io::WX => self.wx = v,
+            io::KEY0 => {}
+            io::VBK => self.vram_bank = (v & 0x01) as usize,
+            io::BGPI => self.bcps.write(v),
+            io::BGPD => {
                 if self.ppu_mode != PPUMode::Draw {
                     self.bcpd[self.bcps.address as usize] = v;
                 }
@@ -1203,8 +1203,8 @@ impl Memory for PPU {
                     self.bcps.address &= 0x3F;
                 }
             }
-            0xFF6A => self.ocps.write(v),
-            0xFF6B => {
+            io::OBPI => self.ocps.write(v),
+            io::OBPD => {
                 if self.ppu_mode != PPUMode::Draw {
                     self.ocpd[self.ocps.address as usize] = v;
                 }
@@ -1214,7 +1214,7 @@ impl Memory for PPU {
                     self.ocps.address &= 0x3F;
                 }
             }
-            0xFF6C => self.opri = v != 0,
+            io::OPRI => self.opri = v != 0,
             _ => {}
         }
     }

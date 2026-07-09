@@ -3,6 +3,7 @@ use super::interrupt::Interrupts;
 use crate::components::joypad::{Joypad, JoypadButton};
 use crate::components::memory::Memory;
 use crate::components::mode::GBMode;
+use crate::components::registers::io;
 use crate::components::serial::Serial;
 use crate::config::Config;
 use crate::mbc::header::Header;
@@ -97,12 +98,12 @@ impl SystemBus {
             | 0xA000..=0xBFFF
             | 0xC000..=0xFDFF
             | 0xFEA0..=0xFEFF
-            | 0xFF00
-            | 0xFF01..=0xFF02
-            | 0xFF4D
-            | 0xFF50
-            | 0xFF56
-            | 0xFF70
+            | io::JOYP
+            | io::SB..=io::SC
+            | io::KEY1
+            | io::BANK
+            | io::RP
+            | io::SVBK
             | 0xFF7F
             | 0xFF80..=0xFFFE)
     }
@@ -131,9 +132,9 @@ impl SystemBus {
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000],
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank.max(1)],
             0xFEA0..=0xFEFF => 0xFF,
-            0xFF00 => self.joypad.read(a),
-            0xFF01..=0xFF02 => self.serial.read(a),
-            0xFF4D => {
+            io::JOYP => self.joypad.read(a),
+            io::SB..=io::SC => self.serial.read(a),
+            io::KEY1 => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
@@ -141,14 +142,14 @@ impl SystemBus {
                         | if self.key1_armed { 0x01 } else { 0x00 }
                 }
             }
-            0xFF56 => {
+            io::RP => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
                     self.rp | 0x3E
                 }
             }
-            0xFF70 => {
+            io::SVBK => {
                 if self.mode == GBMode::DMG {
                     0xFF
                 } else {
@@ -169,19 +170,19 @@ impl SystemBus {
             0xE000..=0xEFFF => self.wram[a as usize - 0xE000] = v,
             0xF000..=0xFDFF => self.wram[a as usize - 0xF000 + 0x1000 * self.wram_bank.max(1)] = v,
             0xFEA0..=0xFEFF => {}
-            0xFF00 => self.joypad.write(a, v),
-            0xFF01..=0xFF02 => self.serial.write(a, v),
-            0xFF4D => self.key1_armed = (v & 0x01) != 0,
-            0xFF50 => {
+            io::JOYP => self.joypad.write(a, v),
+            io::SB..=io::SC => self.serial.write(a, v),
+            io::KEY1 => self.key1_armed = (v & 0x01) != 0,
+            io::BANK => {
                 self.boot_rom_enabled = false;
                 self.boot_just_disabled = true;
             }
-            0xFF56 => {
+            io::RP => {
                 if self.mode != GBMode::DMG {
                     self.rp = v & 0xC1;
                 }
             }
-            0xFF70 => {
+            io::SVBK => {
                 if self.mode != GBMode::DMG {
                     self.wram_bank = (v & 0x07) as usize;
                 }
