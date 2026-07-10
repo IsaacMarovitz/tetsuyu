@@ -4,8 +4,6 @@
 use crate::components::mode::GBMode;
 use crate::components::ppu::structs::*;
 
-const W: usize = 160;
-
 #[inline]
 fn rd(vram: &[u8], a: u16, bank: usize) -> u8 {
     vram[bank * 0x2000 + (a as usize - 0x8000)]
@@ -79,9 +77,6 @@ impl BgFifo {
     fn is_empty(&self) -> bool {
         self.len == 0
     }
-    fn len(&self) -> usize {
-        self.len
-    }
     fn push(&mut self, p: BgPixel) {
         let t = (self.head + self.len) % 16;
         self.data[t] = p;
@@ -151,10 +146,6 @@ pub struct Pipeline {
     sub: u8,
     tile_x: u8,
     fetching_window: bool,
-    /// The line's first BG fetch is discarded (hardware warm-up) to restore the
-    /// ~6-dot Mode 3 startup latency; set once that discard fetch completes.
-    /// Forced true on a window restart, which has no warm-up.
-    warmed: bool,
     tile_id: u8,
     tile_attr: u8,
     tile_low: u8,
@@ -164,13 +155,21 @@ pub struct Pipeline {
     // FIFOs
     bg: BgFifo,
     obj: ObjFifo,
-    // pixel clock
-    emitted: u8,
-    discard: u8,
+    // pixel clock (SACU)
+    /// PX — the single horizontal counter, clocked by the pixel clock. Starts at
+    /// 0; visible pixels are gated at PX >= 9 (screen_x = px - 9), so the 8
+    /// warm-up shifts (PX 1-8) drain the junk row. Window matches `px == WX`,
+    /// objects `px >= SPRITEX + 1`. Terminal at 167.
+    px: i16,
+    /// POKY: the pixel clock is held until the line's first BG tile is fetched.
+    data_ready: bool,
+    /// ROXY fine-scroll gate: holds the pixel clock for SCX&7 dots at startup.
+    fine: u8,
+    /// Window left-edge clip (WX<7): pixels shifted but not emitted.
+    clip: u8,
     // window
     window_active: bool,
     window_triggered: bool,
-    win_pos: u8,
     // sprites
     sprites: Vec<SelectedSprite>,
     sprite_fetch: Option<SpriteFetch>,
@@ -183,7 +182,6 @@ impl Pipeline {
             sub: 0,
             tile_x: 0,
             fetching_window: false,
-            warmed: false,
             tile_id: 0,
             tile_attr: 0,
             tile_low: 0,
@@ -191,11 +189,12 @@ impl Pipeline {
             pending: None,
             bg: BgFifo::new(),
             obj: ObjFifo::new(),
-            emitted: 0,
-            discard: 0,
+            px: 0,
+            data_ready: false,
+            fine: 0,
+            clip: 0,
             window_active: false,
             window_triggered: false,
-            win_pos: 251,
             sprites: Vec::with_capacity(10),
             sprite_fetch: None,
         }
@@ -207,15 +206,22 @@ impl Pipeline {
         self.sub = 0;
         self.tile_x = 0;
         self.fetching_window = false;
-        self.warmed = false;
         self.pending = None;
         self.bg.clear();
         self.obj.clear();
-        self.emitted = 0;
-        self.discard = r.scx % 8;
+        // Junk-row fill: prime the shifter with a discarded tile (drained across
+        // the PX 1-8 warm-up) so the fetcher just runs — no dummy-fetch patch
+        // state. The pixel clock stays held (POKY) until the first real tile is
+        // fetched.
+        for _ in 0..8 {
+            self.bg.push(BgPixel::default());
+        }
+        self.px = 0;
+        self.data_ready = false;
+        self.fine = 0;
+        self.clip = 0;
         self.window_active = false;
         self.window_triggered = false;
-        self.win_pos = 251;
         self.sprite_fetch = None;
         self.select_sprites(oam, r);
     }
@@ -225,9 +231,10 @@ impl Pipeline {
         self.window_triggered
     }
 
-    /// All 160 visible pixels have been emitted (Mode 3 is over).
+    /// All 160 visible pixels have been emitted (Mode 3 is over). PX terminal is
+    /// 167 (WODU); screen pixel 159 is the last, captured as PX reaches it.
     pub fn finished(&self) -> bool {
-        self.emitted as usize >= W
+        self.px >= 168
     }
 
     fn select_sprites(&mut self, oam: &[u8], r: Regs) {
@@ -267,7 +274,9 @@ impl Pipeline {
                 SpriteStage::Align => {
                     self.bg_fetch(vram, r, false);
                     if self.pending.is_some() && !self.bg.is_empty() {
-                        sf.stage = SpriteStage::Core(0);
+                        // The fetch-complete dot is the first core dot, not a
+                        // separate transition dot — enter at Core(1).
+                        sf.stage = SpriteStage::Core(1);
                     }
                     self.sprite_fetch = Some(sf);
                     return None;
@@ -276,6 +285,10 @@ impl Pipeline {
                     if c >= 5 {
                         self.overlay_sprite(vram, r, &sf.sprite, sf.offset);
                         self.sprite_fetch = None;
+                        // A stacked same-position object chains here — before
+                        // bg_fetch loads the held tile and before any shift — so
+                        // the fetch-complete condition stays satisfied and it
+                        // costs exactly its 6-dot core (no fresh alignment).
                         if self.try_start_sprite(r) {
                             return None;
                         }
@@ -294,29 +307,40 @@ impl Pipeline {
             return None;
         }
 
-        let emit = if self.bg.is_empty() { None } else { self.shift() };
-
-        if self.sprite_fetch.is_none() {
-            self.win_pos = self.win_pos.wrapping_add(1);
+        // The pixel clock (SACU). It halts — PX unchanged, nothing emitted — on
+        // any of: the sprite freeze (handled above), POKY (first tile not yet
+        // fetched), the ROXY fine-scroll gate (SCX&7 dots), or an empty shifter.
+        // Otherwise PX advances one step this dot.
+        if !self.data_ready {
+            return None;
         }
-
-        emit
-    }
-
-    /// Pop one pixel from the shifters, honouring the fine-scroll / window
-    /// left-edge discard.
-    fn shift(&mut self) -> Option<Emit> {
-        let bg = self.bg.pop().unwrap();
-        let obj = self.obj.shift_out();
-
-        if self.discard > 0 {
-            self.discard -= 1;
+        if self.fine < (r.scx & 7) {
+            self.fine += 1;
+            return None;
+        }
+        if self.bg.is_empty() {
             return None;
         }
 
-        let x = self.emitted as usize;
-        self.emitted += 1;
-        Some(Emit { x, bg, obj })
+        let bg = self.bg.pop().unwrap();
+        let obj = self.obj.shift_out();
+        self.px += 1;
+
+        // WX<7 left-edge clip: the pixel shifted but lies off the screen's left.
+        if self.clip > 0 {
+            self.clip -= 1;
+            return None;
+        }
+
+        // PX 1-8 are the warm-up (the junk row) — shifted but never reaching
+        // glass. Visible output is gated at PX >= 9; screen_x = px - 9.
+        if self.px >= 9 {
+            let x = (self.px - 9) as usize;
+            if x < 160 {
+                return Some(Emit { x, bg, obj });
+            }
+        }
+        None
     }
 
     /// One dot of the BG/window fetch. Three 2-dot accesses assemble a tile
@@ -325,6 +349,10 @@ impl Pipeline {
     /// column.
     fn bg_fetch(&mut self, vram: &[u8], r: Regs, can_load: bool) {
         if let Some(row) = self.pending {
+            // Load exactly when the 8-pixel shifter has drained (the drain
+            // detector is clocked by the pixel clock), locking the tile cycle
+            // to 8 dots: 6 to assemble + 2 held here. `pending` is the temp
+            // latch, the FIFO the single 8-pixel shifter.
             if can_load && self.bg.is_empty() {
                 for p in row {
                     self.bg.push(p);
@@ -364,14 +392,9 @@ impl Pipeline {
                 } else {
                     self.sub = 0;
                     self.tile_high = self.fetch_plane(vram, r, 1);
-                    if !self.warmed {
-                        // Hardware discards the line's first fetch and refetches
-                        // the same column — the Mode 3 startup latency (~6 dots).
-                        self.warmed = true;
-                        self.step = FetchStep::Tile;
-                    } else {
-                        self.pending = Some(self.assemble_row(r));
-                    }
+                    self.pending = Some(self.assemble_row(r));
+                    // POKY: the first completed BG fetch releases the pixel clock.
+                    self.data_ready = true;
                 }
             }
         }
@@ -452,13 +475,12 @@ impl Pipeline {
             return false;
         }
 
-        let target = self.emitted as i16;
         let mut chosen: Option<usize> = None;
         for (i, s) in self.sprites.iter().enumerate() {
             if s.fetched {
                 continue;
             }
-            if (s.x as i16 - 8) <= target {
+            if (s.x as i16 + 1) <= self.px {
                 match chosen {
                     None => chosen = Some(i),
                     Some(j) => {
@@ -474,7 +496,10 @@ impl Pipeline {
         if let Some(i) = chosen {
             self.sprites[i].fetched = true;
             let s = self.sprites[i];
-            let offset = (s.x as i16 - 8) - self.emitted as i16;
+            let offset = (s.x as i16 + 1) - self.px;
+            // If the BG fetch is already complete (tile held in `pending`), the
+            // trigger and fetch-complete coincide on this dot — it is core dot 1,
+            // not a wasted alignment dot.
             let stage = if self.pending.is_some() {
                 SpriteStage::Core(0)
             } else {
@@ -543,16 +568,11 @@ impl Pipeline {
             return;
         }
 
-        // The WX<7 + fine-scroll glitch and the WX=166 quirk are not modelled.
-        if self.discard != 0 {
-            return;
-        }
-
         if r.wx >= 167 {
             return;
         }
-        
-        if self.win_pos == r.wx {
+
+        if self.px == r.wx as i16 {
             self.window_active = true;
             self.window_triggered = true;
             self.fetching_window = true;
@@ -560,10 +580,9 @@ impl Pipeline {
             self.pending = None;
             self.step = FetchStep::Tile;
             self.sub = 0;
-            self.warmed = true;
             self.bg.clear();
             if r.wx < 7 {
-                self.discard = 7 - r.wx;
+                self.clip = 7 - r.wx;
             }
         }
     }

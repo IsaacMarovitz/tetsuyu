@@ -262,7 +262,7 @@ impl PPU {
         if self.wy == self.ly {
             self.window_y_condition = true;
         }
-        
+
         self.bgp_glitch = None;
         let r = self.regs();
         self.pipeline.start_line(&self.oam, r);
