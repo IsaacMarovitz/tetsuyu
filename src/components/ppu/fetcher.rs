@@ -276,6 +276,9 @@ impl Pipeline {
                     if c >= 5 {
                         self.overlay_sprite(vram, r, &sf.sprite, sf.offset);
                         self.sprite_fetch = None;
+                        if self.try_start_sprite(r) {
+                            return None;
+                        }
                     } else {
                         sf.stage = SpriteStage::Core(c + 1);
                         self.sprite_fetch = Some(sf);
@@ -322,7 +325,7 @@ impl Pipeline {
     /// column.
     fn bg_fetch(&mut self, vram: &[u8], r: Regs, can_load: bool) {
         if let Some(row) = self.pending {
-            if can_load && self.bg.len() <= 8 {
+            if can_load && self.bg.is_empty() {
                 for p in row {
                     self.bg.push(p);
                 }
@@ -472,11 +475,12 @@ impl Pipeline {
             self.sprites[i].fetched = true;
             let s = self.sprites[i];
             let offset = (s.x as i16 - 8) - self.emitted as i16;
-            self.sprite_fetch = Some(SpriteFetch {
-                sprite: s,
-                offset,
-                stage: SpriteStage::Align,
-            });
+            let stage = if self.pending.is_some() {
+                SpriteStage::Core(0)
+            } else {
+                SpriteStage::Align
+            };
+            self.sprite_fetch = Some(SpriteFetch { sprite: s, offset, stage });
             return true;
         }
         false
